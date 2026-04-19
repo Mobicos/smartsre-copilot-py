@@ -5,13 +5,14 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
+from app.config import UPLOADS_DIR
 from app.services.vector_index_service import vector_index_service
 from loguru import logger
 
 router = APIRouter()
 
 # 文件上传后存储的路径
-UPLOAD_DIR = Path("./uploads")
+UPLOAD_DIR = UPLOADS_DIR
 # 支持的文件类型
 ALLOWED_EXTENSIONS = ["txt", "md"]
 # 单个文件支持最大大小

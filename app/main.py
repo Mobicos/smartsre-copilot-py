@@ -8,9 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
-import os
 
-from app.config import config
+from app.config import STATIC_DIR, config
 from loguru import logger
 from app.api import chat, health, file, aiops
 from app.core.milvus_client import milvus_manager
@@ -65,14 +64,13 @@ app.include_router(file.router, prefix="/api", tags=["文件管理"])
 app.include_router(aiops.router, prefix="/api", tags=["AIOps智能运维"])
 
 # 挂载静态文件
-static_dir = "static"
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/")
 async def root():
     """返回首页"""
-    index_path = os.path.join(static_dir, "index.html")
-    if os.path.exists(index_path):
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
         return FileResponse(index_path)
     return {
         "message": f"Welcome to {config.app_name} API",

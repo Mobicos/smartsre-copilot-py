@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 
 from loguru import logger
 
+from app.config import UPLOADS_DIR
 from app.services.document_splitter_service import document_splitter_service
 from app.services.vector_store_manager import vector_store_manager
 
@@ -61,7 +62,7 @@ class VectorIndexService:
 
     def __init__(self):
         """初始化向量索引服务"""
-        self.upload_path = "./uploads"
+        self.upload_path = str(UPLOADS_DIR)
         logger.info("向量索引服务初始化完成")
 
     def index_directory(self, directory_path: Optional[str] = None) -> IndexingResult:
