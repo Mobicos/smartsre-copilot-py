@@ -1,5 +1,7 @@
 """向量嵌入服务模块 - 基于 LangChain Embeddings 标准接口。"""
 
+from typing import cast
+
 from langchain_core.embeddings import Embeddings
 from loguru import logger
 from openai import OpenAI
@@ -71,7 +73,7 @@ class DashScopeEmbeddings(Embeddings):
                 model=self.model, input=texts, dimensions=self.dimensions, encoding_format="float"
             )
 
-            embeddings = [item.embedding for item in response.data]
+            embeddings = [cast(list[float], item.embedding) for item in response.data]
             logger.debug(f"批量嵌入完成, 维度: {len(embeddings[0])}")
 
             return embeddings
@@ -100,7 +102,7 @@ class DashScopeEmbeddings(Embeddings):
                 model=self.model, input=text, dimensions=self.dimensions, encoding_format="float"
             )
 
-            embedding = response.data[0].embedding
+            embedding = cast(list[float], response.data[0].embedding)
             logger.debug(f"查询嵌入完成, 维度: {len(embedding)}")
 
             return embedding

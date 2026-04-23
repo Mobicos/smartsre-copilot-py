@@ -14,6 +14,8 @@ from pymilvus import (
 
 from app.config import config
 
+_MILVUS_CLIENT_PATCHED = False
+
 
 def _patch_pymilvus_milvus_client_orm_alias() -> None:
     """
@@ -24,7 +26,9 @@ def _patch_pymilvus_milvus_client_orm_alias() -> None:
     在已通过 ``connections.connect(alias="default", ...)`` 建立连接后，
     强制让 MilvusClient 使用 ``default`` 别名，与 ORM 一致。
     """
-    if getattr(_patch_pymilvus_milvus_client_orm_alias, "_done", False):
+    global _MILVUS_CLIENT_PATCHED
+
+    if _MILVUS_CLIENT_PATCHED:
         return
     try:
         from pymilvus.milvus_client.milvus_client import MilvusClient
@@ -33,12 +37,12 @@ def _patch_pymilvus_milvus_client_orm_alias() -> None:
 
     _orig_init = MilvusClient.__init__
 
-    def _wrapped_init(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+    def _wrapped_init(self, *args: object, **kwargs: object) -> None:
         _orig_init(self, *args, **kwargs)
         self._using = "default"
 
-    MilvusClient.__init__ = _wrapped_init  # type: ignore[method-assign]
-    _patch_pymilvus_milvus_client_orm_alias._done = True
+    MilvusClient.__init__ = _wrapped_init
+    _MILVUS_CLIENT_PATCHED = True
 
 
 class MilvusClientManager:
@@ -148,7 +152,7 @@ class MilvusClientManager:
         """检查 collection 是否存在"""
         # pymilvus 的类型标注可能不准确，实际返回 bool
         result = utility.has_collection(self.COLLECTION_NAME)
-        return bool(result)  # type: ignore[arg-type]
+        return bool(result)
 
     def _create_collection(self) -> None:
         """创建 biz collection"""

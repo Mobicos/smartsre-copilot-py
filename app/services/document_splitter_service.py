@@ -1,6 +1,7 @@
 """文档分割服务模块 - 基于 LangChain 的智能文档分割"""
 
 from pathlib import Path
+from typing import cast
 
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
@@ -108,7 +109,7 @@ class DocumentSplitterService:
             )
 
             logger.info(f"文本分割完成: {file_path} -> {len(docs)} 个分片")
-            return docs
+            return cast(list[Document], docs)
 
         except Exception as e:
             logger.error(f"文本分割失败: {file_path}, 错误: {e}")
@@ -144,8 +145,8 @@ class DocumentSplitterService:
         if not documents:
             return []
 
-        merged_docs = []
-        current_doc = None
+        merged_docs: list[Document] = []
+        current_doc: Document | None = None
 
         for doc in documents:
             doc_size = len(doc.page_content)

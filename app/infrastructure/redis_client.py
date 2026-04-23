@@ -1,9 +1,9 @@
-"""Redis 基础设施封装。"""
+"""Redis client management utilities."""
 
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, TypeAlias, cast
 
 from loguru import logger
 
@@ -11,16 +11,16 @@ from app.config import config
 
 try:
     from redis import Redis
-    from redis.exceptions import RedisError
-except Exception:  # pragma: no cover - 运行环境可能未安装 redis
+    from redis.exceptions import RedisError as BaseRedisError
+except Exception:  # pragma: no cover - redis may be absent in some environments
     Redis = None
+    BaseRedisError = Exception
 
-    class RedisError(Exception):
-        """Redis 占位异常。"""
+RedisError: TypeAlias = BaseRedisError
 
 
 class RedisManager:
-    """管理 Redis 连接与任务队列操作。"""
+    """Simple Redis connection wrapper for queue operations."""
 
     def __init__(self, redis_url: str) -> None:
         self.redis_url = redis_url
@@ -34,11 +34,11 @@ class RedisManager:
         if self._client is not None:
             return
         if Redis is None:
-            raise RuntimeError("当前配置需要 Redis，但未安装 redis 包")
+            raise RuntimeError("Redis support requires the optional 'redis' dependency")
 
         self._client = Redis.from_url(self.redis_url, decode_responses=True)
         self._client.ping()
-        logger.info(f"Redis 初始化完成: {self.redis_url}")
+        logger.info(f"Redis initialized: {self.redis_url}")
 
     def health_check(self) -> bool:
         try:
@@ -46,7 +46,7 @@ class RedisManager:
             assert self._client is not None
             return bool(self._client.ping())
         except Exception as exc:
-            logger.error(f"Redis 健康检查失败: {exc}")
+            logger.error(f"Redis health check failed: {exc}")
             return False
 
     def enqueue_json(self, queue_name: str, payload: dict[str, Any]) -> None:
@@ -62,7 +62,11 @@ class RedisManager:
             return None
 
         _, raw_payload = result
-        return json.loads(raw_payload)
+        payload = json.loads(raw_payload)
+        if not isinstance(payload, dict):
+            logger.warning(f"Redis queue '{queue_name}' returned a non-object payload")
+            return None
+        return cast(dict[str, Any], payload)
 
 
 redis_manager = RedisManager(config.redis_url)

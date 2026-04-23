@@ -139,7 +139,7 @@ async def planner(state: PlanExecuteState) -> dict[str, Any]:
             plan_steps = plan_result.steps
         else:
             # 如果返回的是字典，提取 steps 字段
-            plan_steps = plan_result.get("steps", [])  # type: ignore
+            plan_steps = plan_result.get("steps", [])
 
         logger.info(f"计划已生成，共 {len(plan_steps)} 个步骤")
         for i, step in enumerate(plan_steps, 1):

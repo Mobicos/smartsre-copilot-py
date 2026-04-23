@@ -4,7 +4,7 @@
 """
 
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, cast
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
@@ -52,7 +52,7 @@ class AIOpsService:
             # 如果已经生成了最终响应，结束
             if state.get("response"):
                 logger.info("已生成最终响应，结束流程")
-                return END
+                return cast(str, END)
 
             # 如果还有计划步骤，继续执行
             plan = state.get("plan", [])
@@ -62,7 +62,7 @@ class AIOpsService:
 
             # 计划为空但没有响应，返回 replanner 生成响应
             logger.info("计划执行完毕，生成最终响应")
-            return END
+            return cast(str, END)
 
         workflow.add_conditional_edges(
             NODE_REPLANNER, should_continue, {NODE_EXECUTOR: NODE_EXECUTOR, END: END}
