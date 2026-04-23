@@ -38,9 +38,9 @@ Before committing code changes, run the project quality gates when the local
 environment permits it:
 
 ```powershell
-python -m compileall app mcp_servers
-python -m ruff check app mcp_servers
-python -m ruff format --check app mcp_servers
+python -m compileall app mcp_servers tests
+python -m ruff check app mcp_servers tests
+python -m ruff format --check app mcp_servers tests
 python -m mypy app --ignore-missing-imports
 python -m bandit -r app -ll
 python -m pytest tests -q
@@ -78,4 +78,3 @@ CI should be stricter than local habits:
 - Keep the Python matrix aligned with the supported version range.
 - Run lint, format check, type check, security scan, and tests.
 - Prefer locked dependency installs once CI is migrated to `uv`.
-
