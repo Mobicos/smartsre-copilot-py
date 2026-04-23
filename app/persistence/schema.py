@@ -68,6 +68,49 @@ SQLITE_SCHEMA_STATEMENTS = [
     CREATE INDEX IF NOT EXISTS idx_audit_logs_request_id
     ON audit_logs(request_id)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS agent_checkpoints (
+        thread_id TEXT NOT NULL,
+        checkpoint_ns TEXT NOT NULL DEFAULT '',
+        checkpoint_id TEXT NOT NULL,
+        checkpoint_type TEXT NOT NULL,
+        checkpoint_data BLOB NOT NULL,
+        metadata_type TEXT NOT NULL,
+        metadata_data BLOB NOT NULL,
+        parent_checkpoint_id TEXT,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY(thread_id, checkpoint_ns, checkpoint_id)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_agent_checkpoints_thread_created
+    ON agent_checkpoints(thread_id, checkpoint_ns, checkpoint_id DESC)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS agent_checkpoint_blobs (
+        thread_id TEXT NOT NULL,
+        checkpoint_ns TEXT NOT NULL DEFAULT '',
+        channel TEXT NOT NULL,
+        version TEXT NOT NULL,
+        value_type TEXT NOT NULL,
+        value_data BLOB NOT NULL,
+        PRIMARY KEY(thread_id, checkpoint_ns, channel, version)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS agent_checkpoint_writes (
+        thread_id TEXT NOT NULL,
+        checkpoint_ns TEXT NOT NULL DEFAULT '',
+        checkpoint_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        write_idx INTEGER NOT NULL,
+        channel TEXT NOT NULL,
+        value_type TEXT NOT NULL,
+        value_data BLOB NOT NULL,
+        task_path TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY(thread_id, checkpoint_ns, checkpoint_id, task_id, write_idx)
+    )
+    """,
 ]
 
 
@@ -77,4 +120,7 @@ REQUIRED_TABLES = (
     "aiops_runs",
     "indexing_tasks",
     "audit_logs",
+    "agent_checkpoints",
+    "agent_checkpoint_blobs",
+    "agent_checkpoint_writes",
 )

@@ -15,7 +15,7 @@ from langchain_core.messages import (
     SystemMessage,
 )
 from langchain_qwq import ChatQwen
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.message import REMOVE_ALL_MESSAGES, add_messages
 from loguru import logger
 from pydantic import SecretStr
@@ -74,7 +74,7 @@ def trim_messages_middleware(state: AgentState) -> dict[str, Any] | None:
 class RagAgentService:
     """RAG Agent 服务 - 使用 LangGraph + ChatQwen 原生集成"""
 
-    def __init__(self, streaming: bool = True):
+    def __init__(self, *, streaming: bool = True, checkpointer: BaseCheckpointSaver[str]):
         """初始化 RAG Agent 服务
 
         Args:
@@ -97,8 +97,9 @@ class RagAgentService:
         # MCP 客户端（延迟初始化，使用全局管理）
         self.mcp_tools: list = []
 
-        # 创建内存检查点（用于会话管理）
-        self.checkpointer = MemorySaver()
+        # 持久化检查点（用于会话管理）
+        self.checkpointer = checkpointer
+        self.checkpoint_ns = "chat"
 
         # Agent 初始化（会在异步方法中完成）
         self.agent: Any | None = None
@@ -197,7 +198,13 @@ class RagAgentService:
             agent_input = {"messages": messages}
 
             # 配置 thread_id（用于会话持久化）
-            config_dict = {"configurable": {"thread_id": session_id}}
+            config_dict = {
+                "configurable": {
+                    "thread_id": session_id,
+                    "checkpoint_ns": self.checkpoint_ns,
+                },
+                "recursion_limit": config.chat_recursion_limit,
+            }
 
             result = await self._get_agent().ainvoke(
                 input=agent_input,
@@ -256,7 +263,13 @@ class RagAgentService:
             agent_input = {"messages": messages}
 
             # 配置 thread_id（用于会话持久化）
-            config_dict = {"configurable": {"thread_id": session_id}}
+            config_dict = {
+                "configurable": {
+                    "thread_id": session_id,
+                    "checkpoint_ns": self.checkpoint_ns,
+                },
+                "recursion_limit": config.chat_recursion_limit,
+            }
 
             async for token, metadata in self._get_agent().astream(
                 input=agent_input,
@@ -294,7 +307,7 @@ class RagAgentService:
 
     def get_session_history(self, session_id: str) -> list:
         """
-        获取会话历史（从 MemorySaver checkpointer 中读取）
+        获取会话历史（从持久化 checkpointer 中读取）
 
         Args:
             session_id: 会话ID（即 thread_id）
@@ -305,7 +318,12 @@ class RagAgentService:
         try:
             # 使用 checkpointer 的 get 方法获取最新的检查点
             # Read the latest checkpoint for this thread.
-            config = {"configurable": {"thread_id": session_id}}
+            config = {
+                "configurable": {
+                    "thread_id": session_id,
+                    "checkpoint_ns": self.checkpoint_ns,
+                }
+            }
             checkpoint = self.checkpointer.get(cast(Any, config))
 
             if not checkpoint:
@@ -345,7 +363,7 @@ class RagAgentService:
 
     def clear_session(self, session_id: str) -> bool:
         """
-        清空会话历史（从 MemorySaver checkpointer 中删除）
+        清空会话历史（从持久化 checkpointer 中删除）
 
         Args:
             session_id: 会话ID（即 thread_id）
@@ -354,8 +372,10 @@ class RagAgentService:
             bool: 是否成功
         """
         try:
-            # 使用 checkpointer 的 delete_thread 方法删除该 thread 的所有检查点
-            self.checkpointer.delete_thread(session_id)
+            if hasattr(self.checkpointer, "delete_namespace"):
+                self.checkpointer.delete_namespace(session_id, self.checkpoint_ns)
+            else:
+                self.checkpointer.delete_thread(session_id)
 
             logger.info(f"已清除会话历史: {session_id}")
             return True

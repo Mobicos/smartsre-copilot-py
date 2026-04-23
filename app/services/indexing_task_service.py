@@ -3,8 +3,8 @@
 from loguru import logger
 
 from app.config import config
+from app.core.container import service_container
 from app.persistence import indexing_task_repository
-from app.services.vector_index_service import vector_index_service
 
 
 class IndexingTaskService:
@@ -30,7 +30,7 @@ class IndexingTaskService:
     def process_task(self, task_id: str, file_path: str) -> str:
         """执行索引任务并更新状态。"""
         try:
-            vector_index_service.index_single_file(file_path)
+            service_container.get_vector_index_service().index_single_file(file_path)
             indexing_task_repository.update_task(task_id, status="completed")
             logger.info(f"索引任务执行完成: {task_id}")
             return "completed"

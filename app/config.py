@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     # RAG 配置
     rag_top_k: int = 3
     rag_model: str = "qwen-max"  # 使用快速响应模型，不带扩展思考
+    chat_recursion_limit: int = 12
+    aiops_recursion_limit: int = 24
+    aiops_max_steps: int = 8
 
     # 文档分块配置
     chunk_max_size: int = 800

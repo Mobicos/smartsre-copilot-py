@@ -11,7 +11,10 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from app.config import config
+from app.infrastructure import checkpoint_saver
+from app.services.document_splitter_service import DocumentSplitterService
 from app.services.vector_embedding_service import DashScopeEmbeddings
+from app.services.vector_index_service import VectorIndexService
 from app.services.vector_search_service import VectorSearchService
 from app.services.vector_store_manager import VectorStoreManager
 
@@ -35,6 +38,8 @@ class AppContainer:
         self._embedding_service: DashScopeEmbeddings | None = None
         self._vector_store_manager: VectorStoreManager | None = None
         self._vector_search_service: VectorSearchService | None = None
+        self._document_splitter_service: DocumentSplitterService | None = None
+        self._vector_index_service: VectorIndexService | None = None
         self._rag_agent_service: RagAgentService | None = None
         self._aiops_service: AIOpsService | None = None
 
@@ -70,22 +75,40 @@ class AppContainer:
             )
         return self._vector_search_service
 
-    def get_rag_agent_service(self) -> "RagAgentService":
+    def get_document_splitter_service(self) -> DocumentSplitterService:
+        """获取文档分割服务。"""
+        if self._document_splitter_service is None:
+            self._document_splitter_service = DocumentSplitterService()
+        return self._document_splitter_service
+
+    def get_vector_index_service(self) -> VectorIndexService:
+        """获取向量索引服务。"""
+        if self._vector_index_service is None:
+            self._vector_index_service = VectorIndexService(
+                document_splitter_service=self.get_document_splitter_service(),
+                vector_store_manager=self.get_vector_store_manager(),
+            )
+        return self._vector_index_service
+
+    def get_rag_agent_service(self) -> RagAgentService:
         """获取 RAG Agent 运行时服务。"""
         if self._rag_agent_service is None:
             logger.info("初始化 RAG Agent 服务...")
             from app.services.rag_agent_service import RagAgentService
 
-            self._rag_agent_service = RagAgentService(streaming=True)
+            self._rag_agent_service = RagAgentService(
+                streaming=True,
+                checkpointer=checkpoint_saver,
+            )
         return self._rag_agent_service
 
-    def get_aiops_service(self) -> "AIOpsService":
+    def get_aiops_service(self) -> AIOpsService:
         """获取 AIOps 工作流运行时服务。"""
         if self._aiops_service is None:
             logger.info("初始化 AIOps 服务...")
             from app.services.aiops_service import AIOpsService
 
-            self._aiops_service = AIOpsService()
+            self._aiops_service = AIOpsService(checkpointer=checkpoint_saver)
         return self._aiops_service
 
     def get_service_health(self) -> dict[str, ServiceHealth]:
@@ -96,6 +119,7 @@ class AppContainer:
         )
         rag_ready = self._rag_agent_service is not None
         aiops_ready = self._aiops_service is not None
+        checkpoint_ready = checkpoint_saver is not None
 
         return {
             "embedding": ServiceHealth(
@@ -114,12 +138,20 @@ class AppContainer:
                 status="ready" if aiops_ready else "not_initialized",
                 message="AIOps 服务已初始化" if aiops_ready else "AIOps 服务尚未初始化",
             ),
+            "checkpoint": ServiceHealth(
+                status="ready" if checkpoint_ready else "not_initialized",
+                message="Checkpoint 存储已初始化"
+                if checkpoint_ready
+                else "Checkpoint 存储尚未初始化",
+            ),
         }
 
     def reset(self) -> None:
         """重置容器中的运行时依赖引用。"""
         self._aiops_service = None
         self._rag_agent_service = None
+        self._vector_index_service = None
+        self._document_splitter_service = None
         self._vector_search_service = None
         self._vector_store_manager = None
         self._embedding_service = None

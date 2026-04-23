@@ -168,7 +168,3 @@ class DocumentSplitterService:
             merged_docs.append(current_doc)
 
         return merged_docs
-
-
-# 全局单例
-document_splitter_service = DocumentSplitterService()

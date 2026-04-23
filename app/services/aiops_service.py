@@ -6,11 +6,12 @@
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 from loguru import logger
 
 from app.agent.aiops import PlanExecuteState, executor, planner, replanner
+from app.config import config
 
 # 节点名称常量
 NODE_PLANNER = "planner"
@@ -21,9 +22,10 @@ NODE_REPLANNER = "replanner"
 class AIOpsService:
     """通用 Plan-Execute-Replan 服务"""
 
-    def __init__(self):
+    def __init__(self, *, checkpointer: BaseCheckpointSaver[str]):
         """初始化服务"""
-        self.checkpointer = MemorySaver()
+        self.checkpointer = checkpointer
+        self.checkpoint_ns = "aiops"
         self.graph = self._build_graph()
         logger.info("Plan-Execute-Replan Service 初始化完成")
 
@@ -52,6 +54,11 @@ class AIOpsService:
             # 如果已经生成了最终响应，结束
             if state.get("response"):
                 logger.info("已生成最终响应，结束流程")
+                return END
+
+            executed_steps = len(state.get("past_steps", []))
+            if executed_steps >= config.aiops_max_steps:
+                logger.warning(f"已达到最大执行步数上限 {config.aiops_max_steps}，提前结束诊断流程")
                 return END
 
             # 如果还有计划步骤，继续执行
@@ -99,7 +106,13 @@ class AIOpsService:
             }
 
             # 流式执行工作流
-            config_dict = {"configurable": {"thread_id": session_id}}
+            config_dict = {
+                "configurable": {
+                    "thread_id": session_id,
+                    "checkpoint_ns": self.checkpoint_ns,
+                },
+                "recursion_limit": config.aiops_recursion_limit,
+            }
 
             async for event in self.graph.astream(
                 input=initial_state, config=config_dict, stream_mode="updates"
@@ -125,6 +138,13 @@ class AIOpsService:
             # 安全地获取响应（处理 values 可能为 None 的情况）
             if final_state and final_state.values:
                 final_response = final_state.values.get("response", "")
+                if not final_response and len(final_state.values.get("past_steps", [])) >= max(
+                    config.aiops_max_steps, 1
+                ):
+                    final_response = (
+                        "诊断流程已达到最大执行步数上限，已提前停止。"
+                        "请缩小排查范围后重试，或分阶段执行诊断。"
+                    )
 
             # 发送完成事件
             yield {

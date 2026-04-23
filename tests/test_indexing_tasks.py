@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.config import config
+from app.core.container import service_container
 from app.persistence import indexing_task_repository
 from app.services.indexing_task_service import indexing_task_service
 
@@ -26,9 +27,15 @@ def test_indexing_task_retries_then_fails_permanently(monkeypatch):
     def raise_index_error(file_path: str) -> None:
         raise RuntimeError(f"boom:{file_path}")
 
+    class FailingVectorIndexService:
+        @staticmethod
+        def index_single_file(file_path: str) -> None:
+            raise_index_error(file_path)
+
     monkeypatch.setattr(
-        "app.services.indexing_task_service.vector_index_service.index_single_file",
-        raise_index_error,
+        service_container,
+        "get_vector_index_service",
+        lambda: FailingVectorIndexService(),
     )
 
     claimed = indexing_task_repository.claim_task(task_id)

@@ -7,8 +7,8 @@ from typing import Any
 from loguru import logger
 
 from app.config import UPLOADS_DIR
-from app.core.container import service_container
-from app.services.document_splitter_service import document_splitter_service
+from app.services.document_splitter_service import DocumentSplitterService
+from app.services.vector_store_manager import VectorStoreManager
 
 
 class IndexingResult:
@@ -60,9 +60,16 @@ class IndexingResult:
 class VectorIndexService:
     """向量索引服务 - 负责读取文件、生成向量、存储到 Milvus"""
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        document_splitter_service: DocumentSplitterService,
+        vector_store_manager: VectorStoreManager,
+    ):
         """初始化向量索引服务"""
         self.upload_path = str(UPLOADS_DIR)
+        self.document_splitter_service = document_splitter_service
+        self.vector_store_manager = vector_store_manager
         logger.info("向量索引服务初始化完成")
 
     def index_directory(self, directory_path: str | None = None) -> IndexingResult:
@@ -154,16 +161,15 @@ class VectorIndexService:
 
             # 2. 删除该文件的旧数据（如果存在）
             normalized_path = path.as_posix()
-            vector_store_manager = service_container.get_vector_store_manager()
-            vector_store_manager.delete_by_source(normalized_path)
+            self.vector_store_manager.delete_by_source(normalized_path)
 
             # 3. 使用新的文档分割器
-            documents = document_splitter_service.split_document(content, normalized_path)
+            documents = self.document_splitter_service.split_document(content, normalized_path)
             logger.info(f"文档分割完成: {file_path} -> {len(documents)} 个分片")
 
             # 4. 添加文档到向量存储
             if documents:
-                vector_store_manager.add_documents(documents)
+                self.vector_store_manager.add_documents(documents)
                 logger.info(f"文件索引完成: {file_path}, 共 {len(documents)} 个分片")
             else:
                 logger.warning(f"文件内容为空或无法分割: {file_path}")
@@ -171,7 +177,3 @@ class VectorIndexService:
         except Exception as e:
             logger.error(f"索引文件失败: {file_path}, 错误: {e}")
             raise RuntimeError(f"索引文件失败: {e}") from e
-
-
-# 全局单例
-vector_index_service = VectorIndexService()

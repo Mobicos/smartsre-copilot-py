@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from app.infrastructure import checkpoint_saver
 from app.services.aiops_service import AIOpsService
 
 
 def test_aiops_planner_event_reports_plan_size():
-    service = AIOpsService()
+    service = AIOpsService(checkpointer=checkpoint_saver)
 
     event = service._format_planner_event({"plan": ["check alerts", "inspect logs"]})
 
@@ -14,7 +15,7 @@ def test_aiops_planner_event_reports_plan_size():
 
 
 def test_aiops_executor_event_reports_last_completed_step():
-    service = AIOpsService()
+    service = AIOpsService(checkpointer=checkpoint_saver)
 
     event = service._format_executor_event(
         {
@@ -30,7 +31,7 @@ def test_aiops_executor_event_reports_last_completed_step():
 
 
 def test_aiops_replanner_event_returns_report_when_response_exists():
-    service = AIOpsService()
+    service = AIOpsService(checkpointer=checkpoint_saver)
 
     event = service._format_replanner_event({"response": "final report", "plan": []})
 

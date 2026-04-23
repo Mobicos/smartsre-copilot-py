@@ -5,11 +5,11 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 
 from app.config import UPLOADS_DIR
+from app.core.container import service_container
 from app.persistence import indexing_task_repository
 from app.security import Principal, require_capability
 from app.services.indexing_task_service import indexing_task_service
 from app.services.task_dispatcher import task_dispatcher
-from app.services.vector_index_service import vector_index_service
 
 router = APIRouter()
 
@@ -123,7 +123,7 @@ async def index_directory(
         logger.info(f"开始索引目录: {directory_path or 'uploads'}")
 
         # 执行索引
-        result = vector_index_service.index_directory(directory_path)
+        result = service_container.get_vector_index_service().index_directory(directory_path)
 
         return JSONResponse(
             status_code=200,
