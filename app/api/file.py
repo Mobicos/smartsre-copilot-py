@@ -1,9 +1,8 @@
 """文件上传接口模块"""
 
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
+from loguru import logger
 
 from app.config import UPLOADS_DIR
 from app.persistence import indexing_task_repository
@@ -11,7 +10,6 @@ from app.security import Principal, require_capability
 from app.services.indexing_task_service import indexing_task_service
 from app.services.task_dispatcher import task_dispatcher
 from app.services.vector_index_service import vector_index_service
-from loguru import logger
 
 router = APIRouter()
 
@@ -69,7 +67,9 @@ async def upload_file(
 
         # 验证文件大小
         if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail=f"文件大小超过限制（最大 {MAX_FILE_SIZE} 字节）")
+            raise HTTPException(
+                status_code=400, detail=f"文件大小超过限制（最大 {MAX_FILE_SIZE} 字节）"
+            )
 
         file_path.write_bytes(content)
 
@@ -102,7 +102,7 @@ async def upload_file(
         raise
     except Exception as e:
         logger.error(f"文件上传失败: {e}")
-        raise HTTPException(status_code=500, detail=f"文件上传失败: {e}")
+        raise HTTPException(status_code=500, detail=f"文件上传失败: {e}") from e
 
 
 @router.post("/index_directory")
@@ -136,7 +136,7 @@ async def index_directory(
 
     except Exception as e:
         logger.error(f"索引目录失败: {e}")
-        raise HTTPException(status_code=500, detail=f"索引目录失败: {e}")
+        raise HTTPException(status_code=500, detail=f"索引目录失败: {e}") from e
 
 
 @router.get("/index_tasks/{task_id}")
@@ -188,6 +188,6 @@ def _sanitize_filename(filename: str) -> str:
     # 去除空格
     sanitized = filename.replace(" ", "_")
     # 去除其他可能导致问题的字符
-    for char in ['\\', '/', ':', '*', '?', '"', '<', '>', '|']:
+    for char in ["\\", "/", ":", "*", "?", '"', "<", ">", "|"]:
         sanitized = sanitized.replace(char, "_")
     return sanitized

@@ -6,9 +6,10 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from loguru import logger
 
@@ -188,9 +189,7 @@ class DatabaseManager:
         for column_name, definition in columns.items():
             if column_name in existing:
                 continue
-            connection.execute(
-                f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"
-            )
+            connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
 
 
 database_manager = DatabaseManager(

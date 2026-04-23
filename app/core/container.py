@@ -67,8 +67,7 @@ class AppContainer:
         """返回核心依赖的健康摘要。"""
         embedding_ready = self._embedding_service is not None
         vector_store_ready = (
-            self._vector_store_manager is not None
-            and self._vector_store_manager.is_initialized
+            self._vector_store_manager is not None and self._vector_store_manager.is_initialized
         )
 
         return {

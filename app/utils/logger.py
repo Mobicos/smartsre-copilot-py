@@ -4,7 +4,9 @@
 """
 
 import sys
+
 from loguru import logger
+
 from app.config import LOGS_DIR, config
 
 
@@ -43,5 +45,6 @@ def setup_logger():
         level="INFO",
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {module}.{function}:{line} | {message}",
     )
+
 
 setup_logger()

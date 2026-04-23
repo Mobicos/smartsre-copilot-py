@@ -1,14 +1,16 @@
 """健康检查接口。"""
 
 from typing import Any
+
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from loguru import logger
+
 from app.config import config
 from app.core.container import service_container
+from app.core.milvus_client import milvus_manager
 from app.infrastructure import redis_manager
 from app.persistence import database_manager
-from app.core.milvus_client import milvus_manager
-from loguru import logger
 from app.services.task_dispatcher import task_dispatcher
 
 router = APIRouter()
@@ -52,21 +54,15 @@ def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
         milvus_healthy = milvus_manager.health_check()
         milvus_status: str = "connected" if milvus_healthy else "disconnected"
         milvus_message: str = "Milvus 连接正常" if milvus_healthy else "Milvus 连接异常"
-        health_data["milvus"] = {
-            "status": milvus_status,
-            "message": milvus_message
-        }
+        health_data["milvus"] = {"status": milvus_status, "message": milvus_message}
     except Exception as e:
         logger.warning(f"Milvus 健康检查失败: {e}")
-        health_data["milvus"] = {
-            "status": "error",
-            "message": f"Milvus 检查失败: {str(e)}"
-        }
-    
+        health_data["milvus"] = {"status": "error", "message": f"Milvus 检查失败: {str(e)}"}
+
     # 判断整体健康状态
     overall_status = "healthy"
     status_code = 200
-    
+
     # 如果 Milvus 不可用，服务不可用
     if health_data["milvus"]["status"] != "connected":
         overall_status = "unhealthy"
@@ -92,7 +88,7 @@ def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
         overall_status = "unhealthy"
         status_code = 503
         health_data["error"] = "Redis 不可用"
-    
+
     health_data["status"] = overall_status
     return status_code, {
         "code": status_code,

@@ -3,20 +3,21 @@
 主应用程序，配置路由、中间件、静态文件等
 """
 
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from loguru import logger
+
+from app.api import aiops, chat, file, health
 from app.config import STATIC_DIR, config
 from app.core.container import service_container
+from app.core.milvus_client import milvus_manager
 from app.persistence import audit_log_repository, database_manager
 from app.security import validate_security_configuration
-from loguru import logger
-from app.api import chat, health, file, aiops
-from app.core.milvus_client import milvus_manager
 from app.services.task_dispatcher import task_dispatcher
 
 
@@ -29,7 +30,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"📝 环境: {'开发' if config.debug else '生产'}")
     logger.info(f"🌐 监听地址: http://{config.host}:{config.port}")
     logger.info(f"📚 API 文档: http://{config.host}:{config.port}/docs")
-    
+
     logger.info("🗄️ 正在初始化持久化存储...")
     database_manager.initialize()
     logger.info("✅ 持久化存储初始化成功")
@@ -49,11 +50,11 @@ async def lifespan(app: FastAPI):
     logger.info("🔌 正在初始化核心依赖...")
     service_container.initialize_required_services()
     logger.info("✅ 核心依赖初始化成功")
-    
+
     logger.info("=" * 60)
-    
+
     yield
-    
+
     # 关闭时执行
     if task_dispatcher.is_started:
         logger.info("🧵 正在停止任务调度器...")
@@ -69,7 +70,7 @@ app = FastAPI(
     title=config.app_name,
     version=config.app_version,
     description="基于 LangChain 的智能oncall运维系统",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # 配置 CORS
@@ -138,6 +139,7 @@ async def request_context_middleware(request: Request, call_next):
     )
     return response
 
+
 # 注册路由
 app.include_router(health.router, tags=["健康检查"])
 app.include_router(chat.router, prefix="/api", tags=["对话"])
@@ -146,6 +148,7 @@ app.include_router(aiops.router, prefix="/api", tags=["AIOps智能运维"])
 
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
 
 @app.get("/")
 async def root():
@@ -156,17 +159,13 @@ async def root():
     return {
         "message": f"Welcome to {config.app_name} API",
         "version": config.app_version,
-        "docs": "/docs"
+        "docs": "/docs",
     }
 
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(
-        "app.main:app",
-        host=config.host,
-        port=config.port,
-        reload=config.debug,
-        log_level="info"
+        "app.main:app", host=config.host, port=config.port, reload=config.debug, log_level="info"
     )

@@ -14,12 +14,7 @@ class ChatRequest(BaseModel):
 
     class Config:
         populate_by_name = True
-        json_schema_extra = {
-            "example": {
-                "Id": "session-123",
-                "Question": "什么是向量数据库？"
-            }
-        }
+        json_schema_extra = {"example": {"Id": "session-123", "Question": "什么是向量数据库？"}}
 
 
 class ClearRequest(BaseModel):

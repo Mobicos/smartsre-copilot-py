@@ -5,9 +5,9 @@
 
 import json
 from pathlib import Path
-from typing import Dict, Any
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Any
 
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = BASE_DIR / ".env"
@@ -105,7 +105,7 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in raw_value.split(",") if origin.strip()]
 
     @property
-    def mcp_servers(self) -> Dict[str, Dict[str, Any]]:
+    def mcp_servers(self) -> dict[str, dict[str, Any]]:
         """获取完整的 MCP 服务器配置"""
         return {
             "cls": {
@@ -115,7 +115,7 @@ class Settings(BaseSettings):
             "monitor": {
                 "transport": self.mcp_monitor_transport,
                 "url": self.mcp_monitor_url,
-            }
+            },
         }
 
 

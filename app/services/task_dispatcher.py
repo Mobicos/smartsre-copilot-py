@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 
-from app.config import config
-from app.infrastructure import redis_manager
 from loguru import logger
 
+from app.config import config
+from app.infrastructure import redis_manager
 from app.persistence import indexing_task_repository
 from app.services.indexing_task_service import indexing_task_service
 
@@ -85,7 +85,7 @@ class LocalTaskDispatcher:
             self._wake_event.clear()
             try:
                 await asyncio.wait_for(self._wake_event.wait(), timeout=poll_interval)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def _redis_worker_loop(self) -> None:

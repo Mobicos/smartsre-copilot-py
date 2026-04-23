@@ -4,15 +4,17 @@
 """
 
 import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
+from loguru import logger
 from sse_starlette.sse import EventSourceResponse
+
 from app.models.request import ChatRequest, ClearRequest
-from app.models.response import SessionInfoResponse, ApiResponse
+from app.models.response import ApiResponse, SessionInfoResponse
 from app.persistence import conversation_repository
 from app.security import Principal, require_capability
 from app.services.rag_agent_service import rag_agent_service
-from loguru import logger
 
 router = APIRouter()
 
@@ -41,10 +43,7 @@ async def chat(
     """
     try:
         logger.info(f"[会话 {request.id}] 收到快速对话请求: {request.question}")
-        answer = await rag_agent_service.query(
-            request.question,
-            session_id=request.id
-        )
+        answer = await rag_agent_service.query(request.question, session_id=request.id)
         conversation_repository.save_chat_exchange(request.id, request.question, answer)
 
         logger.info(f"[会话 {request.id}] 快速对话完成")
@@ -52,14 +51,11 @@ async def chat(
         return JSONResponse(
             status_code=200,
             content={
-            "code": 200,
-            "message": "success",
-            "data": {
-                "success": True,
-                "answer": answer,
-                "errorMessage": None
-            }
-        })
+                "code": 200,
+                "message": "success",
+                "data": {"success": True, "answer": answer, "errorMessage": None},
+            },
+        )
 
     except Exception as e:
         logger.error(f"对话接口错误: {e}")
@@ -109,7 +105,9 @@ async def chat_stream(
     async def event_generator():
         full_response = ""
         try:
-            async for chunk in rag_agent_service.query_stream(request.question, session_id=request.id):
+            async for chunk in rag_agent_service.query_stream(
+                request.question, session_id=request.id
+            ):
                 chunk_type = chunk.get("type", "unknown")
                 chunk_data = chunk.get("data", None)
 
@@ -118,39 +116,39 @@ async def chat_stream(
                     # 调试信息，可以选择发送或忽略
                     yield {
                         "event": "message",
-                        "data": json.dumps({
-                            "type": "debug",
-                            "node": chunk.get("node", "unknown"),
-                            "message_type": chunk.get("message_type", "unknown")
-                        }, ensure_ascii=False)
+                        "data": json.dumps(
+                            {
+                                "type": "debug",
+                                "node": chunk.get("node", "unknown"),
+                                "message_type": chunk.get("message_type", "unknown"),
+                            },
+                            ensure_ascii=False,
+                        ),
                     }
                 elif chunk_type == "tool_call":
                     # 发送工具调用事件（可选，前端可以显示工具调用状态）
                     yield {
                         "event": "message",
-                        "data": json.dumps({
-                            "type": "tool_call",
-                            "data": chunk_data
-                        }, ensure_ascii=False)
+                        "data": json.dumps(
+                            {"type": "tool_call", "data": chunk_data}, ensure_ascii=False
+                        ),
                     }
                 elif chunk_type == "search_results":
                     # 发送检索结果（可选，前端可以忽略）
                     yield {
                         "event": "message",
-                        "data": json.dumps({
-                            "type": "search_results",
-                            "data": chunk_data
-                        }, ensure_ascii=False)
+                        "data": json.dumps(
+                            {"type": "search_results", "data": chunk_data}, ensure_ascii=False
+                        ),
                     }
                 elif chunk_type == "content":
                     full_response += chunk_data or ""
                     # 发送内容块 - 关键：data 必须是 JSON 字符串
                     yield {
                         "event": "message",
-                        "data": json.dumps({
-                            "type": "content",
-                            "data": chunk_data
-                        }, ensure_ascii=False)
+                        "data": json.dumps(
+                            {"type": "content", "data": chunk_data}, ensure_ascii=False
+                        ),
                     }
                 elif chunk_type == "complete":
                     conversation_repository.save_chat_exchange(
@@ -161,19 +159,17 @@ async def chat_stream(
                     # 发送完成信号
                     yield {
                         "event": "message",
-                        "data": json.dumps({
-                            "type": "done",
-                            "data": chunk_data
-                        }, ensure_ascii=False)
+                        "data": json.dumps(
+                            {"type": "done", "data": chunk_data}, ensure_ascii=False
+                        ),
                     }
                 elif chunk_type == "error":
                     # 发送错误信息
                     yield {
                         "event": "message",
-                        "data": json.dumps({
-                            "type": "error",
-                            "data": str(chunk_data)
-                        }, ensure_ascii=False)
+                        "data": json.dumps(
+                            {"type": "error", "data": str(chunk_data)}, ensure_ascii=False
+                        ),
                     }
 
             logger.info(f"[会话 {request.id}] 流式对话完成")
@@ -182,10 +178,7 @@ async def chat_stream(
             logger.error(f"流式对话接口错误: {e}")
             yield {
                 "event": "message",
-                "data": json.dumps({
-                    "type": "error",
-                    "data": str(e)
-                }, ensure_ascii=False)
+                "data": json.dumps({"type": "error", "data": str(e)}, ensure_ascii=False),
             }
 
     return EventSourceResponse(event_generator())
@@ -212,12 +205,12 @@ async def clear_session(
         return ApiResponse(
             status="success" if (success or persistent_deleted) else "error",
             message="会话已清空" if (success or persistent_deleted) else "清空会话失败",
-            data=None
+            data=None,
         )
 
     except Exception as e:
         logger.error(f"清空会话错误: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/chat/sessions")
@@ -237,7 +230,7 @@ async def list_sessions(
         )
     except Exception as e:
         logger.error(f"获取会话列表错误: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/chat/session/{session_id}", response_model=SessionInfoResponse)
@@ -254,16 +247,17 @@ async def get_session_info(
         会话信息
     """
     try:
-        history = [message.to_dict() for message in conversation_repository.get_session_messages(session_id)]
+        history = [
+            message.to_dict()
+            for message in conversation_repository.get_session_messages(session_id)
+        ]
         if not history:
             history = rag_agent_service.get_session_history(session_id)
 
         return SessionInfoResponse(
-            session_id=session_id,
-            message_count=len(history),
-            history=history
+            session_id=session_id, message_count=len(history), history=history
         )
 
     except Exception as e:
         logger.error(f"获取会话信息错误: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

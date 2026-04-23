@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.persistence.database import database_manager
@@ -12,7 +12,7 @@ from app.persistence.database import database_manager
 
 def utc_now() -> str:
     """返回 ISO 8601 UTC 时间戳。"""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def build_session_title(question: str) -> str:
@@ -366,9 +366,7 @@ class IndexingTaskRepository:
                 return None
 
             next_status = (
-                "failed_permanently"
-                if row["attempt_count"] >= row["max_retries"]
-                else "queued"
+                "failed_permanently" if row["attempt_count"] >= row["max_retries"] else "queued"
             )
             connection.execute(
                 """
@@ -392,7 +390,7 @@ class IndexingTaskRepository:
     def requeue_stale_processing_tasks(self, timeout_seconds: int) -> int:
         """将超时未完成的 processing 任务重新入队。"""
         database_manager.initialize()
-        threshold = datetime.now(timezone.utc) - timedelta(seconds=timeout_seconds)
+        threshold = datetime.now(UTC) - timedelta(seconds=timeout_seconds)
         requeued = 0
         with database_manager.get_connection() as connection:
             rows = connection.execute(

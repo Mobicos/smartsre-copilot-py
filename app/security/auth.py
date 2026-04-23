@@ -11,7 +11,6 @@ from loguru import logger
 
 from app.config import config
 
-
 ROLE_CAPABILITIES = {
     "viewer": {"chat:read", "knowledge:read"},
     "operator": {"chat:use", "chat:read", "knowledge:read", "aiops:run"},
@@ -69,14 +68,10 @@ def validate_security_configuration() -> None:
     cors_origins = config.cors_origins
 
     if config.is_production and not api_key_roles:
-        raise RuntimeError(
-            "生产环境要求配置 APP_API_KEY 或 API_KEYS_JSON，当前认证配置为空"
-        )
+        raise RuntimeError("生产环境要求配置 APP_API_KEY 或 API_KEYS_JSON，当前认证配置为空")
 
     if config.is_production and "*" in cors_origins:
-        raise RuntimeError(
-            "生产环境禁止使用通配符 CORS，请设置 CORS_ALLOWED_ORIGINS 为明确白名单"
-        )
+        raise RuntimeError("生产环境禁止使用通配符 CORS，请设置 CORS_ALLOWED_ORIGINS 为明确白名单")
 
 
 async def get_current_principal(

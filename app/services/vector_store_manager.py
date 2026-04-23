@@ -1,7 +1,5 @@
 """向量存储管理器 - 封装 Milvus VectorStore 操作。"""
 
-from typing import List
-
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_milvus import Milvus
@@ -9,7 +7,6 @@ from loguru import logger
 
 from app.config import config
 from app.core.milvus_client import milvus_manager
-
 
 # 统一使用 biz collection
 COLLECTION_NAME = "biz"
@@ -68,7 +65,7 @@ class VectorStoreManager:
             logger.error(f"VectorStore 初始化失败: {e}")
             raise
 
-    def add_documents(self, documents: List[Document]) -> List[str]:
+    def add_documents(self, documents: list[Document]) -> list[str]:
         """
         批量添加文档到向量存储（自动批量向量化）
 
@@ -82,6 +79,7 @@ class VectorStoreManager:
             self._initialize_vector_store()
             import time
             import uuid
+
             start_time = time.time()
 
             # 为每个文档生成唯一 id（因为 auto_id=False）
@@ -94,7 +92,7 @@ class VectorStoreManager:
             elapsed = time.time() - start_time
             logger.info(
                 f"批量添加 {len(documents)} 个文档到 VectorStore 完成, "
-                f"耗时: {elapsed:.2f}秒, 平均: {elapsed/len(documents):.2f}秒/个"
+                f"耗时: {elapsed:.2f}秒, 平均: {elapsed / len(documents):.2f}秒/个"
             )
             return result_ids
         except Exception as e:
@@ -115,17 +113,17 @@ class VectorStoreManager:
             self._initialize_vector_store()
             # 使用 milvus_manager 获取已连接的 collection
             collection = milvus_manager.get_collection()
-            
+
             # metadata 是 JSON 字段，使用 JSON 路径查询语法
             # _source 是文档的来源文件路径
             expr = f'metadata["_source"] == "{file_path}"'
-            
+
             result = collection.delete(expr)
             deleted_count = result.delete_count if hasattr(result, "delete_count") else 0
-            
+
             logger.info(f"删除文件旧数据: {file_path}, 删除数量: {deleted_count}")
             return deleted_count
-            
+
         except Exception as e:
             logger.warning(f"删除旧数据失败 (可能是首次索引): {e}")
             return 0
@@ -140,7 +138,7 @@ class VectorStoreManager:
         self._initialize_vector_store()
         return self.vector_store
 
-    def similarity_search(self, query: str, k: int = 3) -> List[Document]:
+    def similarity_search(self, query: str, k: int = 3) -> list[Document]:
         """
         相似度搜索
 
