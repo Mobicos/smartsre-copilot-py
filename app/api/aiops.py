@@ -8,10 +8,10 @@ from fastapi import APIRouter, Depends
 from loguru import logger
 from sse_starlette.sse import EventSourceResponse
 
+from app.core.container import service_container
 from app.models.aiops import AIOpsRequest
 from app.persistence import aiops_run_repository, conversation_repository
 from app.security import Principal, require_capability
-from app.services.aiops_service import aiops_service
 
 router = APIRouter()
 
@@ -128,6 +128,7 @@ async def diagnose_stream(
         SSE 事件流
     """
     session_id = request.session_id or "default"
+    aiops_service = service_container.get_aiops_service()
     logger.info(f"[会话 {session_id}] 收到 AIOps 诊断请求（流式）")
     run_id = aiops_run_repository.create_run(
         session_id,

@@ -10,11 +10,11 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from sse_starlette.sse import EventSourceResponse
 
+from app.core.container import service_container
 from app.models.request import ChatRequest, ClearRequest
 from app.models.response import ApiResponse, SessionInfoResponse
 from app.persistence import conversation_repository
 from app.security import Principal, require_capability
-from app.services.rag_agent_service import rag_agent_service
 
 router = APIRouter()
 
@@ -42,6 +42,7 @@ async def chat(
         统一格式的对话响应
     """
     try:
+        rag_agent_service = service_container.get_rag_agent_service()
         logger.info(f"[会话 {request.id}] 收到快速对话请求: {request.question}")
         answer = await rag_agent_service.query(request.question, session_id=request.id)
         conversation_repository.save_chat_exchange(request.id, request.question, answer)
@@ -101,6 +102,7 @@ async def chat_stream(
         SSE 事件流
     """
     logger.info(f"[会话 {request.id}] 收到流式对话请求: {request.question}")
+    rag_agent_service = service_container.get_rag_agent_service()
 
     async def event_generator():
         full_response = ""
@@ -198,6 +200,7 @@ async def clear_session(
         操作结果
     """
     try:
+        rag_agent_service = service_container.get_rag_agent_service()
         success = rag_agent_service.clear_session(request.session_id)
         persistent_deleted = conversation_repository.delete_session(request.session_id)
         logger.info(f"清空会话: {request.session_id}, 结果: {success}")
@@ -252,6 +255,7 @@ async def get_session_info(
             for message in conversation_repository.get_session_messages(session_id)
         ]
         if not history:
+            rag_agent_service = service_container.get_rag_agent_service()
             history = rag_agent_service.get_session_history(session_id)
 
         return SessionInfoResponse(

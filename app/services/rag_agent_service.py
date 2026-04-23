@@ -372,7 +372,3 @@ class RagAgentService:
             logger.info("RAG Agent 服务资源已清理")
         except Exception as e:
             logger.error(f"清理资源失败: {e}")
-
-
-# 全局单例 - 启用流式输出
-rag_agent_service = RagAgentService(streaming=True)

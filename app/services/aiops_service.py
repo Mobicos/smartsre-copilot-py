@@ -298,7 +298,3 @@ class AIOpsService:
                 "message": f"评估完成，{'继续执行剩余步骤' if plan else '准备生成最终响应'}",
                 "remaining_steps": len(plan),
             }
-
-
-# 全局单例
-aiops_service = AIOpsService()

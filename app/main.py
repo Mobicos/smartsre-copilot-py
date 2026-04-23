@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
         await task_dispatcher.shutdown()
     logger.info("🔌 正在关闭 Milvus 连接...")
     milvus_manager.close()
-    service_container.reset()
+    await service_container.shutdown()
     logger.info(f"👋 {config.app_name} 关闭")
 
 

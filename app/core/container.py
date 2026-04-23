@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -13,6 +14,10 @@ from app.config import config
 from app.services.vector_embedding_service import DashScopeEmbeddings
 from app.services.vector_search_service import VectorSearchService
 from app.services.vector_store_manager import VectorStoreManager
+
+if TYPE_CHECKING:
+    from app.services.aiops_service import AIOpsService
+    from app.services.rag_agent_service import RagAgentService
 
 
 @dataclass
@@ -30,6 +35,8 @@ class AppContainer:
         self._embedding_service: DashScopeEmbeddings | None = None
         self._vector_store_manager: VectorStoreManager | None = None
         self._vector_search_service: VectorSearchService | None = None
+        self._rag_agent_service: RagAgentService | None = None
+        self._aiops_service: AIOpsService | None = None
 
     def initialize_required_services(self) -> None:
         """初始化启动所需的核心依赖。"""
@@ -63,12 +70,32 @@ class AppContainer:
             )
         return self._vector_search_service
 
+    def get_rag_agent_service(self) -> "RagAgentService":
+        """获取 RAG Agent 运行时服务。"""
+        if self._rag_agent_service is None:
+            logger.info("初始化 RAG Agent 服务...")
+            from app.services.rag_agent_service import RagAgentService
+
+            self._rag_agent_service = RagAgentService(streaming=True)
+        return self._rag_agent_service
+
+    def get_aiops_service(self) -> "AIOpsService":
+        """获取 AIOps 工作流运行时服务。"""
+        if self._aiops_service is None:
+            logger.info("初始化 AIOps 服务...")
+            from app.services.aiops_service import AIOpsService
+
+            self._aiops_service = AIOpsService()
+        return self._aiops_service
+
     def get_service_health(self) -> dict[str, ServiceHealth]:
         """返回核心依赖的健康摘要。"""
         embedding_ready = self._embedding_service is not None
         vector_store_ready = (
             self._vector_store_manager is not None and self._vector_store_manager.is_initialized
         )
+        rag_ready = self._rag_agent_service is not None
+        aiops_ready = self._aiops_service is not None
 
         return {
             "embedding": ServiceHealth(
@@ -79,13 +106,29 @@ class AppContainer:
                 status="ready" if vector_store_ready else "not_initialized",
                 message="VectorStore 已初始化" if vector_store_ready else "VectorStore 尚未初始化",
             ),
+            "rag_agent": ServiceHealth(
+                status="ready" if rag_ready else "not_initialized",
+                message="RAG Agent 已初始化" if rag_ready else "RAG Agent 尚未初始化",
+            ),
+            "aiops": ServiceHealth(
+                status="ready" if aiops_ready else "not_initialized",
+                message="AIOps 服务已初始化" if aiops_ready else "AIOps 服务尚未初始化",
+            ),
         }
 
     def reset(self) -> None:
         """重置容器中的运行时依赖引用。"""
+        self._aiops_service = None
+        self._rag_agent_service = None
         self._vector_search_service = None
         self._vector_store_manager = None
         self._embedding_service = None
+
+    async def shutdown(self) -> None:
+        """按生命周期关闭运行时依赖。"""
+        if self._rag_agent_service is not None:
+            await self._rag_agent_service.cleanup()
+        self.reset()
 
 
 service_container = AppContainer()
