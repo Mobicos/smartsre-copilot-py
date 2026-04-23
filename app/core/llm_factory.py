@@ -11,6 +11,7 @@
 """
 
 from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
 
 from app.config import config
 
@@ -42,7 +43,7 @@ class LLMFactory:
             temperature=temperature,
             streaming=streaming,
             base_url=base_url,
-            api_key=api_key,
+            api_key=SecretStr(api_key),
             extra_body=extra_body if extra_body else None,
         )
 

@@ -9,7 +9,7 @@ from typing import Any
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_qwq import ChatQwen
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from app.agent.mcp_client import get_mcp_tools_with_fallback
 from app.config import config
@@ -136,7 +136,11 @@ async def replanner(state: PlanExecuteState) -> dict[str, Any]:
         logger.warning(
             f"已执行 {len(past_steps)} 个步骤，超过最大限制 {MAX_STEPS}，强制生成最终响应"
         )
-        llm = ChatQwen(model=config.rag_model, api_key=config.dashscope_api_key, temperature=0)
+        llm = ChatQwen(
+            model=config.rag_model,
+            api_key=SecretStr(config.dashscope_api_key),
+            temperature=0,
+        )
         return await _generate_response(state, llm)
 
     # 获取可用工具列表
@@ -158,7 +162,11 @@ async def replanner(state: PlanExecuteState) -> dict[str, Any]:
         tools_description = "无法获取工具列表"
 
     # 创建 LLM
-    llm = ChatQwen(model=config.rag_model, api_key=config.dashscope_api_key, temperature=0)
+    llm = ChatQwen(
+        model=config.rag_model,
+        api_key=SecretStr(config.dashscope_api_key),
+        temperature=0,
+    )
 
     # 格式化已执行的步骤
     steps_summary = "\n".join(

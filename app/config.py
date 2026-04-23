@@ -33,7 +33,8 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     environment: str = "dev"
     debug: bool = False
-    host: str = "0.0.0.0"
+    # Intentionally bind all interfaces by default for container/server deployments.
+    host: str = "0.0.0.0"  # nosec B104
     port: int = 9900
     cors_allowed_origins: str = "*"
     database_path: str = str(DATABASE_FILE)

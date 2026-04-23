@@ -18,6 +18,7 @@ from langchain_qwq import ChatQwen
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.message import REMOVE_ALL_MESSAGES, add_messages
 from loguru import logger
+from pydantic import SecretStr
 from typing_extensions import TypedDict
 
 from app.agent.mcp_client import get_mcp_tools_with_fallback
@@ -85,7 +86,7 @@ class RagAgentService:
 
         self.model = ChatQwen(
             model=self.model_name,
-            api_key=config.dashscope_api_key,
+            api_key=SecretStr(config.dashscope_api_key),
             temperature=0.7,
             streaming=streaming,
         )
@@ -303,24 +304,15 @@ class RagAgentService:
         """
         try:
             # 使用 checkpointer 的 get 方法获取最新的检查点
+            # Read the latest checkpoint for this thread.
             config = {"configurable": {"thread_id": session_id}}
+            checkpoint = self.checkpointer.get(cast(Any, config))
 
-            # 获取该 thread 的最新检查点
-            checkpoint_tuple = self.checkpointer.get(config)
-
-            if not checkpoint_tuple:
-                logger.info(f"获取会话历史: {session_id}, 消息数量: 0")
+            if not checkpoint:
+                logger.info(f"No session history found: {session_id}, message count: 0")
                 return []
 
-            # checkpoint_tuple 可能是命名元组或普通元组，安全地提取 checkpoint
-            # 通常第一个元素是 checkpoint 数据
-            if hasattr(checkpoint_tuple, "checkpoint"):
-                checkpoint_data = cast(dict[str, Any], checkpoint_tuple.checkpoint)
-            else:
-                # 如果是普通元组，第一个元素是 checkpoint
-                checkpoint_data = checkpoint_tuple[0] if checkpoint_tuple else {}
-
-            # 从检查点中提取消息
+            checkpoint_data = cast(dict[str, Any], checkpoint)
             messages = checkpoint_data.get("channel_values", {}).get("messages", [])
 
             # 转换为前端需要的格式

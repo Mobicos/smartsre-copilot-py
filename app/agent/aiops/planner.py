@@ -9,7 +9,7 @@ from typing import Any
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_qwq import ChatQwen
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from app.agent.mcp_client import get_mcp_tools_with_fallback
 from app.config import config
@@ -121,7 +121,11 @@ async def planner(state: PlanExecuteState) -> dict[str, Any]:
             experience_context = ""
 
         # 步骤4: 创建 LLM 并生成计划
-        llm = ChatQwen(model=config.rag_model, api_key=config.dashscope_api_key, temperature=0)
+        llm = ChatQwen(
+            model=config.rag_model,
+            api_key=SecretStr(config.dashscope_api_key),
+            temperature=0,
+        )
 
         planner_chain = planner_prompt | llm.with_structured_output(Plan)
 

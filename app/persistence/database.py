@@ -1,7 +1,4 @@
-"""数据库持久化基础设施。
-
-支持 SQLite（本地开发）与 PostgreSQL（生产环境）两种后端。
-"""
+"""Database management helpers for SQLite and PostgreSQL."""
 
 from __future__ import annotations
 
@@ -16,32 +13,40 @@ from loguru import logger
 from app.config import DATA_DIR, config
 from app.persistence.schema import REQUIRED_TABLES, SQLITE_SCHEMA_STATEMENTS
 
+_psycopg: Any = None
+_dict_row: Any = None
+
 try:
-    import psycopg
-    from psycopg.rows import dict_row
-except Exception:  # pragma: no cover - 运行环境可能未安装 psycopg
-    psycopg = None
-    dict_row = None
+    import psycopg as _imported_psycopg
+    from psycopg.rows import dict_row as _imported_dict_row
+
+    _psycopg = _imported_psycopg
+    _dict_row = _imported_dict_row
+except Exception:  # pragma: no cover - psycopg may be absent in SQLite-only environments
+    pass
+
+psycopg: Any = _psycopg
+dict_row: Any = _dict_row
 
 
 class DatabaseConnectionAdapter:
-    """统一 SQLite / PostgreSQL 的 DB-API 差异。"""
+    """Normalize SQLite and PostgreSQL access behind a DB-API-like wrapper."""
 
     def __init__(self, connection: Any, backend: str) -> None:
         self._connection = connection
         self._backend = backend
 
-    def execute(self, query: str, params: tuple[Any, ...] | list[Any] | None = None):
+    def execute(self, query: str, params: tuple[Any, ...] | list[Any] | None = None) -> Any:
         normalized_query = self._normalize_query(query)
         normalized_params = tuple(params or ())
         if normalized_params:
             return self._connection.execute(normalized_query, normalized_params)
         return self._connection.execute(normalized_query)
 
-    def fetchone(self, query: str, params: tuple[Any, ...] | list[Any] | None = None):
+    def fetchone(self, query: str, params: tuple[Any, ...] | list[Any] | None = None) -> Any:
         return self.execute(query, params).fetchone()
 
-    def fetchall(self, query: str, params: tuple[Any, ...] | list[Any] | None = None):
+    def fetchall(self, query: str, params: tuple[Any, ...] | list[Any] | None = None) -> Any:
         return self.execute(query, params).fetchall()
 
     def commit(self) -> None:
@@ -60,11 +65,7 @@ class DatabaseConnectionAdapter:
 
 
 class DatabaseManager:
-    """统一管理应用数据库。
-
-    SQLite 在本地开发模式下自动引导 schema。
-    PostgreSQL 要求先执行 Alembic 迁移，再在启动期做 schema 就绪检查。
-    """
+    """Handle database initialization and runtime connections."""
 
     def __init__(
         self,
@@ -83,7 +84,6 @@ class DatabaseManager:
         return self._initialized
 
     def initialize(self) -> None:
-        """初始化数据库或校验 schema 就绪状态。"""
         if self._initialized:
             return
 
@@ -96,10 +96,10 @@ class DatabaseManager:
 
     @contextmanager
     def get_connection(self) -> Iterator[DatabaseConnectionAdapter]:
-        """获取连接适配器。"""
+        connection: Any
         if self.backend == "postgres":
             if psycopg is None:
-                raise RuntimeError("当前配置为 PostgreSQL，但未安装 psycopg")
+                raise RuntimeError("PostgreSQL support requires the optional 'psycopg' dependency")
             connection = psycopg.connect(self.postgres_dsn, row_factory=dict_row)
             adapter = DatabaseConnectionAdapter(connection, backend="postgres")
         else:
@@ -117,7 +117,6 @@ class DatabaseManager:
             adapter.close()
 
     def health_check(self) -> bool:
-        """数据库健康检查。"""
         try:
             self.initialize()
             with self.get_connection() as connection:
@@ -126,11 +125,10 @@ class DatabaseManager:
                 return False
             return bool(row["ok"] == 1)
         except Exception as exc:
-            logger.error(f"数据库健康检查失败: {exc}")
+            logger.error(f"Database health check failed: {exc}")
             return False
 
     def placeholders(self, count: int) -> str:
-        """生成兼容当前数据库的占位符列表。"""
         return ", ".join("?" for _ in range(count))
 
     def _initialize_sqlite(self) -> None:
@@ -151,13 +149,13 @@ class DatabaseManager:
                 },
             )
 
-        logger.info(f"SQLite 数据库初始化完成: {self.sqlite_path}")
+        logger.info(f"SQLite database initialized: {self.sqlite_path}")
 
     def _initialize_postgres(self) -> None:
         if psycopg is None:
-            raise RuntimeError("当前配置为 PostgreSQL，但未安装 psycopg")
+            raise RuntimeError("PostgreSQL support requires the optional 'psycopg' dependency")
         if not self.postgres_dsn:
-            raise RuntimeError("当前配置为 PostgreSQL，但未设置 POSTGRES_DSN")
+            raise RuntimeError("PostgreSQL support requires POSTGRES_DSN to be configured")
 
         with self.get_connection() as connection:
             rows = connection.fetchall(
@@ -167,15 +165,16 @@ class DatabaseManager:
                 WHERE table_schema = 'public'
                 """
             )
+
         existing_tables = {row["table_name"] for row in rows}
         missing_tables = [table for table in REQUIRED_TABLES if table not in existing_tables]
         if missing_tables:
             raise RuntimeError(
-                "PostgreSQL schema 未初始化，请先执行数据库迁移。缺失表: "
+                "PostgreSQL schema is missing required tables. Run migrations first: "
                 + ", ".join(missing_tables)
             )
 
-        logger.info("PostgreSQL schema 检查通过")
+        logger.info("PostgreSQL schema verified")
 
     def _ensure_sqlite_columns(
         self,
@@ -183,7 +182,6 @@ class DatabaseManager:
         table_name: str,
         columns: dict[str, str],
     ) -> None:
-        """为 SQLite 已存在表补充缺失列。"""
         rows = connection.fetchall(f"PRAGMA table_info({table_name})")
         existing = {row["name"] for row in rows}
         for column_name, definition in columns.items():

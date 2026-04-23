@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_qwq import ChatQwen
 from langgraph.prebuilt import ToolNode
 from loguru import logger
+from pydantic import SecretStr
 
 from app.agent.mcp_client import get_mcp_tools_with_fallback
 from app.config import config
@@ -48,7 +49,11 @@ async def executor(state: PlanExecuteState) -> dict[str, Any]:
         all_tools = local_tools + mcp_tools
 
         # 创建 LLM（绑定工具）
-        llm = ChatQwen(model=config.rag_model, api_key=config.dashscope_api_key, temperature=0)
+        llm = ChatQwen(
+            model=config.rag_model,
+            api_key=SecretStr(config.dashscope_api_key),
+            temperature=0,
+        )
         llm_with_tools = llm.bind_tools(all_tools)
 
         # 创建工具节点（自动执行工具调用）

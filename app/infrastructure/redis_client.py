@@ -3,20 +3,31 @@
 from __future__ import annotations
 
 import json
-from typing import Any, TypeAlias, cast
+from typing import Any, cast
 
 from loguru import logger
 
 from app.config import config
 
-try:
-    from redis import Redis
-    from redis.exceptions import RedisError as BaseRedisError
-except Exception:  # pragma: no cover - redis may be absent in some environments
-    Redis = None
-    BaseRedisError = Exception
+_RedisClient: Any = None
+_RedisError: Any = Exception
 
-RedisError: TypeAlias = BaseRedisError
+try:
+    from redis import Redis as _ImportedRedisClient
+    from redis.exceptions import RedisError as _ImportedRedisError
+
+    _RedisClient = _ImportedRedisClient
+    _RedisError = _ImportedRedisError
+except Exception:  # pragma: no cover - redis may be absent in some environments
+
+    class _FallbackRedisError(Exception):
+        """Fallback Redis error when redis is not installed."""
+
+    _RedisError = _FallbackRedisError
+
+
+RedisClient: Any = _RedisClient
+RedisError = _RedisError
 
 
 class RedisManager:
@@ -24,7 +35,7 @@ class RedisManager:
 
     def __init__(self, redis_url: str) -> None:
         self.redis_url = redis_url
-        self._client: Redis | None = None
+        self._client: Any | None = None
 
     @property
     def is_initialized(self) -> bool:
@@ -33,10 +44,10 @@ class RedisManager:
     def initialize(self) -> None:
         if self._client is not None:
             return
-        if Redis is None:
+        if RedisClient is None:
             raise RuntimeError("Redis support requires the optional 'redis' dependency")
 
-        self._client = Redis.from_url(self.redis_url, decode_responses=True)
+        self._client = RedisClient.from_url(self.redis_url, decode_responses=True)
         self._client.ping()
         logger.info(f"Redis initialized: {self.redis_url}")
 
@@ -57,7 +68,9 @@ class RedisManager:
     def dequeue_json(self, queue_name: str, timeout_seconds: int) -> dict[str, Any] | None:
         self.initialize()
         assert self._client is not None
-        result = self._client.blpop(queue_name, timeout=timeout_seconds)
+        result = cast(
+            tuple[Any, str] | None, self._client.blpop(queue_name, timeout=timeout_seconds)
+        )
         if result is None:
             return None
 
