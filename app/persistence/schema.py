@@ -25,6 +25,22 @@ SQLITE_SCHEMA_STATEMENTS = [
     ON messages(session_id, created_at, id)
     """,
     """
+    CREATE TABLE IF NOT EXISTS chat_tool_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        exchange_id TEXT NOT NULL,
+        tool_name TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        payload TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_chat_tool_events_session_created
+    ON chat_tool_events(session_id, created_at, id)
+    """,
+    """
     CREATE TABLE IF NOT EXISTS aiops_runs (
         run_id TEXT PRIMARY KEY,
         session_id TEXT NOT NULL,
@@ -35,6 +51,22 @@ SQLITE_SCHEMA_STATEMENTS = [
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS aiops_run_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        message TEXT NOT NULL,
+        payload TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(run_id) REFERENCES aiops_runs(run_id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_aiops_run_events_run_created
+    ON aiops_run_events(run_id, created_at, id)
     """,
     """
     CREATE TABLE IF NOT EXISTS indexing_tasks (
@@ -117,7 +149,9 @@ SQLITE_SCHEMA_STATEMENTS = [
 REQUIRED_TABLES = (
     "sessions",
     "messages",
+    "chat_tool_events",
     "aiops_runs",
+    "aiops_run_events",
     "indexing_tasks",
     "audit_logs",
     "agent_checkpoints",

@@ -4,7 +4,9 @@
 支持真正的流式输出和更好的模型适配。
 """
 
+import json
 from collections.abc import AsyncGenerator, Sequence
+from dataclasses import dataclass
 from typing import Annotated, Any, cast
 
 from langchain.agents import create_agent
@@ -34,6 +36,14 @@ class AgentState(TypedDict):
     """Agent 状态"""
 
     messages: Annotated[Sequence[BaseMessage], add_messages]
+
+
+@dataclass
+class ChatQueryResult:
+    """聊天查询结果。"""
+
+    answer: str
+    tool_events: list[dict[str, Any]]
 
 
 def trim_messages_middleware(state: AgentState) -> dict[str, Any] | None:
@@ -175,7 +185,7 @@ class RagAgentService:
         self,
         question: str,
         session_id: str,
-    ) -> str:
+    ) -> ChatQueryResult:
         """
         非流式处理用户问题（一次性返回完整答案）
 
@@ -184,7 +194,7 @@ class RagAgentService:
             session_id: 会话ID（作为 thread_id）
 
         Returns:
-            str: 完整答案
+            ChatQueryResult: 完整答案与工具事件
         """
         try:
             await self._initialize_agent()
@@ -219,16 +229,18 @@ class RagAgentService:
                     last_message.content if hasattr(last_message, "content") else str(last_message)
                 )
 
-                # 记录工具调用
-                if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-                    tool_names = [tc.get("name", "unknown") for tc in last_message.tool_calls]
-                    logger.info(f"[会话 {session_id}] Agent 调用了工具: {tool_names}")
+                tool_events = self._extract_tool_events_from_messages(messages_result)
+                if tool_events:
+                    logger.info(
+                        f"[会话 {session_id}] Agent 调用了工具: "
+                        f"{[event['toolName'] for event in tool_events]}"
+                    )
 
                 logger.info(f"[会话 {session_id}] RAG Agent 查询完成（非流式）")
-                return answer
+                return ChatQueryResult(answer=answer, tool_events=tool_events)
 
             logger.warning(f"[会话 {session_id}] Agent 返回结果为空")
-            return ""
+            return ChatQueryResult(answer="", tool_events=[])
 
         except Exception as e:
             logger.error(f"[会话 {session_id}] RAG Agent 查询失败（非流式）: {e}")
@@ -253,6 +265,9 @@ class RagAgentService:
         """
         try:
             await self._initialize_agent()
+            full_response = ""
+            tool_events: list[dict[str, Any]] = []
+            seen_signatures: set[str] = set()
 
             logger.info(f"[会话 {session_id}] RAG Agent 收到查询（流式）: {question}")
 
@@ -282,6 +297,17 @@ class RagAgentService:
                     else "unknown"
                 )
                 message_type = type(token).__name__
+                extracted_tool_events = self._extract_tool_events_from_token(
+                    token,
+                    seen_signatures=seen_signatures,
+                )
+                for tool_event in extracted_tool_events:
+                    tool_events.append(tool_event)
+                    yield {
+                        "type": "tool_call",
+                        "data": tool_event,
+                        "node": node_name,
+                    }
 
                 if message_type in ("AIMessage", "AIMessageChunk"):
                     content_blocks = getattr(token, "content_blocks", None)
@@ -291,6 +317,7 @@ class RagAgentService:
                             if isinstance(block, dict) and block.get("type") == "text":
                                 text_content = block.get("text", "")
                                 if text_content:
+                                    full_response += text_content
                                     yield {
                                         "type": "content",
                                         "data": text_content,
@@ -298,7 +325,10 @@ class RagAgentService:
                                     }
 
             logger.info(f"[会话 {session_id}] RAG Agent 查询完成（流式）")
-            yield {"type": "complete"}
+            yield {
+                "type": "complete",
+                "data": {"answer": full_response, "tool_calls": tool_events},
+            }
 
         except Exception as e:
             logger.error(f"[会话 {session_id}] RAG Agent 查询失败（流式）: {e}")
@@ -392,3 +422,87 @@ class RagAgentService:
             logger.info("RAG Agent 服务资源已清理")
         except Exception as e:
             logger.error(f"清理资源失败: {e}")
+
+    def _extract_tool_events_from_messages(
+        self,
+        messages: Sequence[BaseMessage],
+    ) -> list[dict[str, Any]]:
+        """从消息列表中提取去重后的工具调用事件。"""
+        events: list[dict[str, Any]] = []
+        seen_signatures: set[str] = set()
+
+        for message in messages:
+            tool_calls = getattr(message, "tool_calls", None)
+            if not tool_calls:
+                continue
+            events.extend(self._normalize_tool_calls(tool_calls, seen_signatures))
+
+        return events
+
+    def _extract_tool_events_from_token(
+        self,
+        token: Any,
+        *,
+        seen_signatures: set[str],
+    ) -> list[dict[str, Any]]:
+        """从流式 token 中提取工具调用事件。"""
+        tool_calls = getattr(token, "tool_calls", None)
+        if tool_calls:
+            return self._normalize_tool_calls(tool_calls, seen_signatures)
+
+        content_blocks = getattr(token, "content_blocks", None)
+        if not isinstance(content_blocks, list):
+            return []
+
+        tool_calls_from_blocks: list[dict[str, Any]] = []
+        for block in content_blocks:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") not in {"tool_call", "server_tool_call"}:
+                continue
+            tool_calls_from_blocks.append(
+                {
+                    "id": block.get("id"),
+                    "name": block.get("name", "unknown"),
+                    "args": block.get("args") or block.get("input") or {},
+                }
+            )
+
+        return self._normalize_tool_calls(tool_calls_from_blocks, seen_signatures)
+
+    def _normalize_tool_calls(
+        self,
+        tool_calls: Sequence[dict[str, Any]],
+        seen_signatures: set[str],
+    ) -> list[dict[str, Any]]:
+        """归一化工具调用并去重。"""
+        normalized: list[dict[str, Any]] = []
+
+        for tool_call in tool_calls:
+            tool_name = str(tool_call.get("name", "unknown"))
+            payload = {
+                "toolCallId": tool_call.get("id"),
+                "args": tool_call.get("args", {}),
+            }
+            signature = json.dumps(
+                {
+                    "toolName": tool_name,
+                    "toolCallId": payload["toolCallId"],
+                    "args": payload["args"],
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            if signature in seen_signatures:
+                continue
+
+            seen_signatures.add(signature)
+            normalized.append(
+                {
+                    "toolName": tool_name,
+                    "eventType": "call",
+                    "payload": payload,
+                }
+            )
+
+        return normalized

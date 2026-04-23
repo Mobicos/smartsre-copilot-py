@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -168,6 +169,71 @@ class ConversationRepository:
         return bool(deleted)
 
 
+class ChatToolEventRepository:
+    """聊天工具调用事件仓储。"""
+
+    def append_events(
+        self,
+        session_id: str,
+        *,
+        exchange_id: str,
+        events: list[dict[str, Any]],
+    ) -> None:
+        if not events:
+            return
+
+        database_manager.initialize()
+        with database_manager.get_connection() as connection:
+            for event in events:
+                connection.execute(
+                    """
+                    INSERT INTO chat_tool_events (
+                        session_id, exchange_id, tool_name, event_type, payload, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        session_id,
+                        exchange_id,
+                        str(event.get("toolName", "unknown")),
+                        str(event.get("eventType", "call")),
+                        json.dumps(event.get("payload"), ensure_ascii=False)
+                        if event.get("payload") is not None
+                        else None,
+                        utc_now(),
+                    ),
+                )
+
+    def list_events(self, session_id: str) -> list[dict[str, Any]]:
+        """按时间顺序列出会话工具事件。"""
+        database_manager.initialize()
+        with database_manager.get_connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, session_id, exchange_id, tool_name, event_type, payload, created_at
+                FROM chat_tool_events
+                WHERE session_id = ?
+                ORDER BY created_at ASC, id ASC
+                """,
+                (session_id,),
+            ).fetchall()
+
+        events: list[dict[str, Any]] = []
+        for row in rows:
+            payload = row["payload"]
+            events.append(
+                {
+                    "id": row["id"],
+                    "sessionId": row["session_id"],
+                    "exchangeId": row["exchange_id"],
+                    "toolName": row["tool_name"],
+                    "eventType": row["event_type"],
+                    "payload": json.loads(payload) if payload else None,
+                    "createdAt": row["created_at"],
+                }
+            )
+        return events
+
+
 class AIOpsRunRepository:
     """AIOps 运行记录仓储。"""
 
@@ -205,6 +271,77 @@ class AIOpsRunRepository:
                 """,
                 (status, report, error_message, now, run_id),
             )
+
+    def get_run(self, run_id: str) -> dict[str, Any] | None:
+        """获取单次 AIOps 运行记录。"""
+        database_manager.initialize()
+        with database_manager.get_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT run_id, session_id, status, task_input, report, error_message, created_at, updated_at
+                FROM aiops_runs
+                WHERE run_id = ?
+                """,
+                (run_id,),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def append_event(
+        self,
+        run_id: str,
+        *,
+        event_type: str,
+        stage: str,
+        message: str,
+        payload: dict[str, Any] | None = None,
+    ) -> None:
+        """追加 AIOps 中间事件。"""
+        database_manager.initialize()
+        with database_manager.get_connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO aiops_run_events (
+                    run_id, event_type, stage, message, payload, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    event_type,
+                    stage,
+                    message,
+                    json.dumps(payload, ensure_ascii=False) if payload is not None else None,
+                    utc_now(),
+                ),
+            )
+
+    def list_events(self, run_id: str) -> list[dict[str, Any]]:
+        """按时间顺序列出运行事件。"""
+        database_manager.initialize()
+        with database_manager.get_connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, run_id, event_type, stage, message, payload, created_at
+                FROM aiops_run_events
+                WHERE run_id = ?
+                ORDER BY created_at ASC, id ASC
+                """,
+                (run_id,),
+            ).fetchall()
+        events: list[dict[str, Any]] = []
+        for row in rows:
+            payload = row["payload"]
+            events.append(
+                {
+                    "id": row["id"],
+                    "runId": row["run_id"],
+                    "type": row["event_type"],
+                    "stage": row["stage"],
+                    "message": row["message"],
+                    "payload": json.loads(payload) if payload else None,
+                    "createdAt": row["created_at"],
+                }
+            )
+        return events
 
 
 class IndexingTaskRepository:
@@ -489,6 +626,7 @@ class AuditLogRepository:
 
 
 conversation_repository = ConversationRepository()
+chat_tool_event_repository = ChatToolEventRepository()
 aiops_run_repository = AIOpsRunRepository()
 indexing_task_repository = IndexingTaskRepository()
 audit_log_repository = AuditLogRepository()

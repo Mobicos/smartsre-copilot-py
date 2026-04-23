@@ -5,6 +5,7 @@ AIOps 智能运维接口
 import json
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from loguru import logger
 from sse_starlette.sse import EventSourceResponse
 
@@ -138,6 +139,18 @@ async def diagnose_stream(
     async def event_generator():
         try:
             async for event in aiops_service.diagnose(session_id=session_id):
+                event_payload = {
+                    **event,
+                    "run_id": run_id,
+                }
+                aiops_run_repository.append_event(
+                    run_id,
+                    event_type=str(event_payload.get("type", "status")),
+                    stage=str(event_payload.get("stage", "unknown")),
+                    message=str(event_payload.get("message", "")),
+                    payload=event_payload,
+                )
+
                 if event.get("type") == "complete":
                     report = (
                         event.get("diagnosis", {}).get("report", "")
@@ -163,7 +176,7 @@ async def diagnose_stream(
                     )
 
                 # 发送事件
-                yield {"event": "message", "data": json.dumps(event, ensure_ascii=False)}
+                yield {"event": "message", "data": json.dumps(event_payload, ensure_ascii=False)}
 
                 # 如果是完成或错误事件，结束流
                 if event.get("type") in ["complete", "error"]:
@@ -178,12 +191,64 @@ async def diagnose_stream(
                 status="failed",
                 error_message=str(e),
             )
+            error_event = {
+                "type": "error",
+                "stage": "exception",
+                "message": f"诊断异常: {str(e)}",
+                "run_id": run_id,
+            }
+            aiops_run_repository.append_event(
+                run_id,
+                event_type="error",
+                stage="exception",
+                message=error_event["message"],
+                payload=error_event,
+            )
             yield {
                 "event": "message",
-                "data": json.dumps(
-                    {"type": "error", "stage": "exception", "message": f"诊断异常: {str(e)}"},
-                    ensure_ascii=False,
-                ),
+                "data": json.dumps(error_event, ensure_ascii=False),
             }
 
     return EventSourceResponse(event_generator())
+
+
+@router.get("/aiops/runs/{run_id}")
+async def get_aiops_run(
+    run_id: str,
+    _principal: Principal = Depends(require_capability("aiops:run")),
+):
+    """查询 AIOps 运行摘要。"""
+    run = aiops_run_repository.get_run(run_id)
+    if run is None:
+        return JSONResponse(
+            status_code=404,
+            content={"code": 404, "message": "not_found", "data": None},
+        )
+
+    return JSONResponse(
+        status_code=200,
+        content={"code": 200, "message": "success", "data": run},
+    )
+
+
+@router.get("/aiops/runs/{run_id}/events")
+async def list_aiops_run_events(
+    run_id: str,
+    _principal: Principal = Depends(require_capability("aiops:run")),
+):
+    """查询 AIOps 运行过程事件。"""
+    run = aiops_run_repository.get_run(run_id)
+    if run is None:
+        return JSONResponse(
+            status_code=404,
+            content={"code": 404, "message": "not_found", "data": None},
+        )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "code": 200,
+            "message": "success",
+            "data": aiops_run_repository.list_events(run_id),
+        },
+    )

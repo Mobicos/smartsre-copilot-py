@@ -4,6 +4,8 @@
 """
 
 import json
+import uuid
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -13,7 +15,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.core.container import service_container
 from app.models.request import ChatRequest, ClearRequest
 from app.models.response import ApiResponse, SessionInfoResponse
-from app.persistence import conversation_repository
+from app.persistence import chat_tool_event_repository, conversation_repository
 from app.security import Principal, require_capability
 
 router = APIRouter()
@@ -43,9 +45,15 @@ async def chat(
     """
     try:
         rag_agent_service = service_container.get_rag_agent_service()
+        exchange_id = str(uuid.uuid4())
         logger.info(f"[会话 {request.id}] 收到快速对话请求: {request.question}")
-        answer = await rag_agent_service.query(request.question, session_id=request.id)
-        conversation_repository.save_chat_exchange(request.id, request.question, answer)
+        result = await rag_agent_service.query(request.question, session_id=request.id)
+        conversation_repository.save_chat_exchange(request.id, request.question, result.answer)
+        chat_tool_event_repository.append_events(
+            request.id,
+            exchange_id=exchange_id,
+            events=result.tool_events,
+        )
 
         logger.info(f"[会话 {request.id}] 快速对话完成")
 
@@ -54,7 +62,12 @@ async def chat(
             content={
                 "code": 200,
                 "message": "success",
-                "data": {"success": True, "answer": answer, "errorMessage": None},
+                "data": {
+                    "success": True,
+                    "answer": result.answer,
+                    "toolEvents": result.tool_events,
+                    "errorMessage": None,
+                },
             },
         )
 
@@ -103,9 +116,11 @@ async def chat_stream(
     """
     logger.info(f"[会话 {request.id}] 收到流式对话请求: {request.question}")
     rag_agent_service = service_container.get_rag_agent_service()
+    exchange_id = str(uuid.uuid4())
 
     async def event_generator():
         full_response = ""
+        tool_events: list[dict[str, Any]] = []
         try:
             async for chunk in rag_agent_service.query_stream(
                 request.question, session_id=request.id
@@ -128,6 +143,8 @@ async def chat_stream(
                         ),
                     }
                 elif chunk_type == "tool_call":
+                    if isinstance(chunk_data, dict):
+                        tool_events.append(chunk_data)
                     # 发送工具调用事件（可选，前端可以显示工具调用状态）
                     yield {
                         "event": "message",
@@ -153,10 +170,21 @@ async def chat_stream(
                         ),
                     }
                 elif chunk_type == "complete":
+                    complete_data = chunk_data if isinstance(chunk_data, dict) else {}
+                    if not full_response:
+                        full_response = str(complete_data.get("answer", ""))
+                    complete_tool_calls = complete_data.get("tool_calls", [])
+                    if isinstance(complete_tool_calls, list):
+                        tool_events = cast(list[dict[str, object]], complete_tool_calls)
                     conversation_repository.save_chat_exchange(
                         request.id,
                         request.question,
                         full_response,
+                    )
+                    chat_tool_event_repository.append_events(
+                        request.id,
+                        exchange_id=exchange_id,
+                        events=cast(list[dict[str, Any]], tool_events),
                     )
                     # 发送完成信号
                     yield {
@@ -264,4 +292,24 @@ async def get_session_info(
 
     except Exception as e:
         logger.error(f"获取会话信息错误: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/chat/session/{session_id}/tool-events")
+async def get_session_tool_events(
+    session_id: str,
+    _principal: Principal = Depends(require_capability("chat:read")),
+):
+    """查询会话工具调用事件。"""
+    try:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "code": 200,
+                "message": "success",
+                "data": chat_tool_event_repository.list_events(session_id),
+            },
+        )
+    except Exception as e:
+        logger.error(f"获取工具事件错误: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
