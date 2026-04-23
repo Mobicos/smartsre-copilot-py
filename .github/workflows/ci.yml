@@ -10,6 +10,10 @@ jobs:
   quality:
     name: Quality Checks
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
 
     steps:
       - name: Checkout
@@ -18,7 +22,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
@@ -31,10 +35,14 @@ jobs:
       - name: Lint with Ruff
         run: python -m ruff check app mcp_servers
 
-      - name: Run tests if present
-        run: |
-          if [ -d tests ]; then
-            python -m pytest tests -q
-          else
-            echo "No tests directory found; skipping pytest."
-          fi
+      - name: Check formatting with Ruff
+        run: python -m ruff format --check app mcp_servers
+
+      - name: Type check with mypy
+        run: python -m mypy app --ignore-missing-imports
+
+      - name: Security scan with Bandit
+        run: python -m bandit -r app -ll
+
+      - name: Run tests
+        run: python -m pytest tests -q

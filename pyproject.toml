@@ -46,6 +46,7 @@ dev = [
     "ruff>=0.1.9",
     "isort>=5.13.0",
     "mypy>=1.8.0",
+    "bandit>=1.7.10",
     "pre-commit>=3.6.0",
     "ipython>=8.20.0",
     "ipdb>=0.13.13",
@@ -181,6 +182,7 @@ skips = ["B101", "B601"]
 skips = ["*/test_*.py", "*_test.py"]
 
 [tool.pyright]
+# Editor/local analysis only; CI gate uses Ruff, mypy, Bandit, and pytest.
 include = ["app"]
 exclude = ["**/node_modules", "**/__pycache__", ".git", ".venv", "venv", "logs"]
 pythonVersion = "3.11"
