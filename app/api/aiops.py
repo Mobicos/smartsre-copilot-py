@@ -2,8 +2,6 @@
 AIOps 智能运维接口
 """
 
-import json
-
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -11,7 +9,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.core.container import service_container
 from app.models.aiops import AIOpsRequest
-from app.persistence import aiops_run_repository, conversation_repository
+from app.persistence import aiops_run_repository
 from app.security import Principal, require_capability
 
 router = APIRouter()
@@ -129,87 +127,9 @@ async def diagnose_stream(
         SSE 事件流
     """
     session_id = request.session_id or "default"
-    aiops_service = service_container.get_aiops_service()
+    aiops_application_service = service_container.get_aiops_application_service()
     logger.info(f"[会话 {session_id}] 收到 AIOps 诊断请求（流式）")
-    run_id = aiops_run_repository.create_run(
-        session_id,
-        "诊断当前系统是否存在告警，如果存在告警请详细分析告警原因并生成诊断报告",
-    )
-
-    async def event_generator():
-        try:
-            async for event in aiops_service.diagnose(session_id=session_id):
-                event_payload = {
-                    **event,
-                    "run_id": run_id,
-                }
-                aiops_run_repository.append_event(
-                    run_id,
-                    event_type=str(event_payload.get("type", "status")),
-                    stage=str(event_payload.get("stage", "unknown")),
-                    message=str(event_payload.get("message", "")),
-                    payload=event_payload,
-                )
-
-                if event.get("type") == "complete":
-                    report = (
-                        event.get("diagnosis", {}).get("report", "")
-                        if isinstance(event.get("diagnosis"), dict)
-                        else ""
-                    )
-                    aiops_run_repository.update_run(
-                        run_id,
-                        status="completed",
-                        report=report,
-                    )
-                    if report:
-                        conversation_repository.save_aiops_report(
-                            session_id,
-                            "AIOps 自动诊断",
-                            report,
-                        )
-                elif event.get("type") == "error":
-                    aiops_run_repository.update_run(
-                        run_id,
-                        status="failed",
-                        error_message=event.get("message", "未知错误"),
-                    )
-
-                # 发送事件
-                yield {"event": "message", "data": json.dumps(event_payload, ensure_ascii=False)}
-
-                # 如果是完成或错误事件，结束流
-                if event.get("type") in ["complete", "error"]:
-                    break
-
-            logger.info(f"[会话 {session_id}] AIOps 诊断流式响应完成")
-
-        except Exception as e:
-            logger.error(f"[会话 {session_id}] AIOps 诊断流式响应异常: {e}", exc_info=True)
-            aiops_run_repository.update_run(
-                run_id,
-                status="failed",
-                error_message=str(e),
-            )
-            error_event = {
-                "type": "error",
-                "stage": "exception",
-                "message": f"诊断异常: {str(e)}",
-                "run_id": run_id,
-            }
-            aiops_run_repository.append_event(
-                run_id,
-                event_type="error",
-                stage="exception",
-                message=error_event["message"],
-                payload=error_event,
-            )
-            yield {
-                "event": "message",
-                "data": json.dumps(error_event, ensure_ascii=False),
-            }
-
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(aiops_application_service.stream_diagnosis(session_id))
 
 
 @router.get("/aiops/runs/{run_id}")

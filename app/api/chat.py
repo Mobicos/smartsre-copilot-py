@@ -1,11 +1,4 @@
-"""对话接口
-
-提供基于 RAG Agent 的普通对话和流式对话接口
-"""
-
-import json
-import uuid
-from typing import Any, cast
+"""对话接口。"""
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -44,16 +37,9 @@ async def chat(
         统一格式的对话响应
     """
     try:
-        rag_agent_service = service_container.get_rag_agent_service()
-        exchange_id = str(uuid.uuid4())
+        chat_application_service = service_container.get_chat_application_service()
         logger.info(f"[会话 {request.id}] 收到快速对话请求: {request.question}")
-        result = await rag_agent_service.query(request.question, session_id=request.id)
-        conversation_repository.save_chat_exchange(request.id, request.question, result.answer)
-        chat_tool_event_repository.append_events(
-            request.id,
-            exchange_id=exchange_id,
-            events=result.tool_events,
-        )
+        result = await chat_application_service.run_chat(request.id, request.question)
 
         logger.info(f"[会话 {request.id}] 快速对话完成")
 
@@ -64,8 +50,9 @@ async def chat(
                 "message": "success",
                 "data": {
                     "success": True,
-                    "answer": result.answer,
-                    "toolEvents": result.tool_events,
+                    "answer": result["answer"],
+                    "toolEvents": result["toolEvents"],
+                    "exchangeId": result["exchangeId"],
                     "errorMessage": None,
                 },
             },
@@ -115,103 +102,9 @@ async def chat_stream(
         SSE 事件流
     """
     logger.info(f"[会话 {request.id}] 收到流式对话请求: {request.question}")
-    rag_agent_service = service_container.get_rag_agent_service()
-    exchange_id = str(uuid.uuid4())
+    chat_application_service = service_container.get_chat_application_service()
 
-    async def event_generator():
-        full_response = ""
-        tool_events: list[dict[str, Any]] = []
-        try:
-            async for chunk in rag_agent_service.query_stream(
-                request.question, session_id=request.id
-            ):
-                chunk_type = chunk.get("type", "unknown")
-                chunk_data = chunk.get("data", None)
-
-                # 处理调试类型消息（新增）
-                if chunk_type == "debug":
-                    # 调试信息，可以选择发送或忽略
-                    yield {
-                        "event": "message",
-                        "data": json.dumps(
-                            {
-                                "type": "debug",
-                                "node": chunk.get("node", "unknown"),
-                                "message_type": chunk.get("message_type", "unknown"),
-                            },
-                            ensure_ascii=False,
-                        ),
-                    }
-                elif chunk_type == "tool_call":
-                    if isinstance(chunk_data, dict):
-                        tool_events.append(chunk_data)
-                    # 发送工具调用事件（可选，前端可以显示工具调用状态）
-                    yield {
-                        "event": "message",
-                        "data": json.dumps(
-                            {"type": "tool_call", "data": chunk_data}, ensure_ascii=False
-                        ),
-                    }
-                elif chunk_type == "search_results":
-                    # 发送检索结果（可选，前端可以忽略）
-                    yield {
-                        "event": "message",
-                        "data": json.dumps(
-                            {"type": "search_results", "data": chunk_data}, ensure_ascii=False
-                        ),
-                    }
-                elif chunk_type == "content":
-                    full_response += chunk_data or ""
-                    # 发送内容块 - 关键：data 必须是 JSON 字符串
-                    yield {
-                        "event": "message",
-                        "data": json.dumps(
-                            {"type": "content", "data": chunk_data}, ensure_ascii=False
-                        ),
-                    }
-                elif chunk_type == "complete":
-                    complete_data = chunk_data if isinstance(chunk_data, dict) else {}
-                    if not full_response:
-                        full_response = str(complete_data.get("answer", ""))
-                    complete_tool_calls = complete_data.get("tool_calls", [])
-                    if isinstance(complete_tool_calls, list):
-                        tool_events = cast(list[dict[str, object]], complete_tool_calls)
-                    conversation_repository.save_chat_exchange(
-                        request.id,
-                        request.question,
-                        full_response,
-                    )
-                    chat_tool_event_repository.append_events(
-                        request.id,
-                        exchange_id=exchange_id,
-                        events=cast(list[dict[str, Any]], tool_events),
-                    )
-                    # 发送完成信号
-                    yield {
-                        "event": "message",
-                        "data": json.dumps(
-                            {"type": "done", "data": chunk_data}, ensure_ascii=False
-                        ),
-                    }
-                elif chunk_type == "error":
-                    # 发送错误信息
-                    yield {
-                        "event": "message",
-                        "data": json.dumps(
-                            {"type": "error", "data": str(chunk_data)}, ensure_ascii=False
-                        ),
-                    }
-
-            logger.info(f"[会话 {request.id}] 流式对话完成")
-
-        except Exception as e:
-            logger.error(f"流式对话接口错误: {e}")
-            yield {
-                "event": "message",
-                "data": json.dumps({"type": "error", "data": str(e)}, ensure_ascii=False),
-            }
-
-    return EventSourceResponse(event_generator())
+    return EventSourceResponse(chat_application_service.stream_chat(request.id, request.question))
 
 
 @router.post("/chat/clear", response_model=ApiResponse)
@@ -228,14 +121,13 @@ async def clear_session(
         操作结果
     """
     try:
-        rag_agent_service = service_container.get_rag_agent_service()
-        success = rag_agent_service.clear_session(request.session_id)
-        persistent_deleted = conversation_repository.delete_session(request.session_id)
+        chat_application_service = service_container.get_chat_application_service()
+        success = chat_application_service.clear_session(request.session_id)
         logger.info(f"清空会话: {request.session_id}, 结果: {success}")
 
         return ApiResponse(
-            status="success" if (success or persistent_deleted) else "error",
-            message="会话已清空" if (success or persistent_deleted) else "清空会话失败",
+            status="success" if success else "error",
+            message="会话已清空" if success else "清空会话失败",
             data=None,
         )
 

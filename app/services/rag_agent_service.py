@@ -23,9 +23,8 @@ from loguru import logger
 from pydantic import SecretStr
 from typing_extensions import TypedDict
 
-from app.agent.mcp_client import get_mcp_tools_with_fallback
+from app.agent.tool_registry import tool_registry
 from app.config import config
-from app.tools import get_current_time, retrieve_knowledge
 
 # 阿里千问大模型和langchain集成参考： https://docs.langchain.com/oss/python/integrations/chat/qwen
 # 注意：需要配置环境变量 DASHSCOPE_API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1 否则默认访问的是新加坡站点
@@ -101,9 +100,6 @@ class RagAgentService:
             streaming=streaming,
         )
 
-        # 定义基础工具
-        self.tools = [retrieve_knowledge, get_current_time]
-
         # MCP 客户端（延迟初始化，使用全局管理）
         self.mcp_tools: list = []
 
@@ -124,15 +120,12 @@ class RagAgentService:
         if self._agent_initialized:
             return
 
-        # 获取 MCP 工具（逐个服务加载，失败时自动降级）
-        mcp_tools = await get_mcp_tools_with_fallback()
-        logger.info(f"成功加载 {len(mcp_tools)} 个 MCP 工具")
-
-        # 将 MCP 工具添加到实例变量中
-        self.mcp_tools = mcp_tools
-
-        # 合并所有工具
-        all_tools = self.tools + self.mcp_tools
+        all_tools = await tool_registry.get_chat_tools()
+        self.mcp_tools = [
+            tool
+            for tool in all_tools
+            if getattr(tool, "name", "") not in {"retrieve_knowledge", "get_current_time"}
+        ]
 
         self.agent = create_agent(
             self.model,

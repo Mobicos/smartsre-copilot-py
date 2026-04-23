@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     mcp_cls_url: str = "http://localhost:8003/mcp"
     mcp_monitor_transport: str = "streamable-http"
     mcp_monitor_url: str = "http://localhost:8004/mcp"
+    mcp_tools_load_timeout_seconds: float = 8.0
 
     @property
     def is_production(self) -> bool:

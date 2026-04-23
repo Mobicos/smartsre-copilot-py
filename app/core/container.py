@@ -12,6 +12,11 @@ from loguru import logger
 
 from app.config import config
 from app.infrastructure import checkpoint_saver
+from app.persistence import (
+    aiops_run_repository,
+    chat_tool_event_repository,
+    conversation_repository,
+)
 from app.services.document_splitter_service import DocumentSplitterService
 from app.services.vector_embedding_service import DashScopeEmbeddings
 from app.services.vector_index_service import VectorIndexService
@@ -19,6 +24,8 @@ from app.services.vector_search_service import VectorSearchService
 from app.services.vector_store_manager import VectorStoreManager
 
 if TYPE_CHECKING:
+    from app.application.aiops_application_service import AIOpsApplicationService
+    from app.application.chat_application_service import ChatApplicationService
     from app.services.aiops_service import AIOpsService
     from app.services.rag_agent_service import RagAgentService
 
@@ -42,6 +49,8 @@ class AppContainer:
         self._vector_index_service: VectorIndexService | None = None
         self._rag_agent_service: RagAgentService | None = None
         self._aiops_service: AIOpsService | None = None
+        self._chat_application_service: ChatApplicationService | None = None
+        self._aiops_application_service: AIOpsApplicationService | None = None
 
     def initialize_required_services(self) -> None:
         """初始化启动所需的核心依赖。"""
@@ -111,6 +120,30 @@ class AppContainer:
             self._aiops_service = AIOpsService(checkpointer=checkpoint_saver)
         return self._aiops_service
 
+    def get_chat_application_service(self) -> ChatApplicationService:
+        """获取聊天应用服务。"""
+        if self._chat_application_service is None:
+            from app.application.chat_application_service import ChatApplicationService
+
+            self._chat_application_service = ChatApplicationService(
+                rag_agent_service=self.get_rag_agent_service(),
+                conversation_repository=conversation_repository,
+                chat_tool_event_repository=chat_tool_event_repository,
+            )
+        return self._chat_application_service
+
+    def get_aiops_application_service(self) -> AIOpsApplicationService:
+        """获取 AIOps 应用服务。"""
+        if self._aiops_application_service is None:
+            from app.application.aiops_application_service import AIOpsApplicationService
+
+            self._aiops_application_service = AIOpsApplicationService(
+                aiops_service=self.get_aiops_service(),
+                aiops_run_repository=aiops_run_repository,
+                conversation_repository=conversation_repository,
+            )
+        return self._aiops_application_service
+
     def get_service_health(self) -> dict[str, ServiceHealth]:
         """返回核心依赖的健康摘要。"""
         embedding_ready = self._embedding_service is not None
@@ -150,6 +183,8 @@ class AppContainer:
         """重置容器中的运行时依赖引用。"""
         self._aiops_service = None
         self._rag_agent_service = None
+        self._aiops_application_service = None
+        self._chat_application_service = None
         self._vector_index_service = None
         self._document_splitter_service = None
         self._vector_search_service = None

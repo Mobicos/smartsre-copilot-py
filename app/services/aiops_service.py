@@ -10,7 +10,12 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 from loguru import logger
 
-from app.agent.aiops import PlanExecuteState, executor, planner, replanner
+from app.agent.aiops import (
+    PlanExecuteState,
+    executor as aiops_executor,
+    planner as aiops_planner,
+    replanner as aiops_replanner,
+)
 from app.config import config
 
 # 节点名称常量
@@ -37,9 +42,9 @@ class AIOpsService:
         workflow = StateGraph(PlanExecuteState)
 
         # 添加节点
-        workflow.add_node(NODE_PLANNER, planner)  # 制定计划
-        workflow.add_node(NODE_EXECUTOR, executor)  # 执行步骤
-        workflow.add_node(NODE_REPLANNER, replanner)  # 重新规划
+        workflow.add_node(NODE_PLANNER, aiops_planner)  # 制定计划
+        workflow.add_node(NODE_EXECUTOR, aiops_executor)  # 执行步骤
+        workflow.add_node(NODE_REPLANNER, aiops_replanner)  # 重新规划
 
         # 设置入口点
         workflow.set_entry_point(NODE_PLANNER)
