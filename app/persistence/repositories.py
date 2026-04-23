@@ -211,6 +211,14 @@ class IndexingTaskRepository:
     """索引任务仓储。"""
 
     ACTIVE_TASK_STATUSES = ("queued", "processing")
+    ALLOWED_TASK_STATUSES = frozenset(
+        {
+            "queued",
+            "processing",
+            "completed",
+            "failed_permanently",
+        }
+    )
 
     def create_task(
         self,
@@ -238,18 +246,18 @@ class IndexingTaskRepository:
     def find_active_task_by_file_path(self, file_path: str) -> dict[str, Any] | None:
         """查找指定文件当前活跃任务。"""
         database_manager.initialize()
-        placeholders = ", ".join("?" for _ in self.ACTIVE_TASK_STATUSES)
+        status_queued, status_processing = self.ACTIVE_TASK_STATUSES
         with database_manager.get_connection() as connection:
             row = connection.execute(
-                f"""
+                """
                 SELECT task_id, filename, file_path, status, attempt_count, max_retries,
                        error_message, created_at, updated_at
                 FROM indexing_tasks
-                WHERE file_path = ? AND status IN ({placeholders})
+                WHERE file_path = ? AND status IN (?, ?)
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
-                (file_path, *self.ACTIVE_TASK_STATUSES),
+                (file_path, status_queued, status_processing),
             ).fetchone()
         return dict(row) if row is not None else None
 
@@ -316,18 +324,29 @@ class IndexingTaskRepository:
     def list_tasks_by_status(self, statuses: list[str]) -> list[dict[str, Any]]:
         """按状态查询任务列表。"""
         database_manager.initialize()
-        placeholders = ", ".join("?" for _ in statuses)
+        if not statuses:
+            return []
+
+        invalid_statuses = [
+            status for status in statuses if status not in self.ALLOWED_TASK_STATUSES
+        ]
+        if invalid_statuses:
+            raise ValueError(f"Unsupported task statuses: {', '.join(invalid_statuses)}")
+
+        normalized_statuses = list(dict.fromkeys(statuses))
+        query = """
+            SELECT task_id, filename, file_path, status, attempt_count, max_retries,
+                   error_message, created_at, updated_at
+            FROM indexing_tasks
+            WHERE status = ?
+            ORDER BY created_at ASC
+        """
+        rows: list[Any] = []
         with database_manager.get_connection() as connection:
-            rows = connection.execute(
-                f"""
-                SELECT task_id, filename, file_path, status, attempt_count, max_retries,
-                       error_message, created_at, updated_at
-                FROM indexing_tasks
-                WHERE status IN ({placeholders})
-                ORDER BY created_at ASC
-                """,
-                tuple(statuses),
-            ).fetchall()
+            for status in normalized_statuses:
+                rows.extend(connection.execute(query, (status,)).fetchall())
+
+        rows.sort(key=lambda row: row["created_at"])
         return [dict(row) for row in rows]
 
     def claim_next_queued_task(self) -> dict[str, Any] | None:

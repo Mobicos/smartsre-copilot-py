@@ -1,7 +1,5 @@
 """向量存储管理器 - 封装 Milvus VectorStore 操作。"""
 
-from typing import cast
-
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_milvus import Milvus
@@ -97,7 +95,7 @@ class VectorStoreManager:
                 f"批量添加 {len(documents)} 个文档到 VectorStore 完成, "
                 f"耗时: {elapsed:.2f}秒, 平均: {elapsed / len(documents):.2f}秒/个"
             )
-            return cast(list[str], result_ids)
+            return result_ids
         except Exception as e:
             logger.error(f"添加文档失败: {e}")
             raise
@@ -158,7 +156,7 @@ class VectorStoreManager:
             self._initialize_vector_store()
             docs = self.get_vector_store().similarity_search(query, k=k)
             logger.debug(f"相似度搜索完成: query='{query}', 结果数={len(docs)}")
-            return cast(list[Document], docs)
+            return docs
         except Exception as e:
             logger.error(f"相似度搜索失败: {e}")
             return []
