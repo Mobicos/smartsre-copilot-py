@@ -170,6 +170,7 @@ POSTGRES_DSN=postgresql://smartsre:smartsre@postgres:5432/smartsre
 REDIS_URL=redis://redis:6379/0
 TASK_QUEUE_BACKEND=redis
 TASK_DISPATCHER_MODE=detached
+INDEXING_TASK_MAX_RETRIES=3
 
 MILVUS_HOST=standalone
 MILVUS_PORT=19530
@@ -269,6 +270,7 @@ Key settings:
 - `REDIS_URL`: Redis connection string
 - `TASK_QUEUE_BACKEND`: `database` or `redis`
 - `TASK_DISPATCHER_MODE`: `embedded` or `detached`
+- `INDEXING_TASK_MAX_RETRIES`: max retry attempts for background indexing tasks
 - `DASHSCOPE_MODEL`: chat model
 - `MILVUS_HOST`, `MILVUS_PORT`: vector database connection
 - `RAG_TOP_K`: retrieval count

@@ -42,6 +42,8 @@ SQLITE_SCHEMA_STATEMENTS = [
         filename TEXT NOT NULL,
         file_path TEXT NOT NULL,
         status TEXT NOT NULL,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        max_retries INTEGER NOT NULL DEFAULT 3,
         error_message TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL

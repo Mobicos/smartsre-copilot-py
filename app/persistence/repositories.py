@@ -210,21 +210,56 @@ class AIOpsRunRepository:
 class IndexingTaskRepository:
     """索引任务仓储。"""
 
-    def create_task(self, filename: str, file_path: str) -> str:
+    ACTIVE_TASK_STATUSES = ("queued", "processing")
+
+    def create_task(
+        self,
+        filename: str,
+        file_path: str,
+        *,
+        max_retries: int,
+    ) -> str:
         database_manager.initialize()
         task_id = str(uuid.uuid4())
         now = utc_now()
         with database_manager.get_connection() as connection:
             connection.execute(
                 """
-                INSERT INTO indexing_tasks (task_id, filename, file_path, status, error_message, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO indexing_tasks (
+                    task_id, filename, file_path, status, attempt_count, max_retries,
+                    error_message, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (task_id, filename, file_path, "queued", None, now, now),
+                (task_id, filename, file_path, "queued", 0, max_retries, None, now, now),
             )
         return task_id
 
-    def update_task(self, task_id: str, *, status: str, error_message: str | None = None) -> None:
+    def find_active_task_by_file_path(self, file_path: str) -> dict[str, Any] | None:
+        """查找指定文件当前活跃任务。"""
+        database_manager.initialize()
+        placeholders = ", ".join("?" for _ in self.ACTIVE_TASK_STATUSES)
+        with database_manager.get_connection() as connection:
+            row = connection.execute(
+                f"""
+                SELECT task_id, filename, file_path, status, attempt_count, max_retries,
+                       error_message, created_at, updated_at
+                FROM indexing_tasks
+                WHERE file_path = ? AND status IN ({placeholders})
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (file_path, *self.ACTIVE_TASK_STATUSES),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def update_task(
+        self,
+        task_id: str,
+        *,
+        status: str,
+        error_message: str | None = None,
+    ) -> None:
         database_manager.initialize()
         now = utc_now()
         with database_manager.get_connection() as connection:
@@ -242,7 +277,8 @@ class IndexingTaskRepository:
         with database_manager.get_connection() as connection:
             row = connection.execute(
                 """
-                SELECT task_id, filename, file_path, status, error_message, created_at, updated_at
+                SELECT task_id, filename, file_path, status, attempt_count, max_retries,
+                       error_message, created_at, updated_at
                 FROM indexing_tasks
                 WHERE task_id = ?
                 """,
@@ -258,7 +294,7 @@ class IndexingTaskRepository:
             cursor = connection.execute(
                 """
                 UPDATE indexing_tasks
-                SET status = 'processing', updated_at = ?, error_message = NULL
+                SET status = 'processing', updated_at = ?, error_message = NULL, attempt_count = attempt_count + 1
                 WHERE task_id = ? AND status = 'queued'
                 """,
                 (now, task_id),
@@ -268,7 +304,8 @@ class IndexingTaskRepository:
 
             row = connection.fetchone(
                 """
-                SELECT task_id, filename, file_path, status, error_message, created_at, updated_at
+                SELECT task_id, filename, file_path, status, attempt_count, max_retries,
+                       error_message, created_at, updated_at
                 FROM indexing_tasks
                 WHERE task_id = ?
                 """,
@@ -283,7 +320,8 @@ class IndexingTaskRepository:
         with database_manager.get_connection() as connection:
             rows = connection.execute(
                 f"""
-                SELECT task_id, filename, file_path, status, error_message, created_at, updated_at
+                SELECT task_id, filename, file_path, status, attempt_count, max_retries,
+                       error_message, created_at, updated_at
                 FROM indexing_tasks
                 WHERE status IN ({placeholders})
                 ORDER BY created_at ASC
@@ -298,7 +336,8 @@ class IndexingTaskRepository:
         with database_manager.get_connection() as connection:
             row = connection.fetchone(
                 """
-                SELECT task_id, filename, file_path, status, error_message, created_at, updated_at
+                SELECT task_id, filename, file_path, status, attempt_count, max_retries,
+                       error_message, created_at, updated_at
                 FROM indexing_tasks
                 WHERE status = 'queued'
                 ORDER BY created_at ASC
@@ -309,6 +348,47 @@ class IndexingTaskRepository:
             return None
         return self.claim_task(row["task_id"])
 
+    def mark_retry_or_failed(self, task_id: str, error_message: str) -> dict[str, Any] | None:
+        """根据重试次数更新任务状态。"""
+        database_manager.initialize()
+        now = utc_now()
+        with database_manager.get_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT task_id, filename, file_path, status, attempt_count, max_retries,
+                       error_message, created_at, updated_at
+                FROM indexing_tasks
+                WHERE task_id = ?
+                """,
+                (task_id,),
+            ).fetchone()
+            if row is None:
+                return None
+
+            next_status = (
+                "failed_permanently"
+                if row["attempt_count"] >= row["max_retries"]
+                else "queued"
+            )
+            connection.execute(
+                """
+                UPDATE indexing_tasks
+                SET status = ?, error_message = ?, updated_at = ?
+                WHERE task_id = ?
+                """,
+                (next_status, error_message, now, task_id),
+            )
+            updated_row = connection.execute(
+                """
+                SELECT task_id, filename, file_path, status, attempt_count, max_retries,
+                       error_message, created_at, updated_at
+                FROM indexing_tasks
+                WHERE task_id = ?
+                """,
+                (task_id,),
+            ).fetchone()
+        return dict(updated_row) if updated_row is not None else None
+
     def requeue_stale_processing_tasks(self, timeout_seconds: int) -> int:
         """将超时未完成的 processing 任务重新入队。"""
         database_manager.initialize()
@@ -317,7 +397,7 @@ class IndexingTaskRepository:
         with database_manager.get_connection() as connection:
             rows = connection.execute(
                 """
-                SELECT task_id, updated_at
+                SELECT task_id, updated_at, attempt_count, max_retries
                 FROM indexing_tasks
                 WHERE status = 'processing'
                 """
@@ -326,13 +406,25 @@ class IndexingTaskRepository:
             for row in rows:
                 updated_at = datetime.fromisoformat(row["updated_at"])
                 if updated_at <= threshold:
+                    next_status = (
+                        "failed_permanently"
+                        if row["attempt_count"] >= row["max_retries"]
+                        else "queued"
+                    )
                     connection.execute(
                         """
                         UPDATE indexing_tasks
-                        SET status = 'queued', updated_at = ?, error_message = NULL
+                        SET status = ?, updated_at = ?, error_message = ?
                         WHERE task_id = ?
                         """,
-                        (utc_now(), row["task_id"]),
+                        (
+                            next_status,
+                            utc_now(),
+                            "Task requeued after worker timeout"
+                            if next_status == "queued"
+                            else "Task exceeded retry limit after worker timeout",
+                            row["task_id"],
+                        ),
                     )
                     requeued += 1
 

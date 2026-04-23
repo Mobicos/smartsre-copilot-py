@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     task_queue_backend: str = "database"
     task_poll_interval_ms: int = 1000
     task_requeue_timeout_seconds: int = 300
+    indexing_task_max_retries: int = 3
     redis_url: str = "redis://localhost:6379/0"
     redis_task_queue_name: str = "smartsre:indexing:queue"
 

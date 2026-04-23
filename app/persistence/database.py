@@ -141,6 +141,14 @@ class DatabaseManager:
             connection.execute("PRAGMA foreign_keys=ON;")
             for statement in SQLITE_SCHEMA_STATEMENTS:
                 connection.execute(statement)
+            self._ensure_sqlite_columns(
+                connection,
+                "indexing_tasks",
+                {
+                    "attempt_count": "INTEGER NOT NULL DEFAULT 0",
+                    "max_retries": "INTEGER NOT NULL DEFAULT 3",
+                },
+            )
 
         logger.info(f"SQLite 数据库初始化完成: {self.sqlite_path}")
 
@@ -167,6 +175,22 @@ class DatabaseManager:
             )
 
         logger.info("PostgreSQL schema 检查通过")
+
+    def _ensure_sqlite_columns(
+        self,
+        connection: DatabaseConnectionAdapter,
+        table_name: str,
+        columns: dict[str, str],
+    ) -> None:
+        """为 SQLite 已存在表补充缺失列。"""
+        rows = connection.fetchall(f"PRAGMA table_info({table_name})")
+        existing = {row["name"] for row in rows}
+        for column_name, definition in columns.items():
+            if column_name in existing:
+                continue
+            connection.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"
+            )
 
 
 database_manager = DatabaseManager(

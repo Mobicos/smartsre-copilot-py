@@ -77,7 +77,9 @@ class LocalTaskDispatcher:
         while self._started:
             task = indexing_task_repository.claim_next_queued_task()
             if task is not None:
-                indexing_task_service.process_task(task["task_id"], task["file_path"])
+                result = indexing_task_service.process_task(task["task_id"], task["file_path"])
+                if result == "queued":
+                    self._wake_event.set()
                 continue
 
             self._wake_event.clear()
@@ -108,7 +110,12 @@ class LocalTaskDispatcher:
                 logger.info(f"任务已被其他 worker 处理或状态已变化，跳过: {task_id}")
                 continue
 
-            indexing_task_service.process_task(task_id, file_path)
+            result = indexing_task_service.process_task(task_id, file_path)
+            if result == "queued":
+                redis_manager.enqueue_json(
+                    config.redis_task_queue_name,
+                    {"task_id": task_id, "file_path": file_path},
+                )
 
     def _republish_queued_tasks_to_redis(self) -> None:
         """启动时将排队任务重新推入 Redis。"""
