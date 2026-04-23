@@ -215,7 +215,7 @@ def _create_mcp_client(
         kwargs["tool_interceptors"] = tool_interceptors
 
     # 第一个参数是 servers 配置，直接传递
-    return MultiServerMCPClient(servers, **kwargs)  # type: ignore[arg-type]
+    return MultiServerMCPClient(servers, **kwargs)
 
 
 async def get_mcp_tools_with_fallback(

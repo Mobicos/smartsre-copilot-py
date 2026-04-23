@@ -5,7 +5,7 @@
 """
 
 from collections.abc import AsyncGenerator, Sequence
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from langchain.agents import create_agent
 from langchain_core.messages import (
@@ -100,7 +100,7 @@ class RagAgentService:
         self.checkpointer = MemorySaver()
 
         # Agent 初始化（会在异步方法中完成）
-        self.agent = None
+        self.agent: Any | None = None
         self._agent_initialized = False
 
         logger.info(
@@ -133,6 +133,11 @@ class RagAgentService:
         if all_tools:
             tool_names = [tool.name if hasattr(tool, "name") else str(tool) for tool in all_tools]
             logger.info(f"可用工具列表: {', '.join(tool_names)}")
+
+    def _get_agent(self) -> Any:
+        if self.agent is None:
+            raise RuntimeError("RAG Agent has not been initialized")
+        return self.agent
 
     def _build_system_prompt(self) -> str:
         """
@@ -193,7 +198,7 @@ class RagAgentService:
             # 配置 thread_id（用于会话持久化）
             config_dict = {"configurable": {"thread_id": session_id}}
 
-            result = await self.agent.ainvoke(
+            result = await self._get_agent().ainvoke(
                 input=agent_input,
                 config=config_dict,
             )
@@ -252,7 +257,7 @@ class RagAgentService:
             # 配置 thread_id（用于会话持久化）
             config_dict = {"configurable": {"thread_id": session_id}}
 
-            async for token, metadata in self.agent.astream(
+            async for token, metadata in self._get_agent().astream(
                 input=agent_input,
                 config=config_dict,
                 stream_mode="messages",
@@ -310,7 +315,7 @@ class RagAgentService:
             # checkpoint_tuple 可能是命名元组或普通元组，安全地提取 checkpoint
             # 通常第一个元素是 checkpoint 数据
             if hasattr(checkpoint_tuple, "checkpoint"):
-                checkpoint_data = checkpoint_tuple.checkpoint  # type: ignore
+                checkpoint_data = cast(dict[str, Any], checkpoint_tuple.checkpoint)
             else:
                 # 如果是普通元组，第一个元素是 checkpoint
                 checkpoint_data = checkpoint_tuple[0] if checkpoint_tuple else {}

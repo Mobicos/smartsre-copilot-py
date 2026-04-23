@@ -192,8 +192,8 @@ async def replanner(state: PlanExecuteState) -> dict[str, Any]:
                 new_steps = act.new_steps
             else:
                 # 如果返回的是字典
-                action = act.get("action", "continue")  # type: ignore
-                new_steps = act.get("new_steps", [])  # type: ignore
+                action = act.get("action", "continue")
+                new_steps = act.get("new_steps", [])
 
             logger.info(f"Replanner 决策: {action}")
 
@@ -265,7 +265,7 @@ async def _generate_response(state: PlanExecuteState, llm: ChatQwen) -> dict[str
             final_response = response_obj.response
         else:
             # 如果返回的是字典
-            final_response = response_obj.get("response", "")  # type: ignore
+            final_response = response_obj.get("response", "")
 
         logger.info(f"最终响应生成完成，长度: {len(final_response)}")
 

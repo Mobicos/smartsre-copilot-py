@@ -107,7 +107,7 @@ async def upload_file(
 
 @router.post("/index_directory")
 async def index_directory(
-    directory_path: str = None,
+    directory_path: str | None = None,
     _principal: Principal = Depends(require_capability("knowledge:write")),
 ):
     """
