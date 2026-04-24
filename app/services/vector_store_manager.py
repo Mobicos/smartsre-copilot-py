@@ -38,8 +38,7 @@ class VectorStoreManager:
             _ = milvus_manager.connect()
 
             connection_args = {
-                "host": config.milvus_host,
-                "port": config.milvus_port,
+                "uri": f"http://{config.milvus_host}:{config.milvus_port}",
             }
 
             # 创建 LangChain Milvus VectorStore
