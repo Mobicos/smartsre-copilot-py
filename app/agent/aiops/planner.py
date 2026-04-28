@@ -97,13 +97,10 @@ async def planner(state: PlanExecuteState) -> dict[str, Any]:
         # 步骤2: 获取可用工具列表
         all_tools = await tool_registry.get_diagnosis_tools()
         local_tool_names = {
-            str(getattr(tool, "name", ""))
-            for tool in tool_registry.get_local_tools("diagnosis")
+            str(getattr(tool, "name", "")) for tool in tool_registry.get_local_tools("diagnosis")
         }
         mcp_tool_count = sum(
-            1
-            for tool in all_tools
-            if str(getattr(tool, "name", "")) not in local_tool_names
+            1 for tool in all_tools if str(getattr(tool, "name", "")) not in local_tool_names
         )
         if mcp_tool_count == 0:
             message = (
