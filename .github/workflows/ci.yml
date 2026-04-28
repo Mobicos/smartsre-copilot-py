@@ -7,8 +7,8 @@ on:
   pull_request:
 
 jobs:
-  quality:
-    name: Quality Checks
+  backend:
+    name: Backend Quality Checks
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -47,3 +47,42 @@ jobs:
 
       - name: Run tests
         run: uv run python -m pytest tests -q
+
+  frontend:
+    name: Frontend Quality Checks
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.1
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint frontend
+        run: pnpm lint
+
+      - name: Type check frontend
+        run: pnpm typecheck
+
+      - name: Build frontend
+        run: pnpm build

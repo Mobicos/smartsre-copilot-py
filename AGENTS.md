@@ -46,6 +46,15 @@ python -m bandit -r app -ll
 python -m pytest tests -q
 ```
 
+For frontend changes under `frontend/`, run the frontend gates as well:
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm typecheck
+pnpm build
+```
+
 If a local environment issue prevents a command from running, record the exact
 reason and rely on GitHub Actions as the final verification source.
 
@@ -69,6 +78,17 @@ chore: update dependency lock file
 - Use parameterized SQL. Do not interpolate user-controlled values into SQL.
 - Avoid broad exception swallowing unless the fallback behavior is explicit and logged.
 - Keep edits scoped to the requested task and avoid unrelated refactors.
+
+## Frontend Policy
+
+- Keep the Next.js frontend in `frontend/` as a separate pnpm workspace-style app with its own lock file.
+- Do not commit `frontend/node_modules/`, `frontend/.next/`, `frontend/tsconfig.tsbuildinfo`, or local pnpm stores.
+- Do not use `typescript.ignoreBuildErrors` in `next.config.mjs`; type errors must fail builds.
+- Browser components should call local Next.js route handlers, not the FastAPI backend directly.
+- Keep backend API keys server-side in Next.js route handlers. Never expose them through `NEXT_PUBLIC_*`.
+- Keep FastAPI response-envelope parsing in `frontend/lib/api-contracts.ts` or BFF route handlers.
+- When backend request or response models change, update the frontend contract adapter in the same change.
+- Prefer server-side BFF adapters for compatibility with legacy backend field names such as `Id` and `Question`.
 
 ## CI Policy
 
