@@ -10,13 +10,13 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from app.api import aiops, chat, file, health
+from app.api.routes import aiops, chat, file, health, native_agent
 from app.config import config
 from app.core.container import service_container
 from app.core.milvus_client import milvus_manager
-from app.persistence import audit_log_repository, database_manager
+from app.infrastructure.tasks import task_dispatcher
+from app.platform.persistence import audit_log_repository, database_manager
 from app.security import validate_security_configuration
-from app.services.task_dispatcher import task_dispatcher
 
 
 @asynccontextmanager
@@ -143,6 +143,8 @@ app.include_router(health.router, tags=["健康检查"])
 app.include_router(chat.router, prefix="/api", tags=["对话"])
 app.include_router(file.router, prefix="/api", tags=["文件管理"])
 app.include_router(aiops.router, prefix="/api", tags=["AIOps智能运维"])
+app.include_router(native_agent.router, prefix="/api", tags=["Native Agent"])
+
 
 @app.get("/")
 async def root():

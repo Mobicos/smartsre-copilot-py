@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from app.api.file import ALLOWED_EXTENSIONS, MAX_FILE_SIZE, _get_file_extension, _sanitize_filename
+from app.api.routes.file import (
+    ALLOWED_EXTENSIONS,
+    MAX_FILE_SIZE,
+    _get_file_extension,
+    _sanitize_filename,
+)
 
 
 @pytest.mark.parametrize(

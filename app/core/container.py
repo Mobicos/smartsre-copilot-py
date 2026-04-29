@@ -12,22 +12,32 @@ from loguru import logger
 
 from app.config import config
 from app.infrastructure import checkpoint_saver
-from app.persistence import (
+from app.infrastructure.knowledge import (
+    DashScopeEmbeddings,
+    DocumentSplitterService,
+    VectorIndexService,
+    VectorSearchService,
+    VectorStoreManager,
+)
+from app.platform.persistence import (
+    agent_feedback_repository,
+    agent_run_repository,
     aiops_run_repository,
     chat_tool_event_repository,
     conversation_repository,
+    indexing_task_repository,
+    scene_repository,
+    tool_policy_repository,
+    workspace_repository,
 )
-from app.services.document_splitter_service import DocumentSplitterService
-from app.services.vector_embedding_service import DashScopeEmbeddings
-from app.services.vector_index_service import VectorIndexService
-from app.services.vector_search_service import VectorSearchService
-from app.services.vector_store_manager import VectorStoreManager
 
 if TYPE_CHECKING:
+    from app.agent_runtime import AgentRuntime, ToolCatalog, ToolExecutor
     from app.application.aiops_application_service import AIOpsApplicationService
+    from app.application.chat import RagAgentService
     from app.application.chat_application_service import ChatApplicationService
-    from app.services.aiops_service import AIOpsService
-    from app.services.rag_agent_service import RagAgentService
+    from app.application.indexing import IndexingTaskService
+    from app.application.native_agent_application_service import NativeAgentApplicationService
 
 
 @dataclass
@@ -48,9 +58,13 @@ class AppContainer:
         self._document_splitter_service: DocumentSplitterService | None = None
         self._vector_index_service: VectorIndexService | None = None
         self._rag_agent_service: RagAgentService | None = None
-        self._aiops_service: AIOpsService | None = None
+        self._indexing_task_service: IndexingTaskService | None = None
+        self._tool_catalog: ToolCatalog | None = None
+        self._tool_executor: ToolExecutor | None = None
+        self._agent_runtime: AgentRuntime | None = None
         self._chat_application_service: ChatApplicationService | None = None
         self._aiops_application_service: AIOpsApplicationService | None = None
+        self._native_agent_application_service: NativeAgentApplicationService | None = None
 
     def initialize_required_services(self) -> None:
         """初始化启动所需的核心依赖。"""
@@ -103,7 +117,7 @@ class AppContainer:
         """获取 RAG Agent 运行时服务。"""
         if self._rag_agent_service is None:
             logger.info("初始化 RAG Agent 服务...")
-            from app.services.rag_agent_service import RagAgentService
+            from app.application.chat import RagAgentService
 
             self._rag_agent_service = RagAgentService(
                 streaming=True,
@@ -111,14 +125,46 @@ class AppContainer:
             )
         return self._rag_agent_service
 
-    def get_aiops_service(self) -> AIOpsService:
-        """获取 AIOps 工作流运行时服务。"""
-        if self._aiops_service is None:
-            logger.info("初始化 AIOps 服务...")
-            from app.services.aiops_service import AIOpsService
+    def get_indexing_task_service(self) -> IndexingTaskService:
+        """获取索引任务应用服务。"""
+        if self._indexing_task_service is None:
+            from app.application.indexing import IndexingTaskService
 
-            self._aiops_service = AIOpsService(checkpointer=checkpoint_saver)
-        return self._aiops_service
+            self._indexing_task_service = IndexingTaskService(
+                repository=indexing_task_repository,
+                vector_indexer_provider=lambda: self.get_vector_index_service(),
+                max_retries_provider=lambda: config.indexing_task_max_retries,
+            )
+        return self._indexing_task_service
+
+    def get_tool_catalog(self) -> ToolCatalog:
+        """获取原生 Agent 工具目录。"""
+        if self._tool_catalog is None:
+            from app.agent_runtime import ToolCatalog
+
+            self._tool_catalog = ToolCatalog()
+        return self._tool_catalog
+
+    def get_tool_executor(self) -> ToolExecutor:
+        """获取原生 Agent 工具执行器。"""
+        if self._tool_executor is None:
+            from app.agent_runtime import ToolExecutor, ToolPolicyRepositoryAdapter
+
+            self._tool_executor = ToolExecutor(
+                policy_store=ToolPolicyRepositoryAdapter(tool_policy_repository)
+            )
+        return self._tool_executor
+
+    def get_agent_runtime(self) -> AgentRuntime:
+        """获取原生 SRE Agent Runtime。"""
+        if self._agent_runtime is None:
+            from app.agent_runtime import AgentRuntime
+
+            self._agent_runtime = AgentRuntime(
+                tool_catalog=self.get_tool_catalog(),
+                tool_executor=self.get_tool_executor(),
+            )
+        return self._agent_runtime
 
     def get_chat_application_service(self) -> ChatApplicationService:
         """获取聊天应用服务。"""
@@ -138,11 +184,31 @@ class AppContainer:
             from app.application.aiops_application_service import AIOpsApplicationService
 
             self._aiops_application_service = AIOpsApplicationService(
-                aiops_service=self.get_aiops_service(),
+                agent_runtime=self.get_agent_runtime(),
                 aiops_run_repository=aiops_run_repository,
                 conversation_repository=conversation_repository,
+                workspace_repository=workspace_repository,
+                scene_repository=scene_repository,
             )
         return self._aiops_application_service
+
+    def get_native_agent_application_service(self) -> NativeAgentApplicationService:
+        """获取原生 Agent 应用服务。"""
+        if self._native_agent_application_service is None:
+            from app.application.native_agent_application_service import (
+                NativeAgentApplicationService,
+            )
+
+            self._native_agent_application_service = NativeAgentApplicationService(
+                agent_runtime=self.get_agent_runtime(),
+                tool_catalog=self.get_tool_catalog(),
+                workspace_repository=workspace_repository,
+                scene_repository=scene_repository,
+                tool_policy_repository=tool_policy_repository,
+                agent_run_repository=agent_run_repository,
+                agent_feedback_repository=agent_feedback_repository,
+            )
+        return self._native_agent_application_service
 
     def get_service_health(self) -> dict[str, ServiceHealth]:
         """返回核心依赖的健康摘要。"""
@@ -151,7 +217,7 @@ class AppContainer:
             self._vector_store_manager is not None and self._vector_store_manager.is_initialized
         )
         rag_ready = self._rag_agent_service is not None
-        aiops_ready = self._aiops_service is not None
+        aiops_ready = self._aiops_application_service is not None
         checkpoint_ready = checkpoint_saver is not None
 
         return {
@@ -169,7 +235,7 @@ class AppContainer:
             ),
             "aiops": ServiceHealth(
                 status="ready" if aiops_ready else "not_initialized",
-                message="AIOps 服务已初始化" if aiops_ready else "AIOps 服务尚未初始化",
+                message="AIOps 应用服务已初始化" if aiops_ready else "AIOps 应用服务尚未初始化",
             ),
             "checkpoint": ServiceHealth(
                 status="ready" if checkpoint_ready else "not_initialized",
@@ -181,10 +247,14 @@ class AppContainer:
 
     def reset(self) -> None:
         """重置容器中的运行时依赖引用。"""
-        self._aiops_service = None
+        self._agent_runtime = None
+        self._tool_executor = None
+        self._tool_catalog = None
+        self._indexing_task_service = None
         self._rag_agent_service = None
         self._aiops_application_service = None
         self._chat_application_service = None
+        self._native_agent_application_service = None
         self._vector_index_service = None
         self._document_splitter_service = None
         self._vector_search_service = None

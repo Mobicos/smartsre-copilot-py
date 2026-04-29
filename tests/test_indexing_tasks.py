@@ -3,15 +3,15 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
-from app.api.file import get_index_task
+from app.api.routes.file import get_index_task
 from app.config import config
 from app.core.container import service_container
-from app.persistence import indexing_task_repository
+from app.platform.persistence import indexing_task_repository
 from app.security import Principal
-from app.services.indexing_task_service import indexing_task_service
 
 
 def test_submit_task_reuses_active_task():
+    indexing_task_service = service_container.get_indexing_task_service()
     task_id = indexing_task_repository.create_task(
         "ops.md",
         "/tmp/ops.md",
@@ -26,6 +26,7 @@ def test_submit_task_reuses_active_task():
 
 
 def test_indexing_task_retries_then_fails_permanently(monkeypatch):
+    indexing_task_service = service_container.get_indexing_task_service()
     config.indexing_task_max_retries = 2
     task_id = indexing_task_service.submit_task("ops.md", "/tmp/ops.md")
 

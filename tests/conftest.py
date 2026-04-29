@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.config import config
-from app.persistence.database import database_manager
+from app.platform.persistence.database import database_manager
 from app.security.auth import load_api_key_roles
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.agent import mcp_client
+from app.infrastructure.tools import mcp_client
 
 
 async def test_get_mcp_tools_with_fallback_returns_empty_for_missing_config():

@@ -7,8 +7,8 @@ import signal
 
 from loguru import logger
 
-from app.persistence import database_manager
-from app.services.task_dispatcher import task_dispatcher
+from app.infrastructure.tasks import task_dispatcher
+from app.platform.persistence import database_manager
 
 
 async def run_worker() -> None:

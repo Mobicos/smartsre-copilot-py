@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.agent.tool_registry import ToolRegistry
+from app.infrastructure.tools import ToolRegistry
 
 
 def test_tool_registry_returns_expected_local_tools_order():
@@ -46,7 +46,7 @@ async def test_tool_registry_falls_back_on_mcp_timeout(monkeypatch: pytest.Monke
         raise TimeoutError("simulated timeout")
 
     monkeypatch.setattr(
-        "app.agent.tool_registry.get_mcp_tools_with_fallback",
+        "app.infrastructure.tools.registry.get_mcp_tools_with_fallback",
         fake_get_mcp_tools_with_fallback,
     )
 

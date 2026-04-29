@@ -20,6 +20,7 @@ Core capabilities:
 - Streaming chat responses and persisted conversation history.
 - Background indexing pipeline with retryable tasks.
 - Plan-Execute-Replan AIOps diagnosis workflow.
+- Native Agent workspace, scene, tool policy, trajectory replay, and feedback APIs.
 - Optional MCP tool integration for external logs, metrics, and alert systems.
 
 ## Architecture
@@ -43,8 +44,9 @@ FastAPI backend (app/)
   |                                + DashScope embeddings
   |                                + Milvus collection: biz
   |
-  +-- AIOps diagnosis -----------> Planner -> Executor -> Replanner
-  |                                + local tools
+  +-- Native Agent diagnosis ----> AgentRuntime
+  |                                + ToolCatalog / ToolPolicy / ToolExecutor
+  |                                + trajectory events
   |                                + optional MCP tools
   |
   +-- Persistence ---------------> PostgreSQL
@@ -58,6 +60,7 @@ Backend:
 - LangChain, LangGraph, Qwen via DashScope
 - PostgreSQL, Alembic, Redis, Milvus
 - MCP client support for external tool servers
+- Native Agent runtime, tool policy, scene, and trajectory persistence
 
 Frontend:
 
@@ -85,6 +88,7 @@ Local application data stays local unless you explicitly connect external tools.
 
 - Uploaded files are stored under `uploads/`.
 - Chat history, task status, audit logs, and AIOps run events are stored in PostgreSQL.
+- Native Agent workspaces, scenes, tool policies, trajectories, and feedback are stored in PostgreSQL.
 - Document vectors are stored in Milvus.
 - DashScope receives prompts and embedding inputs required for model calls.
 - MCP tools are optional. A Tencent Cloud CLS MCP server queries Tencent CLS data, not local Postgres or Milvus data.
@@ -254,6 +258,17 @@ Backend routes:
 - `POST /api/aiops`: streaming AIOps diagnosis via SSE
 - `GET /api/aiops/runs/{run_id}`: AIOps run summary
 - `GET /api/aiops/runs/{run_id}/events`: AIOps run events
+- `POST /api/workspaces`: create a Native Agent workspace
+- `GET /api/workspaces`: list Native Agent workspaces
+- `POST /api/scenes`: create a workspace-scoped diagnosis scene
+- `GET /api/scenes`: list scenes, optionally filtered by `workspace_id`
+- `GET /api/scenes/{scene_id}`: fetch scene detail, linked knowledge bases, and tools
+- `GET /api/tools`: discover diagnosis tools and persisted policies
+- `PATCH /api/tools/{tool_name}/policy`: enable, disable, or require approval for a tool
+- `POST /api/agent/runs`: run a scene-scoped Native Agent diagnosis
+- `GET /api/agent/runs/{run_id}`: fetch a Native Agent run summary
+- `GET /api/agent/runs/{run_id}/events`: replay a Native Agent trajectory
+- `POST /api/agent/runs/{run_id}/feedback`: capture thumbs-up/down feedback
 
 The frontend calls server-side handlers under `frontend/app/api/*`; browser components should not call FastAPI directly.
 
@@ -333,10 +348,23 @@ AIOps:
 Frontend diagnose
   -> Next.js BFF
   -> FastAPI /api/aiops
-  -> Planner
-  -> Executor
-  -> Replanner
-  -> persisted run events
+  -> compatibility wrapper
+  -> AgentRuntime
+  -> ToolExecutor
+  -> persisted Native Agent trajectory + AIOps-compatible run events
+```
+
+Native Agent V1:
+
+```text
+Workspace
+  -> Scene
+  -> Knowledge bases + MCP/local tools
+  -> AgentRuntime
+  -> Tool policy checks
+  -> Tool calls and results
+  -> Trajectory replay
+  -> Feedback and analytics inputs
 ```
 
 ## Troubleshooting
@@ -374,6 +402,7 @@ Frontend cannot reach backend:
 - Use explicit CORS origins in production.
 - Use least-privilege cloud credentials for MCP servers.
 - Store audit logs and AIOps run events in durable storage.
+- Require approval for high-risk tools through tool policies; V1 reports `approval_required` instead of executing those tools.
 - Review uploaded document access rules before exposing the app to multiple teams.
 
 ## Contributing

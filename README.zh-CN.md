@@ -20,6 +20,7 @@ SmartSRE Copilot 是一个面向企业内部运维场景的智能助手原型。
 - 流式对话和会话历史持久化。
 - 支持失败重试的后台异步索引流水线。
 - Planner / Executor / Replanner 模式的 AIOps 诊断流程。
+- Native Agent 工作空间、场景、工具策略、轨迹回放和反馈 API。
 - 可选 MCP 工具接入外部日志、指标和告警系统。
 
 ## 架构
@@ -43,8 +44,9 @@ FastAPI 后端 (app/)
   |                                + DashScope Embedding
   |                                + Milvus collection: biz
   |
-  +-- AIOps 诊断 ----------------> Planner -> Executor -> Replanner
-  |                                + 本地工具
+  +-- Native Agent 诊断 ---------> AgentRuntime
+  |                                + ToolCatalog / ToolPolicy / ToolExecutor
+  |                                + 轨迹事件
   |                                + 可选 MCP 工具
   |
   +-- 持久化 --------------------> PostgreSQL
@@ -58,6 +60,7 @@ FastAPI 后端 (app/)
 - LangChain、LangGraph、DashScope/Qwen
 - PostgreSQL、Alembic、Redis、Milvus
 - 支持 MCP 客户端接入外部工具服务
+- Native Agent runtime、工具策略、场景和轨迹持久化
 
 前端：
 
@@ -85,6 +88,7 @@ volumes/          Docker 服务数据，Git 忽略
 
 - 上传文件保存在 `uploads/`。
 - 会话历史、任务状态、审计日志、AIOps 事件保存在 PostgreSQL。
+- Native Agent 的空间、场景、工具策略、轨迹和反馈保存在 PostgreSQL。
 - 文档向量保存在 Milvus。
 - DashScope 会收到模型调用所需的 prompt 和 embedding 输入。
 - MCP 是可选工具入口。腾讯云 CLS MCP 查询的是腾讯云 CLS 数据，不是本地 Postgres 或 Milvus 数据。
@@ -254,6 +258,17 @@ MCP_TOOLS_LOAD_TIMEOUT_SECONDS=30
 - `POST /api/aiops`：SSE 流式 AIOps 诊断
 - `GET /api/aiops/runs/{run_id}`：AIOps 运行摘要
 - `GET /api/aiops/runs/{run_id}/events`：AIOps 运行事件
+- `POST /api/workspaces`：创建 Native Agent 空间
+- `GET /api/workspaces`：列出 Native Agent 空间
+- `POST /api/scenes`：创建空间内诊断场景
+- `GET /api/scenes`：列出场景，可通过 `workspace_id` 过滤
+- `GET /api/scenes/{scene_id}`：查询场景详情、关联知识库和工具
+- `GET /api/tools`：发现诊断工具和已持久化策略
+- `PATCH /api/tools/{tool_name}/policy`：启用、禁用工具或配置审批要求
+- `POST /api/agent/runs`：执行场景化 Native Agent 诊断
+- `GET /api/agent/runs/{run_id}`：查询 Native Agent 运行摘要
+- `GET /api/agent/runs/{run_id}/events`：回放 Native Agent 轨迹
+- `POST /api/agent/runs/{run_id}/feedback`：提交点赞/点踩反馈
 
 前端通过 `frontend/app/api/*` 的服务端路由代理后端，浏览器组件不应直接调用 FastAPI。
 
@@ -333,10 +348,23 @@ AIOps：
 Frontend diagnose
   -> Next.js BFF
   -> FastAPI /api/aiops
-  -> Planner
-  -> Executor
-  -> Replanner
-  -> persisted run events
+  -> 兼容包装层
+  -> AgentRuntime
+  -> ToolExecutor
+  -> Native Agent 轨迹 + AIOps 兼容运行事件
+```
+
+Native Agent V1：
+
+```text
+Workspace
+  -> Scene
+  -> 知识库 + MCP/本地工具
+  -> AgentRuntime
+  -> 工具策略校验
+  -> 工具调用与结果
+  -> 轨迹回放
+  -> 反馈与运营分析输入
 ```
 
 ## 故障排查
@@ -374,6 +402,7 @@ MCP 工具不可用：
 - 生产环境使用明确 CORS 白名单。
 - MCP 云账号使用最小权限。
 - 审计日志和 AIOps 运行事件使用持久化存储。
+- 高风险工具通过工具策略要求审批；V1 遇到这类工具会返回 `approval_required`，不会直接执行。
 - 多团队使用前先设计上传文档的权限边界。
 
 ## 贡献
