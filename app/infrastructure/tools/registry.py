@@ -11,9 +11,9 @@ from typing import Any, Literal
 
 from loguru import logger
 
-from app.agent.mcp_client import get_mcp_tools_with_fallback
 from app.config import config
-from app.tools import get_current_time, retrieve_knowledge
+from app.infrastructure.tools.local import get_current_time, retrieve_knowledge
+from app.infrastructure.tools.mcp_client import get_mcp_tools_with_fallback
 
 ToolScope = Literal["chat", "diagnosis"]
 

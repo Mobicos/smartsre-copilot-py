@@ -18,7 +18,7 @@ from langgraph.checkpoint.base import (
     get_checkpoint_metadata,
 )
 
-from app.persistence.database import DatabaseManager, database_manager
+from app.platform.persistence.database import DatabaseManager, database_manager
 
 
 class DatabaseCheckpointSaver(BaseCheckpointSaver[str]):

@@ -19,7 +19,7 @@ from app.infrastructure.knowledge import (
     VectorSearchService,
     VectorStoreManager,
 )
-from app.persistence import (
+from app.platform.persistence import (
     agent_feedback_repository,
     agent_run_repository,
     aiops_run_repository,

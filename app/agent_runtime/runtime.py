@@ -20,7 +20,7 @@ from app.agent_runtime.state import EvidenceItem
 from app.agent_runtime.synthesizer import ReportSynthesizer
 from app.agent_runtime.tool_catalog import ToolCatalog
 from app.agent_runtime.tool_executor import ToolExecutor
-from app.persistence import (
+from app.platform.persistence import (
     agent_run_repository,
     scene_repository,
     tool_policy_repository,

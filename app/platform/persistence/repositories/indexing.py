@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from app.persistence.database import database_manager
+from app.platform.persistence.database import database_manager
 
 
 def utc_now() -> str:

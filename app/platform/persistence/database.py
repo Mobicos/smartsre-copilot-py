@@ -11,7 +11,7 @@ from typing import Any
 from loguru import logger
 
 from app.config import DATA_DIR, config
-from app.persistence.schema import REQUIRED_TABLES, SQLITE_SCHEMA_STATEMENTS
+from app.platform.persistence.schema import REQUIRED_TABLES, SQLITE_SCHEMA_STATEMENTS
 
 _psycopg: Any = None
 _dict_row: Any = None

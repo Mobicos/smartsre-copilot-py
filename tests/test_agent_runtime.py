@@ -16,7 +16,7 @@ from app.agent_runtime import (
     ToolPolicyGate,
     ToolPolicySnapshot,
 )
-from app.persistence import (
+from app.platform.persistence import (
     agent_run_repository,
     knowledge_base_repository,
     scene_repository,

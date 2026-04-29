@@ -10,7 +10,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.api.responses import json_response
 from app.core.container import service_container
 from app.domains.aiops import AIOpsRequest
-from app.persistence import aiops_run_repository
+from app.platform.persistence import aiops_run_repository
 from app.security import Principal, require_capability
 
 router = APIRouter()

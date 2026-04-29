@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from app.api.routes.file import get_index_task
 from app.config import config
 from app.core.container import service_container
-from app.persistence import indexing_task_repository
+from app.platform.persistence import indexing_task_repository
 from app.security import Principal
 
 

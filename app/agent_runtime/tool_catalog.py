@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.tool_registry import ToolScope, tool_registry
+from app.infrastructure.tools import ToolScope, tool_registry
 
 
 class ToolCatalog:

@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator
 import pytest
 
 from app.application.aiops_application_service import AIOpsApplicationService
-from app.persistence import (
+from app.platform.persistence import (
     aiops_run_repository,
     conversation_repository,
     scene_repository,
@@ -40,7 +40,7 @@ class StaticRuntime:
 
 
 @pytest.mark.asyncio
-async def test_legacy_aiops_stream_uses_native_runtime_and_preserves_complete_event():
+async def test_aiops_stream_uses_native_runtime_and_preserves_complete_event():
     service = AIOpsApplicationService(
         agent_runtime=StaticRuntime(),
         aiops_run_repository=aiops_run_repository,

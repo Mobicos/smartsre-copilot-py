@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.persistence.database import database_manager
+from app.platform.persistence.database import database_manager
 
 
 def utc_now() -> str:

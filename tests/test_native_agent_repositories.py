@@ -8,7 +8,7 @@ from app.domains.native_agent import (
     ToolPolicy,
     Workspace,
 )
-from app.persistence import (
+from app.platform.persistence import (
     agent_feedback_repository,
     agent_run_repository,
     knowledge_base_repository,

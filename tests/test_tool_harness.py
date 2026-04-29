@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.agent_runtime import ToolExecutor, ToolPolicyRepositoryAdapter
-from app.persistence import tool_policy_repository
+from app.platform.persistence import tool_policy_repository
 from app.security.auth import Principal
 
 

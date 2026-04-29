@@ -14,6 +14,22 @@ def test_native_agent_runtime_has_dedicated_platform_package():
     assert ToolExecutor is ExecutorFromModule
 
 
+def test_legacy_agent_packages_are_not_kept_as_source_boundaries():
+    assert not Path("app/agent").exists()
+    assert not Path("app/legacy").exists()
+    assert not Path("app/persistence").exists()
+    assert not Path("app/tools").exists()
+
+
+def test_tooling_infrastructure_owns_tool_registry_and_mcp_client():
+    from app.infrastructure.tools import ToolRegistry, mcp_client, tool_registry
+    from app.infrastructure.tools.registry import ToolRegistry as RegistryFromModule
+
+    assert ToolRegistry is RegistryFromModule
+    assert tool_registry.__class__ is ToolRegistry
+    assert mcp_client.__name__ == "app.infrastructure.tools.mcp_client"
+
+
 def test_native_agent_schemas_live_in_domain_package():
     from app.domains.native_agent import AgentRunCreateRequest, WorkspaceCreateRequest
     from app.domains.native_agent.schemas import (

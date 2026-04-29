@@ -129,7 +129,7 @@ class AIOpsApplicationService:
         else:
             workspace_id = self._workspace_repository.create_workspace(
                 name="Default SRE Workspace",
-                description="Default workspace for legacy AIOps diagnosis",
+                description="Default workspace for AIOps diagnosis",
             )
 
         scenes = self._scene_repository.list_scenes(workspace_id=workspace_id)
@@ -138,7 +138,7 @@ class AIOpsApplicationService:
         return self._scene_repository.create_scene(
             workspace_id,
             name="Default AIOps Diagnosis",
-            description="Legacy AIOps compatibility scene",
+            description="Default AIOps compatibility scene",
             agent_config={"mode": "compat"},
         )
 

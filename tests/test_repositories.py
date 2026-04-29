@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from app.persistence import (
+from app.platform.persistence import (
     aiops_run_repository,
     audit_log_repository,
     chat_tool_event_repository,
     conversation_repository,
 )
-from app.persistence.database import database_manager
+from app.platform.persistence.database import database_manager
 
 
 def test_conversation_repository_saves_lists_and_deletes_session():

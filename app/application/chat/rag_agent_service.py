@@ -24,9 +24,8 @@ from loguru import logger
 from pydantic import SecretStr
 from typing_extensions import TypedDict
 
-from app.agent.tool_registry import tool_registry
 from app.config import config
-from app.tools import retrieve_knowledge
+from app.infrastructure.tools import retrieve_knowledge, tool_registry
 
 # 阿里千问大模型和langchain集成参考： https://docs.langchain.com/oss/python/integrations/chat/qwen
 # 注意：需要配置环境变量 DASHSCOPE_API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1 否则默认访问的是新加坡站点
