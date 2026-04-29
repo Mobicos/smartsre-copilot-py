@@ -7,8 +7,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.api.responses import json_response
 from app.core.container import service_container
-from app.models.request import ChatRequest, ClearRequest
-from app.models.response import ApiResponse, SessionInfoResponse
+from app.domains.chat import ApiResponse, ChatRequest, ClearRequest, SessionInfoResponse
 from app.persistence import chat_tool_event_repository, conversation_repository
 from app.security import Principal, require_capability
 

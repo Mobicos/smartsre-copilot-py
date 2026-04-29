@@ -23,6 +23,24 @@ def test_native_agent_schemas_live_in_domain_package():
     assert WorkspaceCreateRequest is WorkspaceRequestFromModule
 
 
+def test_chat_and_aiops_schemas_live_in_domain_packages():
+    from app.domains.aiops import AIOpsRequest
+    from app.domains.aiops.schemas import AIOpsRequest as AIOpsRequestFromModule
+    from app.domains.chat import ApiResponse, ChatRequest, ClearRequest, SessionInfoResponse
+    from app.domains.chat.schemas import (
+        ApiResponse as ApiResponseFromModule,
+        ChatRequest as ChatRequestFromModule,
+        ClearRequest as ClearRequestFromModule,
+        SessionInfoResponse as SessionInfoResponseFromModule,
+    )
+
+    assert ChatRequest is ChatRequestFromModule
+    assert ClearRequest is ClearRequestFromModule
+    assert ApiResponse is ApiResponseFromModule
+    assert SessionInfoResponse is SessionInfoResponseFromModule
+    assert AIOpsRequest is AIOpsRequestFromModule
+
+
 def test_native_agent_repositories_live_in_platform_persistence_package():
     from app.platform.persistence.repositories.native_agent import (
         AgentRunRepository,
