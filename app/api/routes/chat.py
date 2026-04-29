@@ -75,6 +75,7 @@ async def chat(
 
 
 @router.post("/chat_stream")
+@router.post("/chat/stream")
 async def chat_stream(
     request: ChatRequest,
     _principal: Principal = Depends(require_capability("chat:use")),
