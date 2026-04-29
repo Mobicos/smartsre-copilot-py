@@ -12,6 +12,13 @@ from loguru import logger
 
 from app.config import config
 from app.infrastructure import checkpoint_saver
+from app.infrastructure.knowledge import (
+    DashScopeEmbeddings,
+    DocumentSplitterService,
+    VectorIndexService,
+    VectorSearchService,
+    VectorStoreManager,
+)
 from app.persistence import (
     agent_feedback_repository,
     agent_run_repository,
@@ -22,11 +29,6 @@ from app.persistence import (
     tool_policy_repository,
     workspace_repository,
 )
-from app.services.document_splitter_service import DocumentSplitterService
-from app.services.vector_embedding_service import DashScopeEmbeddings
-from app.services.vector_index_service import VectorIndexService
-from app.services.vector_search_service import VectorSearchService
-from app.services.vector_store_manager import VectorStoreManager
 
 if TYPE_CHECKING:
     from app.agent_runtime import AgentRuntime, ToolCatalog, ToolExecutor

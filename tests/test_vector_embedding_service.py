@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.services.vector_embedding_service import DashScopeEmbeddings
+from app.infrastructure.knowledge import DashScopeEmbeddings
 
 
 def test_embed_documents_splits_requests_into_supported_batch_sizes():

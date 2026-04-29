@@ -41,6 +41,25 @@ def test_chat_and_aiops_schemas_live_in_domain_packages():
     assert AIOpsRequest is AIOpsRequestFromModule
 
 
+def test_knowledge_infrastructure_lives_under_infrastructure_package():
+    from app.infrastructure.knowledge import (
+        DashScopeEmbeddings,
+        DocumentSplitterService,
+        VectorIndexService,
+        VectorSearchService,
+        VectorStoreManager,
+    )
+    from app.infrastructure.knowledge.vector_embedding_service import (
+        DashScopeEmbeddings as EmbeddingsFromModule,
+    )
+
+    assert DashScopeEmbeddings is EmbeddingsFromModule
+    assert DocumentSplitterService.__name__ == "DocumentSplitterService"
+    assert VectorIndexService.__name__ == "VectorIndexService"
+    assert VectorSearchService.__name__ == "VectorSearchService"
+    assert VectorStoreManager.__name__ == "VectorStoreManager"
+
+
 def test_native_agent_repositories_live_in_platform_persistence_package():
     from app.platform.persistence.repositories.native_agent import (
         AgentRunRepository,

@@ -7,8 +7,8 @@ from typing import Any
 from loguru import logger
 
 from app.config import UPLOADS_DIR
-from app.services.document_splitter_service import DocumentSplitterService
-from app.services.vector_store_manager import VectorStoreManager
+from app.infrastructure.knowledge.document_splitter_service import DocumentSplitterService
+from app.infrastructure.knowledge.vector_store_manager import VectorStoreManager
 
 
 class IndexingResult:
