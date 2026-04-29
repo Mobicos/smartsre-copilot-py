@@ -33,9 +33,9 @@ from app.persistence import (
 if TYPE_CHECKING:
     from app.agent_runtime import AgentRuntime, ToolCatalog, ToolExecutor
     from app.application.aiops_application_service import AIOpsApplicationService
+    from app.application.chat import RagAgentService
     from app.application.chat_application_service import ChatApplicationService
     from app.application.native_agent_application_service import NativeAgentApplicationService
-    from app.services.rag_agent_service import RagAgentService
 
 
 @dataclass
@@ -114,7 +114,7 @@ class AppContainer:
         """获取 RAG Agent 运行时服务。"""
         if self._rag_agent_service is None:
             logger.info("初始化 RAG Agent 服务...")
-            from app.services.rag_agent_service import RagAgentService
+            from app.application.chat import RagAgentService
 
             self._rag_agent_service = RagAgentService(
                 streaming=True,

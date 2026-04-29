@@ -41,6 +41,13 @@ def test_chat_and_aiops_schemas_live_in_domain_packages():
     assert AIOpsRequest is AIOpsRequestFromModule
 
 
+def test_chat_rag_runtime_lives_under_chat_application_package():
+    from app.application.chat import RagAgentService
+    from app.application.chat.rag_agent_service import RagAgentService as RagAgentServiceFromModule
+
+    assert RagAgentService is RagAgentServiceFromModule
+
+
 def test_knowledge_infrastructure_lives_under_infrastructure_package():
     from app.infrastructure.knowledge import (
         DashScopeEmbeddings,
@@ -58,6 +65,14 @@ def test_knowledge_infrastructure_lives_under_infrastructure_package():
     assert VectorIndexService.__name__ == "VectorIndexService"
     assert VectorSearchService.__name__ == "VectorSearchService"
     assert VectorStoreManager.__name__ == "VectorStoreManager"
+
+
+def test_indexing_task_orchestration_has_explicit_application_and_infrastructure_layers():
+    from app.application.indexing import IndexingTaskService, indexing_task_service
+    from app.infrastructure.tasks import LocalTaskDispatcher, task_dispatcher
+
+    assert indexing_task_service.__class__ is IndexingTaskService
+    assert task_dispatcher.__class__ is LocalTaskDispatcher
 
 
 def test_native_agent_repositories_live_in_platform_persistence_package():

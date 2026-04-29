@@ -14,9 +14,9 @@ from app.api.routes import aiops, chat, file, health, native_agent
 from app.config import config
 from app.core.container import service_container
 from app.core.milvus_client import milvus_manager
+from app.infrastructure.tasks import task_dispatcher
 from app.persistence import audit_log_repository, database_manager
 from app.security import validate_security_configuration
-from app.services.task_dispatcher import task_dispatcher
 
 
 @asynccontextmanager

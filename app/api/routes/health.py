@@ -10,8 +10,8 @@ from app.config import config
 from app.core.container import service_container
 from app.core.milvus_client import milvus_manager
 from app.infrastructure import redis_manager
+from app.infrastructure.tasks import task_dispatcher
 from app.persistence import database_manager
-from app.services.task_dispatcher import task_dispatcher
 
 router = APIRouter()
 

@@ -5,12 +5,12 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 
 from app.api.responses import json_response
+from app.application.indexing import indexing_task_service
 from app.config import UPLOADS_DIR
 from app.core.container import service_container
+from app.infrastructure.tasks import task_dispatcher
 from app.platform.persistence.repositories.indexing import indexing_task_repository
 from app.security import Principal, require_capability
-from app.services.indexing_task_service import indexing_task_service
-from app.services.task_dispatcher import task_dispatcher
 
 router = APIRouter()
 

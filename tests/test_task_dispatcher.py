@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.config import config
-from app.services.task_dispatcher import LocalTaskDispatcher
+from app.infrastructure.tasks import LocalTaskDispatcher
 
 
 async def test_database_enqueue_wakes_embedded_worker(monkeypatch):
@@ -20,7 +20,7 @@ async def test_redis_enqueue_publishes_task_payload(monkeypatch):
     monkeypatch.setattr(config, "task_queue_backend", "redis")
     monkeypatch.setattr(config, "redis_task_queue_name", "queue")
     monkeypatch.setattr(
-        "app.services.task_dispatcher.redis_manager.enqueue_json",
+        "app.infrastructure.tasks.dispatcher.redis_manager.enqueue_json",
         lambda queue, payload: published.append((queue, payload)),
     )
 
@@ -34,14 +34,14 @@ def test_republish_queued_tasks_to_redis(monkeypatch):
     published: list[tuple[str, dict[str, str]]] = []
     monkeypatch.setattr(config, "redis_task_queue_name", "queue")
     monkeypatch.setattr(
-        "app.services.task_dispatcher.indexing_task_repository.list_tasks_by_status",
+        "app.infrastructure.tasks.dispatcher.indexing_task_repository.list_tasks_by_status",
         lambda statuses: [
             {"task_id": "task-1", "file_path": "/tmp/a.md"},
             {"task_id": "task-2", "file_path": "/tmp/b.md"},
         ],
     )
     monkeypatch.setattr(
-        "app.services.task_dispatcher.redis_manager.enqueue_json",
+        "app.infrastructure.tasks.dispatcher.redis_manager.enqueue_json",
         lambda queue, payload: published.append((queue, payload)),
     )
 
