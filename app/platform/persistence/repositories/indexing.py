@@ -158,6 +158,7 @@ class IndexingTaskRepository:
             task.updated_at = _utc_now()
             session.add(task)
             session.commit()
+            session.refresh(task)
             return _model_to_dict(task)
 
     def requeue_stale_processing_tasks(self, timeout_seconds: int) -> int:
