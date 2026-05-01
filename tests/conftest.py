@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import uuid
 
@@ -21,6 +22,10 @@ _TEST_DB_NAME = f"smartsre_test_{uuid.uuid4().hex[:8]}"
 
 def _get_container_host() -> str:
     """Get the container's IP via docker inspect (works when localhost port forwarding is broken)."""
+    configured_host = os.getenv("SMARTSRE_TEST_POSTGRES_HOST")
+    if configured_host:
+        return configured_host
+
     result = subprocess.run(
         [
             "docker",

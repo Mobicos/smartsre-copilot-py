@@ -7,8 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import col
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.platform.persistence.database import get_engine
 from app.platform.persistence.schema import (

@@ -10,6 +10,20 @@ jobs:
   backend:
     name: Backend Quality Checks
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: smartsre
+          POSTGRES_PASSWORD: smartsre
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U smartsre -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     strategy:
       fail-fast: false
       matrix:
@@ -46,6 +60,8 @@ jobs:
         run: uv run python -m bandit -r app -ll
 
       - name: Run tests
+        env:
+          SMARTSRE_TEST_POSTGRES_HOST: localhost
         run: uv run python -m pytest tests -q
 
   frontend:
