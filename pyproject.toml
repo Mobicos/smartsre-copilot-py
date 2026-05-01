@@ -32,7 +32,7 @@ dependencies = [
     "alembic>=1.14.0",
     "langchain-milvus>=0.3.3",
     "langchain-text-splitters>=1.1.2",
-    "langchain-mcp-adapters>=0.2.1",
+    "langchain-mcp-adapters>=0.2.2",
     "fastmcp>=3.2.0",
     "langchain-qwq>=0.3.4",
 ]
