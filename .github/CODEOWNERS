@@ -1,0 +1,8 @@
+# Repository ownership and review routing.
+#
+# This project currently has a single maintainer. Keep ownership explicit so
+# branch protection can require CODEOWNER reviews later without guessing file
+# responsibility from history.
+
+* @Mobicos
+

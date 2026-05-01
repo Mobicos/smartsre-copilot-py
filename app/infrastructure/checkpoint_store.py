@@ -17,67 +17,65 @@ from langgraph.checkpoint.base import (
     get_checkpoint_id,
     get_checkpoint_metadata,
 )
+from sqlalchemy import text
 
-from app.platform.persistence.database import DatabaseManager, database_manager
+from app.platform.persistence.database import get_engine
 
 
 class DatabaseCheckpointSaver(BaseCheckpointSaver[str]):
-    """Persist LangGraph checkpoints in SQLite/PostgreSQL."""
-
-    def __init__(self, db_manager: DatabaseManager) -> None:
-        super().__init__()
-        self._db_manager = db_manager
+    """Persist LangGraph checkpoints in PostgreSQL."""
 
     def get_tuple(self, config: RunnableConfig) -> CheckpointTuple | None:
         thread_id = str(config["configurable"]["thread_id"])
         checkpoint_ns = str(config["configurable"].get("checkpoint_ns", ""))
         requested_checkpoint_id = get_checkpoint_id(config)
 
-        with self._db_manager.get_connection() as connection:
+        engine = get_engine()
+        with engine.connect() as connection:
             if requested_checkpoint_id:
-                row = connection.fetchone(
-                    """
-                    SELECT checkpoint_id, checkpoint_type, checkpoint_data, metadata_type, metadata_data,
-                           parent_checkpoint_id
-                    FROM agent_checkpoints
-                    WHERE thread_id = ? AND checkpoint_ns = ? AND checkpoint_id = ?
-                    """,
-                    (thread_id, checkpoint_ns, requested_checkpoint_id),
-                )
+                row = connection.execute(
+                    text("""
+                        SELECT checkpoint_id, checkpoint_type, checkpoint_data, metadata_type, metadata_data,
+                               parent_checkpoint_id
+                        FROM agent_checkpoints
+                        WHERE thread_id = :tid AND checkpoint_ns = :ns AND checkpoint_id = :cid
+                    """),
+                    {"tid": thread_id, "ns": checkpoint_ns, "cid": requested_checkpoint_id},
+                ).fetchone()
             else:
-                row = connection.fetchone(
-                    """
-                    SELECT checkpoint_id, checkpoint_type, checkpoint_data, metadata_type, metadata_data,
-                           parent_checkpoint_id
-                    FROM agent_checkpoints
-                    WHERE thread_id = ? AND checkpoint_ns = ?
-                    ORDER BY checkpoint_id DESC
-                    LIMIT 1
-                    """,
-                    (thread_id, checkpoint_ns),
-                )
+                row = connection.execute(
+                    text("""
+                        SELECT checkpoint_id, checkpoint_type, checkpoint_data, metadata_type, metadata_data,
+                               parent_checkpoint_id
+                        FROM agent_checkpoints
+                        WHERE thread_id = :tid AND checkpoint_ns = :ns
+                        ORDER BY checkpoint_id DESC
+                        LIMIT 1
+                    """),
+                    {"tid": thread_id, "ns": checkpoint_ns},
+                ).fetchone()
 
             if row is None:
                 return None
 
-            checkpoint_id = str(row["checkpoint_id"])
-            writes = connection.fetchall(
-                """
-                SELECT task_id, channel, value_type, value_data, task_path
-                FROM agent_checkpoint_writes
-                WHERE thread_id = ? AND checkpoint_ns = ? AND checkpoint_id = ?
-                ORDER BY write_idx ASC
-                """,
-                (thread_id, checkpoint_ns, checkpoint_id),
-            )
+            checkpoint_id = str(row[0])
+            writes = connection.execute(
+                text("""
+                    SELECT task_id, channel, value_type, value_data, task_path
+                    FROM agent_checkpoint_writes
+                    WHERE thread_id = :tid AND checkpoint_ns = :ns AND checkpoint_id = :cid
+                    ORDER BY write_idx ASC
+                """),
+                {"tid": thread_id, "ns": checkpoint_ns, "cid": checkpoint_id},
+            ).fetchall()
 
         checkpoint = self._deserialize_typed(
-            str(row["checkpoint_type"]),
-            bytes(row["checkpoint_data"]),
+            str(row[1]),
+            bytes(row[2]),
         )
         metadata = self._deserialize_typed(
-            str(row["metadata_type"]),
-            bytes(row["metadata_data"]),
+            str(row[3]),
+            bytes(row[4]),
         )
 
         if not isinstance(checkpoint, dict):
@@ -92,7 +90,7 @@ class DatabaseCheckpointSaver(BaseCheckpointSaver[str]):
             checkpoint_data["channel_versions"],
         )
 
-        parent_checkpoint_id = row["parent_checkpoint_id"]
+        parent_checkpoint_id = row[5]
 
         return CheckpointTuple(
             config={
@@ -117,11 +115,11 @@ class DatabaseCheckpointSaver(BaseCheckpointSaver[str]):
             ),
             pending_writes=[
                 (
-                    str(write["task_id"]),
-                    str(write["channel"]),
+                    str(write[0]),
+                    str(write[1]),
                     self._deserialize_typed(
-                        str(write["value_type"]),
-                        bytes(write["value_data"]),
+                        str(write[2]),
+                        bytes(write[3]),
                     ),
                 )
                 for write in writes
@@ -146,20 +144,20 @@ class DatabaseCheckpointSaver(BaseCheckpointSaver[str]):
             FROM agent_checkpoints
         """
         conditions: list[str] = []
-        params: list[Any] = []
+        params: dict[str, Any] = {}
 
         if thread_id is not None:
-            conditions.append("thread_id = ?")
-            params.append(thread_id)
+            conditions.append("thread_id = :tid")
+            params["tid"] = thread_id
         if checkpoint_ns is not None:
-            conditions.append("checkpoint_ns = ?")
-            params.append(checkpoint_ns)
+            conditions.append("checkpoint_ns = :ns")
+            params["ns"] = checkpoint_ns
         if checkpoint_id is not None:
-            conditions.append("checkpoint_id = ?")
-            params.append(checkpoint_id)
+            conditions.append("checkpoint_id = :cid")
+            params["cid"] = checkpoint_id
         if before_checkpoint_id is not None:
-            conditions.append("checkpoint_id < ?")
-            params.append(before_checkpoint_id)
+            conditions.append("checkpoint_id < :bcid")
+            params["bcid"] = before_checkpoint_id
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -168,15 +166,16 @@ class DatabaseCheckpointSaver(BaseCheckpointSaver[str]):
         if limit is not None:
             query += f" LIMIT {int(limit)}"
 
-        with self._db_manager.get_connection() as connection:
-            rows = connection.fetchall(query, params)
+        engine = get_engine()
+        with engine.connect() as connection:
+            rows = connection.execute(text(query), params).fetchall()
 
         for row in rows:
             tuple_config = {
                 "configurable": {
-                    "thread_id": str(row["thread_id"]),
-                    "checkpoint_ns": str(row["checkpoint_ns"]),
-                    "checkpoint_id": str(row["checkpoint_id"]),
+                    "thread_id": str(row[0]),
+                    "checkpoint_ns": str(row[1]),
+                    "checkpoint_id": str(row[2]),
                 }
             }
             checkpoint_tuple = self.get_tuple(cast(RunnableConfig, tuple_config))
@@ -205,57 +204,58 @@ class DatabaseCheckpointSaver(BaseCheckpointSaver[str]):
             get_checkpoint_metadata(config, metadata)
         )
 
-        with self._db_manager.get_connection() as connection:
+        engine = get_engine()
+        with engine.begin() as connection:
             for channel, version in new_versions.items():
                 value_type, value_data = (
                     self.serde.dumps_typed(values[channel]) if channel in values else ("empty", b"")
                 )
                 connection.execute(
-                    """
-                    INSERT INTO agent_checkpoint_blobs (
-                        thread_id, checkpoint_ns, channel, version, value_type, value_data
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(thread_id, checkpoint_ns, channel, version)
-                    DO UPDATE SET
-                        value_type = excluded.value_type,
-                        value_data = excluded.value_data
-                    """,
-                    (
-                        thread_id,
-                        checkpoint_ns,
-                        str(channel),
-                        str(version),
-                        value_type,
-                        value_data,
-                    ),
+                    text("""
+                        INSERT INTO agent_checkpoint_blobs (
+                            thread_id, checkpoint_ns, channel, version, value_type, value_data
+                        ) VALUES (:tid, :ns, :ch, :ver, :vt, :vd)
+                        ON CONFLICT(thread_id, checkpoint_ns, channel, version)
+                        DO UPDATE SET
+                            value_type = excluded.value_type,
+                            value_data = excluded.value_data
+                    """),
+                    {
+                        "tid": thread_id,
+                        "ns": checkpoint_ns,
+                        "ch": str(channel),
+                        "ver": str(version),
+                        "vt": value_type,
+                        "vd": value_data,
+                    },
                 )
 
             connection.execute(
-                """
-                INSERT INTO agent_checkpoints (
-                    thread_id, checkpoint_ns, checkpoint_id, checkpoint_type, checkpoint_data,
-                    metadata_type, metadata_data, parent_checkpoint_id, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(thread_id, checkpoint_ns, checkpoint_id)
-                DO UPDATE SET
-                    checkpoint_type = excluded.checkpoint_type,
-                    checkpoint_data = excluded.checkpoint_data,
-                    metadata_type = excluded.metadata_type,
-                    metadata_data = excluded.metadata_data,
-                    parent_checkpoint_id = excluded.parent_checkpoint_id,
-                    created_at = excluded.created_at
-                """,
-                (
-                    thread_id,
-                    checkpoint_ns,
-                    checkpoint_id,
-                    checkpoint_type,
-                    checkpoint_data,
-                    metadata_type,
-                    metadata_data,
-                    config["configurable"].get("checkpoint_id"),
-                    checkpoint["ts"],
-                ),
+                text("""
+                    INSERT INTO agent_checkpoints (
+                        thread_id, checkpoint_ns, checkpoint_id, checkpoint_type, checkpoint_data,
+                        metadata_type, metadata_data, parent_checkpoint_id, created_at
+                    ) VALUES (:tid, :ns, :cid, :ct, :cd, :mt, :md, :pcid, :ts)
+                    ON CONFLICT(thread_id, checkpoint_ns, checkpoint_id)
+                    DO UPDATE SET
+                        checkpoint_type = excluded.checkpoint_type,
+                        checkpoint_data = excluded.checkpoint_data,
+                        metadata_type = excluded.metadata_type,
+                        metadata_data = excluded.metadata_data,
+                        parent_checkpoint_id = excluded.parent_checkpoint_id,
+                        created_at = excluded.created_at
+                """),
+                {
+                    "tid": thread_id,
+                    "ns": checkpoint_ns,
+                    "cid": checkpoint_id,
+                    "ct": checkpoint_type,
+                    "cd": checkpoint_data,
+                    "mt": metadata_type,
+                    "md": metadata_data,
+                    "pcid": config["configurable"].get("checkpoint_id"),
+                    "ts": checkpoint["ts"],
+                },
             )
 
         return {
@@ -277,91 +277,94 @@ class DatabaseCheckpointSaver(BaseCheckpointSaver[str]):
         checkpoint_ns = str(config["configurable"].get("checkpoint_ns", ""))
         checkpoint_id = str(config["configurable"]["checkpoint_id"])
 
-        with self._db_manager.get_connection() as connection:
+        engine = get_engine()
+        with engine.begin() as connection:
             for idx, (channel, value) in enumerate(writes):
                 write_idx = WRITES_IDX_MAP.get(channel, idx)
-                existing = connection.fetchone(
-                    """
-                    SELECT 1 AS exists_flag
-                    FROM agent_checkpoint_writes
-                    WHERE thread_id = ? AND checkpoint_ns = ? AND checkpoint_id = ?
-                      AND task_id = ? AND write_idx = ?
-                    """,
-                    (
-                        thread_id,
-                        checkpoint_ns,
-                        checkpoint_id,
-                        task_id,
-                        write_idx,
-                    ),
-                )
+                existing = connection.execute(
+                    text("""
+                        SELECT 1 AS exists_flag
+                        FROM agent_checkpoint_writes
+                        WHERE thread_id = :tid AND checkpoint_ns = :ns AND checkpoint_id = :cid
+                          AND task_id = :task_id AND write_idx = :wi
+                    """),
+                    {
+                        "tid": thread_id,
+                        "ns": checkpoint_ns,
+                        "cid": checkpoint_id,
+                        "task_id": task_id,
+                        "wi": write_idx,
+                    },
+                ).fetchone()
                 if write_idx >= 0 and existing is not None:
                     continue
 
                 value_type, value_data = self.serde.dumps_typed(value)
                 connection.execute(
-                    """
-                    INSERT INTO agent_checkpoint_writes (
-                        thread_id, checkpoint_ns, checkpoint_id, task_id, write_idx,
-                        channel, value_type, value_data, task_path
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(thread_id, checkpoint_ns, checkpoint_id, task_id, write_idx)
-                    DO UPDATE SET
-                        channel = excluded.channel,
-                        value_type = excluded.value_type,
-                        value_data = excluded.value_data,
-                        task_path = excluded.task_path
-                    """,
-                    (
-                        thread_id,
-                        checkpoint_ns,
-                        checkpoint_id,
-                        task_id,
-                        write_idx,
-                        channel,
-                        value_type,
-                        value_data,
-                        task_path,
-                    ),
+                    text("""
+                        INSERT INTO agent_checkpoint_writes (
+                            thread_id, checkpoint_ns, checkpoint_id, task_id, write_idx,
+                            channel, value_type, value_data, task_path
+                        ) VALUES (:tid, :ns, :cid, :task_id, :wi, :ch, :vt, :vd, :tp)
+                        ON CONFLICT(thread_id, checkpoint_ns, checkpoint_id, task_id, write_idx)
+                        DO UPDATE SET
+                            channel = excluded.channel,
+                            value_type = excluded.value_type,
+                            value_data = excluded.value_data,
+                            task_path = excluded.task_path
+                    """),
+                    {
+                        "tid": thread_id,
+                        "ns": checkpoint_ns,
+                        "cid": checkpoint_id,
+                        "task_id": task_id,
+                        "wi": write_idx,
+                        "ch": channel,
+                        "vt": value_type,
+                        "vd": value_data,
+                        "tp": task_path,
+                    },
                 )
 
     def delete_thread(self, thread_id: str) -> None:
-        with self._db_manager.get_connection() as connection:
+        engine = get_engine()
+        with engine.begin() as connection:
             connection.execute(
-                "DELETE FROM agent_checkpoint_writes WHERE thread_id = ?",
-                (thread_id,),
+                text("DELETE FROM agent_checkpoint_writes WHERE thread_id = :tid"),
+                {"tid": thread_id},
             )
             connection.execute(
-                "DELETE FROM agent_checkpoint_blobs WHERE thread_id = ?",
-                (thread_id,),
+                text("DELETE FROM agent_checkpoint_blobs WHERE thread_id = :tid"),
+                {"tid": thread_id},
             )
             connection.execute(
-                "DELETE FROM agent_checkpoints WHERE thread_id = ?",
-                (thread_id,),
+                text("DELETE FROM agent_checkpoints WHERE thread_id = :tid"),
+                {"tid": thread_id},
             )
 
     def delete_namespace(self, thread_id: str, checkpoint_ns: str) -> None:
-        with self._db_manager.get_connection() as connection:
+        engine = get_engine()
+        with engine.begin() as connection:
             connection.execute(
-                """
-                DELETE FROM agent_checkpoint_writes
-                WHERE thread_id = ? AND checkpoint_ns = ?
-                """,
-                (thread_id, checkpoint_ns),
+                text("""
+                    DELETE FROM agent_checkpoint_writes
+                    WHERE thread_id = :tid AND checkpoint_ns = :ns
+                """),
+                {"tid": thread_id, "ns": checkpoint_ns},
             )
             connection.execute(
-                """
-                DELETE FROM agent_checkpoint_blobs
-                WHERE thread_id = ? AND checkpoint_ns = ?
-                """,
-                (thread_id, checkpoint_ns),
+                text("""
+                    DELETE FROM agent_checkpoint_blobs
+                    WHERE thread_id = :tid AND checkpoint_ns = :ns
+                """),
+                {"tid": thread_id, "ns": checkpoint_ns},
             )
             connection.execute(
-                """
-                DELETE FROM agent_checkpoints
-                WHERE thread_id = ? AND checkpoint_ns = ?
-                """,
-                (thread_id, checkpoint_ns),
+                text("""
+                    DELETE FROM agent_checkpoints
+                    WHERE thread_id = :tid AND checkpoint_ns = :ns
+                """),
+                {"tid": thread_id, "ns": checkpoint_ns},
             )
 
     async def aget_tuple(self, config: RunnableConfig) -> CheckpointTuple | None:
@@ -420,21 +423,27 @@ class DatabaseCheckpointSaver(BaseCheckpointSaver[str]):
             return {}
 
         channel_values: dict[str, Any] = {}
-        with self._db_manager.get_connection() as connection:
+        engine = get_engine()
+        with engine.connect() as connection:
             for channel, version in versions.items():
-                row = connection.fetchone(
-                    """
-                    SELECT value_type, value_data
-                    FROM agent_checkpoint_blobs
-                    WHERE thread_id = ? AND checkpoint_ns = ? AND channel = ? AND version = ?
-                    """,
-                    (thread_id, checkpoint_ns, str(channel), str(version)),
-                )
-                if row is None or row["value_type"] == "empty":
+                row = connection.execute(
+                    text("""
+                        SELECT value_type, value_data
+                        FROM agent_checkpoint_blobs
+                        WHERE thread_id = :tid AND checkpoint_ns = :ns AND channel = :ch AND version = :ver
+                    """),
+                    {
+                        "tid": thread_id,
+                        "ns": checkpoint_ns,
+                        "ch": str(channel),
+                        "ver": str(version),
+                    },
+                ).fetchone()
+                if row is None or row[0] == "empty":
                     continue
                 channel_values[str(channel)] = self._deserialize_typed(
-                    str(row["value_type"]),
-                    bytes(row["value_data"]),
+                    str(row[0]),
+                    bytes(row[1]),
                 )
         return channel_values
 
@@ -442,4 +451,4 @@ class DatabaseCheckpointSaver(BaseCheckpointSaver[str]):
         return self.serde.loads_typed((value_type, value_data))
 
 
-checkpoint_saver = DatabaseCheckpointSaver(database_manager)
+checkpoint_saver = DatabaseCheckpointSaver()

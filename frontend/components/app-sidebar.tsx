@@ -2,12 +2,13 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Activity, BookOpen, MessageSquare, Settings, Stethoscope, Terminal } from "lucide-react"
+import { Activity, Bot, BookOpen, MessageSquare, Settings, Stethoscope, Terminal } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const NAV = [
   { href: "/chat", label: "问答台", icon: MessageSquare, desc: "把问题说出来，得到答案" },
   { href: "/diagnose", label: "故障诊断", icon: Stethoscope, desc: "把现象交给它，看它怎么查" },
+  { href: "/agent", label: "Agent Harness", icon: Bot, desc: "运行场景、工具与 Agent 历史" },
   { href: "/knowledge", label: "知识库", icon: BookOpen, desc: "让它读懂你们的资料" },
   { href: "/health", label: "运行状态", icon: Activity, desc: "看一眼它今天好不好" },
   { href: "/settings", label: "设置", icon: Settings, desc: "调整工作方式" },

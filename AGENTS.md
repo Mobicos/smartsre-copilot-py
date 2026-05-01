@@ -4,13 +4,15 @@ Project instructions for AI coding agents and maintainers.
 
 ## Commit Style
 
-Use this simplified Conventional Commits format:
+Use the project Conventional Commits format:
 
 ```text
 <type>: <concise action summary>
+<type>(<scope>): <concise action summary>
 ```
 
-Do not use scoped commits such as `fix(ci): ...`.
+Scopes are optional. Use them when they add useful context, especially for
+automated dependency updates and CI/platform work.
 
 Allowed types:
 
@@ -27,10 +29,60 @@ Examples:
 
 ```text
 fix: resolve CI type check failures
+ci(actions): enforce ruff format check
+chore(deps): update dependency lock file
 ci: enforce ruff format check
-chore: update dependency lock file
 docs: explain GitHub Actions workflow
 ```
+
+PR titles must use the same format because squash merges use the PR title as
+the final commit subject on `main`.
+
+If a change contains unrelated dependency lock updates, split the lock update
+into a separate commit named:
+
+```text
+chore(deps): update dependency lock file
+```
+
+## Branch Policy
+
+- Create feature work from the latest `main`.
+- Use short kebab-case branch names:
+  - `feature/<capability>`
+  - `fix/<problem>`
+  - `refactor/<area>`
+  - `docs/<topic>`
+  - `ci/<workflow-topic>`
+- Keep one branch focused on one product or engineering outcome.
+- Do not mix large feature work, dependency churn, and unrelated cleanup in the
+  same branch.
+- Delete remote feature branches after the PR is merged unless the branch is a
+  long-running integration branch.
+
+## Pull Request Policy
+
+- Prefer PRs that are reviewable in one sitting. If a PR needs multiple
+  architectural topics, split it into stacked or follow-up PRs.
+- PR descriptions must explain user/developer impact, validation evidence,
+  operational risk, and rollback notes.
+- Backend model or API contract changes must update the frontend BFF adapter in
+  the same PR.
+- Persistence changes must include migrations and mention rollback behavior.
+- Local-only files must not be committed. Root-level `docker-compose.local.yml`
+  is for local development overrides only.
+- Draft PRs are allowed for early CI feedback, but do not merge draft or red PRs.
+
+## Merge Policy
+
+- Use squash merge for normal feature, fix, refactor, docs, and CI PRs.
+- Use the PR title as the squash commit subject, and keep it compliant with the
+  commit style above.
+- Use merge commits only for intentionally stacked or long-running integration
+  branches where preserving branch topology matters.
+- Do not rebase or force-push shared branches unless everyone using the branch
+  has agreed.
+- Do not merge with failing or pending required checks.
 
 ## Quality Gates
 
@@ -66,7 +118,7 @@ reason and rely on GitHub Actions as the final verification source.
 - Commit dependency lock updates separately as:
 
 ```text
-chore: update dependency lock file
+chore(deps): update dependency lock file
 ```
 
 ## Code Style
@@ -98,3 +150,9 @@ CI should be stricter than local habits:
 - Keep the Python matrix aligned with the supported version range.
 - Run lint, format check, type check, security scan, and tests.
 - Prefer locked dependency installs once CI is migrated to `uv`.
+- Run frontend checks when `frontend/` exists and has a committed lock file.
+- Use least-privilege workflow permissions.
+- Cancel superseded PR workflow runs so reviewers see the latest signal.
+- Validate PR titles so the final squash commit stays compliant.
+- GitHub Actions is the final gate when local Docker, network, or platform
+  constraints prevent running the full suite locally.

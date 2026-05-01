@@ -38,9 +38,15 @@ class AIOpsApplicationService:
         self,
         session_id: str,
         principal: Principal | None = None,
+        *,
+        task_input: str | None = None,
     ) -> AsyncGenerator[dict[str, str], None]:
         """Run a streaming diagnosis flow and persist runtime events."""
-        task_input = "诊断当前系统是否存在告警，如果存在告警请详细分析告警原因并生成诊断报告"
+        task_input = (
+            task_input.strip()
+            if task_input and task_input.strip()
+            else "诊断当前系统是否存在告警，如果存在告警请详细分析告警原因并生成诊断报告"
+        )
         run_id = self._aiops_run_repository.create_run(session_id, task_input)
         scene_id = self._ensure_default_scene()
         runtime_principal = principal or Principal(role="admin", subject="aiops-compat")
