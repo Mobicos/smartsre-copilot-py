@@ -7,12 +7,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from app.platform.persistence.database import database_manager
+from sqlalchemy import func
+from sqlmodel import Session, col, select
+
+from app.platform.persistence.database import get_engine
+from app.platform.persistence.schema import ChatToolEvent, Message, Session as SessionModel
 
 
-def utc_now() -> str:
-    """Return an ISO 8601 UTC timestamp."""
-    return datetime.now(UTC).isoformat()
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 def build_session_title(question: str) -> str:
@@ -47,49 +50,46 @@ class ConversationRepository:
         title: str,
         session_type: str = "chat",
     ) -> None:
-        database_manager.initialize()
-        now = utc_now()
-        with database_manager.get_connection() as connection:
-            existing = connection.execute(
-                "SELECT title, created_at FROM sessions WHERE session_id = ?",
-                (session_id,),
-            ).fetchone()
+        now = _utc_now()
+        with Session(bind=get_engine()) as db:
+            existing = db.get(SessionModel, session_id)
             if existing is None:
-                connection.execute(
-                    """
-                    INSERT INTO sessions (session_id, title, session_type, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (session_id, title, session_type, now, now),
+                db.add(
+                    SessionModel(
+                        session_id=session_id,
+                        title=title,
+                        session_type=session_type,
+                        created_at=now,
+                        updated_at=now,
+                    )
                 )
+                db.commit()
                 return
 
-            current_title = existing["title"]
-            updated_title = current_title if current_title and current_title != "新对话" else title
-            connection.execute(
-                """
-                UPDATE sessions
-                SET title = ?, session_type = ?, updated_at = ?
-                WHERE session_id = ?
-                """,
-                (updated_title, session_type, now, session_id),
-            )
+            if existing.title and existing.title != "新对话":
+                title = existing.title
+            existing.title = title
+            existing.session_type = session_type
+            existing.updated_at = now
+            db.add(existing)
+            db.commit()
 
     def append_message(self, session_id: str, role: str, content: str) -> None:
-        database_manager.initialize()
-        now = utc_now()
-        with database_manager.get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO messages (session_id, role, content, created_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (session_id, role, content, now),
+        now = _utc_now()
+        with Session(bind=get_engine()) as db:
+            db.add(
+                Message(
+                    session_id=session_id,
+                    role=role,
+                    content=content,
+                    created_at=now,
+                )
             )
-            connection.execute(
-                "UPDATE sessions SET updated_at = ? WHERE session_id = ?",
-                (now, session_id),
-            )
+            session_obj = db.get(SessionModel, session_id)
+            if session_obj:
+                session_obj.updated_at = now
+                db.add(session_obj)
+            db.commit()
 
     def save_chat_exchange(self, session_id: str, question: str, answer: str) -> None:
         title = build_session_title(question)
@@ -104,68 +104,63 @@ class ConversationRepository:
         self.append_message(session_id, "assistant", report)
 
     def get_session_messages(self, session_id: str) -> list[ConversationMessage]:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            rows = connection.execute(
-                """
-                SELECT role, content, created_at
-                FROM messages
-                WHERE session_id = ?
-                ORDER BY created_at ASC, id ASC
-                """,
-                (session_id,),
-            ).fetchall()
+        with Session(bind=get_engine()) as db:
+            statement = (
+                select(Message)
+                .where(Message.session_id == session_id)
+                .order_by(col(Message.created_at).asc(), col(Message.id).asc())
+            )
+            rows = db.exec(statement).all()
         return [
             ConversationMessage(
-                role=row["role"],
-                content=row["content"],
-                timestamp=row["created_at"],
+                role=row.role,
+                content=row.content,
+                timestamp=row.created_at.isoformat()
+                if isinstance(row.created_at, datetime)
+                else str(row.created_at),
             )
             for row in rows
         ]
 
     def list_sessions(self) -> list[dict[str, Any]]:
         """List all persisted sessions."""
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            rows = connection.execute(
-                """
-                SELECT
-                    session_id,
-                    title,
-                    session_type,
-                    created_at,
-                    updated_at,
-                    (
-                        SELECT COUNT(1)
-                        FROM messages
-                        WHERE messages.session_id = sessions.session_id
-                    ) AS message_count
-                FROM sessions
-                ORDER BY updated_at DESC
-                """
-            ).fetchall()
+        with Session(bind=get_engine()) as db:
+            msg_count = (
+                select(func.count())
+                .where(col(Message.session_id) == col(SessionModel.session_id))
+                .correlate(SessionModel)
+                .scalar_subquery()
+            )
+            statement = select(
+                SessionModel.session_id,
+                SessionModel.title,
+                SessionModel.session_type,
+                SessionModel.created_at,
+                SessionModel.updated_at,
+                msg_count.label("message_count"),
+            ).order_by(col(SessionModel.updated_at).desc())  # type: ignore[call-overload]
+            rows = db.exec(statement).all()
         return [
             {
-                "id": row["session_id"],
-                "title": row["title"],
-                "sessionType": row["session_type"],
-                "createdAt": row["created_at"],
-                "updatedAt": row["updated_at"],
-                "messageCount": row["message_count"],
+                "id": row.session_id,
+                "title": row.title,
+                "sessionType": row.session_type,
+                "createdAt": row.created_at,
+                "updatedAt": row.updated_at,
+                "messageCount": row.message_count,
                 "messages": [],
             }
             for row in rows
         ]
 
     def delete_session(self, session_id: str) -> bool:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            deleted = connection.execute(
-                "DELETE FROM sessions WHERE session_id = ?",
-                (session_id,),
-            ).rowcount
-        return bool(deleted)
+        with Session(bind=get_engine()) as db:
+            session_obj = db.get(SessionModel, session_id)
+            if session_obj is None:
+                return False
+            db.delete(session_obj)
+            db.commit()
+        return True
 
 
 class ChatToolEventRepository:
@@ -181,53 +176,44 @@ class ChatToolEventRepository:
         if not events:
             return
 
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
+        with Session(bind=get_engine()) as db:
             for event in events:
-                connection.execute(
-                    """
-                    INSERT INTO chat_tool_events (
-                        session_id, exchange_id, tool_name, event_type, payload, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        session_id,
-                        exchange_id,
-                        str(event.get("toolName", "unknown")),
-                        str(event.get("eventType", "call")),
-                        json.dumps(event.get("payload"), ensure_ascii=False)
+                db.add(
+                    ChatToolEvent(
+                        session_id=session_id,
+                        exchange_id=exchange_id,
+                        tool_name=str(event.get("toolName", "unknown")),
+                        event_type=str(event.get("eventType", "call")),
+                        payload=json.dumps(event.get("payload"), ensure_ascii=False)
                         if event.get("payload") is not None
                         else None,
-                        utc_now(),
-                    ),
+                        created_at=_utc_now(),
+                    )
                 )
+            db.commit()
 
     def list_events(self, session_id: str) -> list[dict[str, Any]]:
         """List session tool events chronologically."""
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            rows = connection.execute(
-                """
-                SELECT id, session_id, exchange_id, tool_name, event_type, payload, created_at
-                FROM chat_tool_events
-                WHERE session_id = ?
-                ORDER BY created_at ASC, id ASC
-                """,
-                (session_id,),
-            ).fetchall()
+        with Session(bind=get_engine()) as db:
+            statement = (
+                select(ChatToolEvent)
+                .where(ChatToolEvent.session_id == session_id)
+                .order_by(col(ChatToolEvent.created_at).asc(), col(ChatToolEvent.id).asc())
+            )
+            rows = db.exec(statement).all()
 
         events: list[dict[str, Any]] = []
         for row in rows:
-            payload = row["payload"]
+            payload = row.payload
             events.append(
                 {
-                    "id": row["id"],
-                    "sessionId": row["session_id"],
-                    "exchangeId": row["exchange_id"],
-                    "toolName": row["tool_name"],
-                    "eventType": row["event_type"],
+                    "id": row.id,
+                    "sessionId": row.session_id,
+                    "exchangeId": row.exchange_id,
+                    "toolName": row.tool_name,
+                    "eventType": row.event_type,
                     "payload": json.loads(payload) if payload else None,
-                    "createdAt": row["created_at"],
+                    "createdAt": row.created_at,
                 }
             )
         return events

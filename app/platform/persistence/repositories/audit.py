@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.platform.persistence.database import database_manager
+from sqlmodel import Session
 
-
-def utc_now() -> str:
-    """Return an ISO 8601 UTC timestamp."""
-    return datetime.now(UTC).isoformat()
+from app.platform.persistence.database import get_engine
+from app.platform.persistence.schema import AuditLog
 
 
 class AuditLogRepository:
@@ -28,28 +26,49 @@ class AuditLogRepository:
         user_agent: str | None,
         error_message: str | None = None,
     ) -> None:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO audit_logs (
-                    request_id, method, path, status_code, subject, role,
-                    client_ip, user_agent, error_message, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    request_id,
-                    method,
-                    path,
-                    status_code,
-                    subject,
-                    role,
-                    client_ip,
-                    user_agent,
-                    error_message,
-                    utc_now(),
-                ),
-            )
+        entry = AuditLog(
+            request_id=request_id,
+            method=method,
+            path=path,
+            status_code=status_code,
+            subject=subject,
+            role=role,
+            client_ip=client_ip,
+            user_agent=user_agent,
+            error_message=error_message,
+            created_at=datetime.now(UTC),
+        )
+        with Session(bind=get_engine()) as session:
+            session.add(entry)
+            session.commit()
+
+    def log_request_with_session(
+        self,
+        session: Session,
+        *,
+        request_id: str,
+        method: str,
+        path: str,
+        status_code: int,
+        subject: str | None,
+        role: str | None,
+        client_ip: str | None,
+        user_agent: str | None,
+        error_message: str | None = None,
+    ) -> None:
+        entry = AuditLog(
+            request_id=request_id,
+            method=method,
+            path=path,
+            status_code=status_code,
+            subject=subject,
+            role=role,
+            client_ip=client_ip,
+            user_agent=user_agent,
+            error_message=error_message,
+            created_at=datetime.now(UTC),
+        )
+        session.add(entry)
 
 
 audit_log_repository = AuditLogRepository()

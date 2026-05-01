@@ -1,6 +1,5 @@
 """Platform persistence package."""
 
-from app.platform.persistence.database import database_manager
 from app.platform.persistence.repositories.aiops import aiops_run_repository
 from app.platform.persistence.repositories.audit import audit_log_repository
 from app.platform.persistence.repositories.conversation import (
@@ -24,7 +23,6 @@ __all__ = [
     "audit_log_repository",
     "chat_tool_event_repository",
     "conversation_repository",
-    "database_manager",
     "indexing_task_repository",
     "knowledge_base_repository",
     "scene_repository",
