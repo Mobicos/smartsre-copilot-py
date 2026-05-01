@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Activity, BookOpen, Menu, MessageSquare, Settings, Stethoscope, Terminal } from "lucide-react"
+import { Activity, Bot, BookOpen, Menu, MessageSquare, Settings, Stethoscope, Terminal } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -11,6 +11,7 @@ import { useState } from "react"
 const NAV = [
   { href: "/chat", label: "问答台", icon: MessageSquare },
   { href: "/diagnose", label: "故障诊断", icon: Stethoscope },
+  { href: "/agent", label: "Agent Harness", icon: Bot },
   { href: "/knowledge", label: "知识库", icon: BookOpen },
   { href: "/health", label: "运行状态", icon: Activity },
   { href: "/settings", label: "设置", icon: Settings },

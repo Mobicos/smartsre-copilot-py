@@ -78,7 +78,7 @@ mcp_servers/      Local/mock MCP server examples
 tests/            Backend tests
 aiops-docs/       Sample operational documents
 uploads/          Local uploaded files, ignored by Git
-data/             Local SQLite/data files, ignored by Git
+data/             Local data files, ignored by Git
 volumes/          Docker service data, ignored by Git
 ```
 
@@ -203,7 +203,6 @@ Key backend variables:
 - `DASHSCOPE_API_KEY`: DashScope model access
 - `DASHSCOPE_MODEL`, `RAG_MODEL`: chat models
 - `DASHSCOPE_EMBEDDING_MODEL`: embedding model
-- `DATABASE_BACKEND`: `postgres` or `sqlite`
 - `POSTGRES_DSN`: PostgreSQL DSN
 - `REDIS_URL`: Redis connection string
 - `TASK_QUEUE_BACKEND`: `redis` or `database`

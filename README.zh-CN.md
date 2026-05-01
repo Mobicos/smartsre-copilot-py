@@ -203,7 +203,6 @@ SMARTSRE_API_KEY=your_backend_api_key
 - `DASHSCOPE_API_KEY`：DashScope 模型访问凭证
 - `DASHSCOPE_MODEL`、`RAG_MODEL`：对话模型
 - `DASHSCOPE_EMBEDDING_MODEL`：Embedding 模型
-- `DATABASE_BACKEND`：`postgres` 或 `sqlite`
 - `POSTGRES_DSN`：PostgreSQL DSN
 - `REDIS_URL`：Redis 连接串
 - `TASK_QUEUE_BACKEND`：`redis` 或 `database`

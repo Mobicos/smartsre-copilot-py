@@ -128,9 +128,16 @@ async def diagnose_stream(
         SSE 事件流
     """
     session_id = request.session_id or "default"
+    task_input = request.diagnosis_goal()
     aiops_application_service = service_container.get_aiops_application_service()
     logger.info(f"[会话 {session_id}] 收到 AIOps 诊断请求（流式）")
-    return EventSourceResponse(aiops_application_service.stream_diagnosis(session_id, principal))
+    return EventSourceResponse(
+        aiops_application_service.stream_diagnosis(
+            session_id,
+            task_input=task_input,
+            principal=principal,
+        )
+    )
 
 
 @router.get("/aiops/runs/{run_id}")

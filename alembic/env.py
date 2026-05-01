@@ -8,8 +8,10 @@ from pathlib import Path
 
 from sqlalchemy import create_engine, pool
 from dotenv import load_dotenv
+from sqlmodel import SQLModel
 
 from alembic import context
+from app.platform.persistence.schema import *  # noqa: F401,F403 — register all models
 
 config = context.config
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,7 +21,7 @@ load_dotenv(BASE_DIR / ".env")
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = None
+target_metadata = SQLModel.metadata
 
 
 def _normalize_database_url(database_url: str) -> str:
@@ -32,15 +34,10 @@ def _normalize_database_url(database_url: str) -> str:
 
 
 def _resolve_database_url() -> str:
-    backend = os.getenv("DATABASE_BACKEND", "postgres").strip().lower()
-    if backend == "sqlite":
-        database_path = os.getenv("DATABASE_PATH", "data/smartsre_copilot.db")
-        return f"sqlite:///{database_path}"
-
     return _normalize_database_url(
         os.getenv(
-        "POSTGRES_DSN",
-        config.get_main_option("sqlalchemy.url"),
+            "POSTGRES_DSN",
+            config.get_main_option("sqlalchemy.url"),
         )
     )
 
