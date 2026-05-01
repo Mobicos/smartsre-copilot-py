@@ -41,7 +41,7 @@ class Settings(BaseSettings):
 
     # 应用配置
     app_name: str = "SmartSRE Copilot"
-    app_version: str = "1.0.0"
+    app_version: str = "1.2.1"
     environment: str = "dev"
     debug: bool = False
     # Intentionally bind all interfaces by default for container/server deployments.
