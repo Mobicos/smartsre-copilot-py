@@ -7,12 +7,24 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from app.platform.persistence.database import database_manager
+from sqlmodel import Session, col, select
+
+from app.platform.persistence.database import get_engine
+from app.platform.persistence.schema import (
+    AgentEvent,
+    AgentFeedback,
+    AgentRun,
+    KnowledgeBase,
+    Scene,
+    SceneKnowledgeBase,
+    SceneTool,
+    ToolPolicy,
+    Workspace,
+)
 
 
-def utc_now() -> str:
-    """Return an ISO 8601 UTC timestamp."""
-    return datetime.now(UTC).isoformat()
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 def _json_dumps(value: dict[str, Any] | None) -> str | None:
@@ -28,63 +40,54 @@ def _json_loads(value: str | None) -> dict[str, Any]:
     return loaded if isinstance(loaded, dict) else {}
 
 
+def _model_to_dict(obj: Any) -> dict[str, Any]:
+    return {k: v for k, v in obj.__dict__.items() if k != "_sa_instance_state"}
+
+
 class WorkspaceRepository:
     """Cloud Mate style workspace repository."""
 
     def create_workspace(self, *, name: str, description: str | None = None) -> str:
-        database_manager.initialize()
         workspace_id = str(uuid.uuid4())
-        now = utc_now()
-        with database_manager.get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO workspaces (workspace_id, name, description, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (workspace_id, name, description, now, now),
+        now = _utc_now()
+        with Session(bind=get_engine()) as session:
+            session.add(
+                Workspace(
+                    workspace_id=workspace_id,
+                    name=name,
+                    description=description,
+                    created_at=now,
+                    updated_at=now,
+                )
             )
+            session.commit()
         return workspace_id
 
     def list_workspaces(self) -> list[dict[str, Any]]:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            rows = connection.fetchall(
-                """
-                SELECT workspace_id, name, description, created_at, updated_at
-                FROM workspaces
-                ORDER BY created_at ASC
-                """
-            )
+        with Session(bind=get_engine()) as session:
+            rows = session.exec(select(Workspace).order_by(col(Workspace.created_at).asc())).all()
         return [
             {
-                "id": row["workspace_id"],
-                "name": row["name"],
-                "description": row["description"],
-                "created_at": row["created_at"],
-                "updated_at": row["updated_at"],
+                "id": row.workspace_id,
+                "name": row.name,
+                "description": row.description,
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
             }
             for row in rows
         ]
 
     def get_workspace(self, workspace_id: str) -> dict[str, Any] | None:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            row = connection.fetchone(
-                """
-                SELECT workspace_id, name, description, created_at, updated_at
-                FROM workspaces
-                WHERE workspace_id = ?
-                """,
-                (workspace_id,),
-            )
+        with Session(bind=get_engine()) as session:
+            row = session.get(Workspace, workspace_id)
         if row is None:
             return None
         return {
-            "id": row["workspace_id"],
-            "name": row["name"],
-            "description": row["description"],
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
+            "id": row.workspace_id,
+            "name": row.name,
+            "description": row.description,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
         }
 
 
@@ -99,66 +102,53 @@ class KnowledgeBaseRepository:
         description: str | None = None,
         version: str = "0.0.1",
     ) -> str:
-        database_manager.initialize()
         knowledge_base_id = str(uuid.uuid4())
-        now = utc_now()
-        with database_manager.get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO knowledge_bases (
-                    knowledge_base_id, workspace_id, name, description, version,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (knowledge_base_id, workspace_id, name, description, version, now, now),
+        now = _utc_now()
+        with Session(bind=get_engine()) as session:
+            session.add(
+                KnowledgeBase(
+                    knowledge_base_id=knowledge_base_id,
+                    workspace_id=workspace_id,
+                    name=name,
+                    description=description,
+                    version=version,
+                    created_at=now,
+                    updated_at=now,
+                )
             )
+            session.commit()
         return knowledge_base_id
 
     def list_by_workspace(self, workspace_id: str) -> list[dict[str, Any]]:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            rows = connection.fetchall(
-                """
-                SELECT knowledge_base_id, workspace_id, name, description, version,
-                       created_at, updated_at
-                FROM knowledge_bases
-                WHERE workspace_id = ?
-                ORDER BY created_at ASC
-                """,
-                (workspace_id,),
-            )
+        with Session(bind=get_engine()) as session:
+            rows = session.exec(
+                select(KnowledgeBase)
+                .where(KnowledgeBase.workspace_id == workspace_id)
+                .order_by(col(KnowledgeBase.created_at).asc())
+            ).all()
         return [self._row_to_dict(row) for row in rows]
 
     def get_many(self, knowledge_base_ids: list[str]) -> list[dict[str, Any]]:
         if not knowledge_base_ids:
             return []
-        database_manager.initialize()
-        rows: list[Any] = []
-        with database_manager.get_connection() as connection:
-            for knowledge_base_id in knowledge_base_ids:
-                row = connection.fetchone(
-                    """
-                    SELECT knowledge_base_id, workspace_id, name, description, version,
-                           created_at, updated_at
-                    FROM knowledge_bases
-                    WHERE knowledge_base_id = ?
-                    """,
-                    (knowledge_base_id,),
+        with Session(bind=get_engine()) as session:
+            rows = session.exec(
+                select(KnowledgeBase).where(
+                    col(KnowledgeBase.knowledge_base_id).in_(knowledge_base_ids)
                 )
-                if row is not None:
-                    rows.append(row)
+            ).all()
         return [self._row_to_dict(row) for row in rows]
 
     @staticmethod
     def _row_to_dict(row: Any) -> dict[str, Any]:
         return {
-            "id": row["knowledge_base_id"],
-            "workspace_id": row["workspace_id"],
-            "name": row["name"],
-            "description": row["description"],
-            "version": row["version"],
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
+            "id": row.knowledge_base_id,
+            "workspace_id": row.workspace_id,
+            "name": row.name,
+            "description": row.description,
+            "version": row.version,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
         }
 
 
@@ -175,111 +165,73 @@ class SceneRepository:
         tool_names: list[str] | None = None,
         agent_config: dict[str, Any] | None = None,
     ) -> str:
-        database_manager.initialize()
         scene_id = str(uuid.uuid4())
-        now = utc_now()
-        with database_manager.get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO scenes (
-                    scene_id, workspace_id, name, description, agent_config,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    scene_id,
-                    workspace_id,
-                    name,
-                    description,
-                    _json_dumps(agent_config),
-                    now,
-                    now,
-                ),
+        now = _utc_now()
+        with Session(bind=get_engine()) as session:
+            session.add(
+                Scene(
+                    scene_id=scene_id,
+                    workspace_id=workspace_id,
+                    name=name,
+                    description=description,
+                    agent_config=_json_dumps(agent_config),
+                    created_at=now,
+                    updated_at=now,
+                )
             )
-            for knowledge_base_id in knowledge_base_ids or []:
-                connection.execute(
-                    """
-                    INSERT INTO scene_knowledge_bases (scene_id, knowledge_base_id)
-                    VALUES (?, ?)
-                    """,
-                    (scene_id, knowledge_base_id),
-                )
+            for kb_id in knowledge_base_ids or []:
+                session.add(SceneKnowledgeBase(scene_id=scene_id, knowledge_base_id=kb_id))
             for tool_name in tool_names or []:
-                connection.execute(
-                    "INSERT INTO scene_tools (scene_id, tool_name) VALUES (?, ?)",
-                    (scene_id, tool_name),
-                )
+                session.add(SceneTool(scene_id=scene_id, tool_name=tool_name))
+            session.commit()
         return scene_id
 
     def list_scenes(self, *, workspace_id: str | None = None) -> list[dict[str, Any]]:
-        database_manager.initialize()
-        query = """
-            SELECT scene_id, workspace_id, name, description, agent_config,
-                   created_at, updated_at
-            FROM scenes
-        """
-        params: list[Any] = []
-        if workspace_id:
-            query += " WHERE workspace_id = ?"
-            params.append(workspace_id)
-        query += " ORDER BY created_at ASC"
-        with database_manager.get_connection() as connection:
-            rows = connection.fetchall(query, params)
+        with Session(bind=get_engine()) as session:
+            statement = select(Scene).order_by(col(Scene.created_at).asc())
+            if workspace_id:
+                statement = statement.where(Scene.workspace_id == workspace_id)
+            rows = session.exec(statement).all()
         return [self._row_to_dict(row, include_links=False) for row in rows]
 
     def get_scene(self, scene_id: str) -> dict[str, Any] | None:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            row = connection.fetchone(
-                """
-                SELECT scene_id, workspace_id, name, description, agent_config,
-                       created_at, updated_at
-                FROM scenes
-                WHERE scene_id = ?
-                """,
-                (scene_id,),
-            )
-            if row is None:
+        with Session(bind=get_engine()) as session:
+            scene = session.get(Scene, scene_id)
+            if scene is None:
                 return None
-            knowledge_rows = connection.fetchall(
-                """
-                SELECT kb.knowledge_base_id, kb.workspace_id, kb.name, kb.description,
-                       kb.version, kb.created_at, kb.updated_at
-                FROM knowledge_bases kb
-                JOIN scene_knowledge_bases skb
-                  ON skb.knowledge_base_id = kb.knowledge_base_id
-                WHERE skb.scene_id = ?
-                ORDER BY kb.created_at ASC
-                """,
-                (scene_id,),
-            )
-            tool_rows = connection.fetchall(
-                """
-                SELECT tool_name
-                FROM scene_tools
-                WHERE scene_id = ?
-                ORDER BY tool_name ASC
-                """,
-                (scene_id,),
-            )
 
-        scene = self._row_to_dict(row, include_links=True)
-        scene["knowledge_bases"] = [
-            KnowledgeBaseRepository._row_to_dict(knowledge_row) for knowledge_row in knowledge_rows
+            kb_statement = (
+                select(KnowledgeBase)
+                .join(SceneKnowledgeBase)
+                .where(SceneKnowledgeBase.scene_id == scene_id)
+                .order_by(col(KnowledgeBase.created_at).asc())
+            )
+            knowledge_rows = session.exec(kb_statement).all()
+
+            tool_statement = (
+                select(SceneTool)
+                .where(SceneTool.scene_id == scene_id)
+                .order_by(col(SceneTool.tool_name).asc())
+            )
+            tool_rows = session.exec(tool_statement).all()
+
+        result = self._row_to_dict(scene, include_links=True)
+        result["knowledge_bases"] = [
+            KnowledgeBaseRepository._row_to_dict(kb) for kb in knowledge_rows
         ]
-        scene["tools"] = [tool_row["tool_name"] for tool_row in tool_rows]
-        return scene
+        result["tools"] = [t.tool_name for t in tool_rows]
+        return result
 
     @staticmethod
     def _row_to_dict(row: Any, *, include_links: bool) -> dict[str, Any]:
         scene = {
-            "id": row["scene_id"],
-            "workspace_id": row["workspace_id"],
-            "name": row["name"],
-            "description": row["description"],
-            "agent_config": _json_loads(row["agent_config"]),
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
+            "id": row.scene_id,
+            "workspace_id": row.workspace_id,
+            "name": row.name,
+            "description": row.description,
+            "agent_config": _json_loads(row.agent_config),
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
         }
         if include_links:
             scene["knowledge_bases"] = []
@@ -300,80 +252,53 @@ class ToolPolicyRepository:
         enabled: bool = True,
         approval_required: bool = False,
     ) -> dict[str, Any]:
-        database_manager.initialize()
-        now = utc_now()
-        existing = self.get_policy(tool_name)
-        created_at = existing["created_at"] if existing else now
-        with database_manager.get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO tool_policies (
-                    tool_name, scope, risk_level, capability, enabled,
-                    approval_required, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(tool_name)
-                DO UPDATE SET
-                    scope = excluded.scope,
-                    risk_level = excluded.risk_level,
-                    capability = excluded.capability,
-                    enabled = excluded.enabled,
-                    approval_required = excluded.approval_required,
-                    updated_at = excluded.updated_at
-                """,
-                (
-                    tool_name,
-                    scope,
-                    risk_level,
-                    capability,
-                    int(enabled),
-                    int(approval_required),
-                    created_at,
-                    now,
-                ),
-            )
-        policy = self.get_policy(tool_name)
-        if policy is None:
-            raise RuntimeError(f"failed to persist tool policy: {tool_name}")
-        return policy
+        now = _utc_now()
+        with Session(bind=get_engine()) as session:
+            existing = session.get(ToolPolicy, tool_name)
+            if existing is not None:
+                existing.scope = scope
+                existing.risk_level = risk_level
+                existing.capability = capability
+                existing.enabled = enabled
+                existing.approval_required = approval_required
+                existing.updated_at = now
+            else:
+                existing = ToolPolicy(
+                    tool_name=tool_name,
+                    scope=scope,
+                    risk_level=risk_level,
+                    capability=capability,
+                    enabled=enabled,
+                    approval_required=approval_required,
+                    created_at=now,
+                    updated_at=now,
+                )
+            session.add(existing)
+            session.commit()
+            session.refresh(existing)
+        return self._row_to_dict(existing)
 
     def get_policy(self, tool_name: str) -> dict[str, Any] | None:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            row = connection.fetchone(
-                """
-                SELECT tool_name, scope, risk_level, capability, enabled,
-                       approval_required, created_at, updated_at
-                FROM tool_policies
-                WHERE tool_name = ?
-                """,
-                (tool_name,),
-            )
+        with Session(bind=get_engine()) as session:
+            row = session.get(ToolPolicy, tool_name)
         return self._row_to_dict(row) if row is not None else None
 
     def list_policies(self) -> list[dict[str, Any]]:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            rows = connection.fetchall(
-                """
-                SELECT tool_name, scope, risk_level, capability, enabled,
-                       approval_required, created_at, updated_at
-                FROM tool_policies
-                ORDER BY tool_name ASC
-                """
-            )
+        with Session(bind=get_engine()) as session:
+            rows = session.exec(select(ToolPolicy).order_by(col(ToolPolicy.tool_name).asc())).all()
         return [self._row_to_dict(row) for row in rows]
 
     @staticmethod
     def _row_to_dict(row: Any) -> dict[str, Any]:
         return {
-            "tool_name": row["tool_name"],
-            "scope": row["scope"],
-            "risk_level": row["risk_level"],
-            "capability": row["capability"],
-            "enabled": bool(row["enabled"]),
-            "approval_required": bool(row["approval_required"]),
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
+            "tool_name": row.tool_name,
+            "scope": row.scope,
+            "risk_level": row.risk_level,
+            "capability": row.capability,
+            "enabled": bool(row.enabled),
+            "approval_required": bool(row.approval_required),
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
         }
 
 
@@ -388,19 +313,22 @@ class AgentRunRepository:
         session_id: str,
         goal: str,
     ) -> str:
-        database_manager.initialize()
         run_id = str(uuid.uuid4())
-        now = utc_now()
-        with database_manager.get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO agent_runs (
-                    run_id, workspace_id, scene_id, session_id, status, goal,
-                    final_report, error_message, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (run_id, workspace_id, scene_id, session_id, "running", goal, None, None, now, now),
+        now = _utc_now()
+        with Session(bind=get_engine()) as session:
+            session.add(
+                AgentRun(
+                    run_id=run_id,
+                    workspace_id=workspace_id,
+                    scene_id=scene_id,
+                    session_id=session_id,
+                    status="running",
+                    goal=goal,
+                    created_at=now,
+                    updated_at=now,
+                )
             )
+            session.commit()
         return run_id
 
     def update_run(
@@ -411,30 +339,22 @@ class AgentRunRepository:
         final_report: str | None = None,
         error_message: str | None = None,
     ) -> None:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            connection.execute(
-                """
-                UPDATE agent_runs
-                SET status = ?, final_report = COALESCE(?, final_report),
-                    error_message = ?, updated_at = ?
-                WHERE run_id = ?
-                """,
-                (status, final_report, error_message, utc_now(), run_id),
-            )
+        with Session(bind=get_engine()) as session:
+            run = session.get(AgentRun, run_id)
+            if run is None:
+                return
+            run.status = status
+            if final_report is not None:
+                run.final_report = final_report
+            if error_message is not None:
+                run.error_message = error_message
+            run.updated_at = _utc_now()
+            session.add(run)
+            session.commit()
 
     def get_run(self, run_id: str) -> dict[str, Any] | None:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            row = connection.fetchone(
-                """
-                SELECT run_id, workspace_id, scene_id, session_id, status, goal,
-                       final_report, error_message, created_at, updated_at
-                FROM agent_runs
-                WHERE run_id = ?
-                """,
-                (run_id,),
-            )
+        with Session(bind=get_engine()) as session:
+            row = session.get(AgentRun, run_id)
         return self._row_to_dict(row) if row is not None else None
 
     def append_event(
@@ -446,38 +366,35 @@ class AgentRunRepository:
         message: str,
         payload: dict[str, Any] | None = None,
     ) -> None:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO agent_events (
-                    run_id, event_type, stage, message, payload, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (run_id, event_type, stage, message, _json_dumps(payload), utc_now()),
+        with Session(bind=get_engine()) as session:
+            session.add(
+                AgentEvent(
+                    run_id=run_id,
+                    event_type=event_type,
+                    stage=stage,
+                    message=message,
+                    payload=_json_dumps(payload),
+                    created_at=_utc_now(),
+                )
             )
+            session.commit()
 
     def list_events(self, run_id: str) -> list[dict[str, Any]]:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            rows = connection.fetchall(
-                """
-                SELECT id, run_id, event_type, stage, message, payload, created_at
-                FROM agent_events
-                WHERE run_id = ?
-                ORDER BY created_at ASC, id ASC
-                """,
-                (run_id,),
-            )
+        with Session(bind=get_engine()) as session:
+            rows = session.exec(
+                select(AgentEvent)
+                .where(AgentEvent.run_id == run_id)
+                .order_by(col(AgentEvent.created_at).asc(), col(AgentEvent.id).asc())
+            ).all()
         return [
             {
-                "id": row["id"],
-                "run_id": row["run_id"],
-                "type": row["event_type"],
-                "stage": row["stage"],
-                "message": row["message"],
-                "payload": json.loads(row["payload"]) if row["payload"] else None,
-                "created_at": row["created_at"],
+                "id": row.id,
+                "run_id": row.run_id,
+                "type": row.event_type,
+                "stage": row.stage,
+                "message": row.message,
+                "payload": json.loads(row.payload) if row.payload else None,
+                "created_at": row.created_at,
             }
             for row in rows
         ]
@@ -485,16 +402,16 @@ class AgentRunRepository:
     @staticmethod
     def _row_to_dict(row: Any) -> dict[str, Any]:
         return {
-            "run_id": row["run_id"],
-            "workspace_id": row["workspace_id"],
-            "scene_id": row["scene_id"],
-            "session_id": row["session_id"],
-            "status": row["status"],
-            "goal": row["goal"],
-            "final_report": row["final_report"],
-            "error_message": row["error_message"],
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
+            "run_id": row.run_id,
+            "workspace_id": row.workspace_id,
+            "scene_id": row.scene_id,
+            "session_id": row.session_id,
+            "status": row.status,
+            "goal": row.goal,
+            "final_report": row.final_report,
+            "error_message": row.error_message,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
         }
 
 
@@ -508,37 +425,34 @@ class AgentFeedbackRepository:
         rating: str,
         comment: str | None = None,
     ) -> str:
-        database_manager.initialize()
         feedback_id = str(uuid.uuid4())
-        with database_manager.get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO agent_feedback (feedback_id, run_id, rating, comment, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (feedback_id, run_id, rating, comment, utc_now()),
+        with Session(bind=get_engine()) as session:
+            session.add(
+                AgentFeedback(
+                    feedback_id=feedback_id,
+                    run_id=run_id,
+                    rating=rating,
+                    comment=comment,
+                    created_at=_utc_now(),
+                )
             )
+            session.commit()
         return feedback_id
 
     def list_feedback(self, run_id: str) -> list[dict[str, Any]]:
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            rows = connection.fetchall(
-                """
-                SELECT feedback_id, run_id, rating, comment, created_at
-                FROM agent_feedback
-                WHERE run_id = ?
-                ORDER BY created_at ASC
-                """,
-                (run_id,),
-            )
+        with Session(bind=get_engine()) as session:
+            rows = session.exec(
+                select(AgentFeedback)
+                .where(AgentFeedback.run_id == run_id)
+                .order_by(col(AgentFeedback.created_at).asc())
+            ).all()
         return [
             {
-                "feedback_id": row["feedback_id"],
-                "run_id": row["run_id"],
-                "rating": row["rating"],
-                "comment": row["comment"],
-                "created_at": row["created_at"],
+                "feedback_id": row.feedback_id,
+                "run_id": row.run_id,
+                "rating": row.rating,
+                "comment": row.comment,
+                "created_at": row.created_at,
             }
             for row in rows
         ]
