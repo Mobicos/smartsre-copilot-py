@@ -7,30 +7,37 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from app.platform.persistence.database import database_manager
+from sqlmodel import Session, col, select
+
+from app.platform.persistence.database import get_engine
+from app.platform.persistence.schema import AIOpsRun, AIOpsRunEvent
 
 
-def utc_now() -> str:
-    """Return an ISO 8601 UTC timestamp."""
-    return datetime.now(UTC).isoformat()
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _model_to_dict(obj: Any) -> dict[str, Any]:
+    return {k: v for k, v in obj.__dict__.items() if k != "_sa_instance_state"}
 
 
 class AIOpsRunRepository:
     """AIOps run repository."""
 
     def create_run(self, session_id: str, task_input: str) -> str:
-        database_manager.initialize()
         run_id = str(uuid.uuid4())
-        now = utc_now()
-        with database_manager.get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO aiops_runs (
-                    run_id, session_id, status, task_input, report, error_message, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (run_id, session_id, "running", task_input, None, None, now, now),
+        now = _utc_now()
+        with Session(bind=get_engine()) as session:
+            run = AIOpsRun(
+                run_id=run_id,
+                session_id=session_id,
+                status="running",
+                task_input=task_input,
+                created_at=now,
+                updated_at=now,
             )
+            session.add(run)
+            session.commit()
         return run_id
 
     def update_run(
@@ -41,31 +48,23 @@ class AIOpsRunRepository:
         report: str | None = None,
         error_message: str | None = None,
     ) -> None:
-        database_manager.initialize()
-        now = utc_now()
-        with database_manager.get_connection() as connection:
-            connection.execute(
-                """
-                UPDATE aiops_runs
-                SET status = ?, report = COALESCE(?, report), error_message = ?, updated_at = ?
-                WHERE run_id = ?
-                """,
-                (status, report, error_message, now, run_id),
-            )
+        with Session(bind=get_engine()) as session:
+            run = session.get(AIOpsRun, run_id)
+            if run is None:
+                return
+            run.status = status
+            if report is not None:
+                run.report = report
+            if error_message is not None:
+                run.error_message = error_message
+            run.updated_at = _utc_now()
+            session.add(run)
+            session.commit()
 
     def get_run(self, run_id: str) -> dict[str, Any] | None:
-        """Get an AIOps run record."""
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            row = connection.execute(
-                """
-                SELECT run_id, session_id, status, task_input, report, error_message, created_at, updated_at
-                FROM aiops_runs
-                WHERE run_id = ?
-                """,
-                (run_id,),
-            ).fetchone()
-        return dict(row) if row is not None else None
+        with Session(bind=get_engine()) as session:
+            run = session.get(AIOpsRun, run_id)
+            return _model_to_dict(run) if run else None
 
     def append_event(
         self,
@@ -76,50 +75,38 @@ class AIOpsRunRepository:
         message: str,
         payload: dict[str, Any] | None = None,
     ) -> None:
-        """Append an AIOps runtime event."""
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO aiops_run_events (
-                    run_id, event_type, stage, message, payload, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    run_id,
-                    event_type,
-                    stage,
-                    message,
-                    json.dumps(payload, ensure_ascii=False) if payload is not None else None,
-                    utc_now(),
-                ),
+        with Session(bind=get_engine()) as session:
+            event = AIOpsRunEvent(
+                run_id=run_id,
+                event_type=event_type,
+                stage=stage,
+                message=message,
+                payload=json.dumps(payload, ensure_ascii=False) if payload is not None else None,
+                created_at=_utc_now(),
             )
+            session.add(event)
+            session.commit()
 
     def list_events(self, run_id: str) -> list[dict[str, Any]]:
-        """List run events chronologically."""
-        database_manager.initialize()
-        with database_manager.get_connection() as connection:
-            rows = connection.execute(
-                """
-                SELECT id, run_id, event_type, stage, message, payload, created_at
-                FROM aiops_run_events
-                WHERE run_id = ?
-                ORDER BY created_at ASC, id ASC
-                """,
-                (run_id,),
-            ).fetchall()
+        with Session(bind=get_engine()) as session:
+            statement = (
+                select(AIOpsRunEvent)
+                .where(AIOpsRunEvent.run_id == run_id)
+                .order_by(col(AIOpsRunEvent.created_at).asc(), col(AIOpsRunEvent.id).asc())
+            )
+            rows = session.exec(statement).all()
         events: list[dict[str, Any]] = []
         for row in rows:
-            payload = row["payload"]
+            payload = row.payload
             events.append(
                 {
-                    "id": row["id"],
-                    "runId": row["run_id"],
-                    "type": row["event_type"],
-                    "stage": row["stage"],
-                    "message": row["message"],
+                    "id": row.id,
+                    "runId": row.run_id,
+                    "type": row.event_type,
+                    "stage": row.stage,
+                    "message": row.message,
                     "payload": json.loads(payload) if payload else None,
-                    "createdAt": row["created_at"],
+                    "createdAt": row.created_at,
                 }
             )
         return events

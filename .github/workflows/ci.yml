@@ -5,11 +5,58 @@ on:
     branches:
       - main
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - ready_for_review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  pr-title:
+    name: Pull Request Title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Validate Conventional Commit title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|ci|chore|docs|test|refactor|perf)(\([a-z0-9][a-z0-9.-]*\))?: [a-z0-9].+$'
+          if [[ ! "$PR_TITLE" =~ $pattern ]]; then
+            echo "PR title must match: <type>: <concise action summary> or <type>(<scope>): <concise action summary>"
+            echo "Allowed types: feat, fix, ci, chore, docs, test, refactor, perf"
+            echo "Optional scopes may contain lowercase letters, numbers, dots, and hyphens."
+            echo "Current title: $PR_TITLE"
+            exit 1
+          fi
+
   backend:
     name: Backend Quality Checks
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: smartsre
+          POSTGRES_PASSWORD: smartsre
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U smartsre -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     strategy:
       fail-fast: false
       matrix:
@@ -46,6 +93,8 @@ jobs:
         run: uv run python -m bandit -r app -ll
 
       - name: Run tests
+        env:
+          SMARTSRE_TEST_POSTGRES_HOST: localhost
         run: uv run python -m pytest tests -q
 
   frontend:

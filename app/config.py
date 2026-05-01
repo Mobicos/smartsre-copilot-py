@@ -4,17 +4,28 @@
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = BASE_DIR / ".env"
 UPLOADS_DIR = BASE_DIR / "uploads"
 LOGS_DIR = BASE_DIR / "logs"
-DATA_DIR = BASE_DIR / "data"
-DATABASE_FILE = DATA_DIR / "smartsre_copilot.db"
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_SECRETS = {
+    "changethis",
+    "changeme",
+    "secret",
+    "password",
+    "your_dashscope_api_key",
+    "replace_with_a_secure_key",
+}
 
 
 class Settings(BaseSettings):
@@ -25,19 +36,18 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        env_ignore_empty=True,
     )
 
     # 应用配置
     app_name: str = "SmartSRE Copilot"
-    app_version: str = "1.0.0"
+    app_version: str = "1.2.1"
     environment: str = "dev"
     debug: bool = False
     # Intentionally bind all interfaces by default for container/server deployments.
     host: str = "0.0.0.0"  # nosec B104
     port: int = 9900
     cors_allowed_origins: str = "*"
-    database_path: str = str(DATABASE_FILE)
-    database_backend: str = "sqlite"
     postgres_dsn: str = ""
     app_api_key: str = ""
     api_keys_json: str = ""
@@ -76,6 +86,39 @@ class Settings(BaseSettings):
     mcp_monitor_transport: str = "streamable-http"
     mcp_monitor_url: str = "http://localhost:8004/mcp"
     mcp_tools_load_timeout_seconds: float = 8.0
+
+    @model_validator(mode="after")
+    def _check_default_secrets(self) -> "Settings":
+        """Warn or error when secrets still contain placeholder values."""
+        secret_fields = {
+            "app_api_key": self.app_api_key,
+            "postgres_dsn": self.postgres_dsn,
+            "dashscope_api_key": self.dashscope_api_key,
+        }
+        issues: list[str] = []
+        for field_name, value in secret_fields.items():
+            if value and value.strip().lower() in _DEFAULT_SECRETS:
+                issues.append(f"{field_name} is set to a default/placeholder value")
+
+        if not issues:
+            return self
+
+        message = f"Security configuration issues: {'; '.join(issues)}"
+        if self.is_production:
+            raise ValueError(message)
+        logger.warning(message)
+        return self
+
+    @property
+    def sqlalchemy_database_uri(self) -> str:
+        """Return a SQLAlchemy-compatible DSN (psycopg3 driver)."""
+        raw = self.postgres_dsn
+        if not raw:
+            return ""
+        if raw.startswith("postgresql+"):
+            return raw
+        # postgresql://… → postgresql+psycopg://…
+        return raw.replace("postgresql://", "postgresql+psycopg://", 1)
 
     @property
     def is_production(self) -> bool:

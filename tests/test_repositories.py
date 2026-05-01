@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from sqlalchemy import text
+
 from app.platform.persistence import (
     aiops_run_repository,
     audit_log_repository,
     chat_tool_event_repository,
     conversation_repository,
 )
-from app.platform.persistence.database import database_manager
+from app.platform.persistence.database import get_engine
 
 
 def test_conversation_repository_saves_lists_and_deletes_session():
@@ -64,13 +66,16 @@ def test_aiops_run_repository_updates_status_and_report():
 
     aiops_run_repository.update_run(run_id, status="completed", report="root cause report")
 
-    with database_manager.get_connection() as connection:
-        row = connection.fetchone("SELECT status, report, error_message FROM aiops_runs")
+    engine = get_engine()
+    with engine.connect() as connection:
+        row = connection.execute(
+            text("SELECT status, report, error_message FROM aiops_runs")
+        ).fetchone()
 
     assert row is not None
-    assert row["status"] == "completed"
-    assert row["report"] == "root cause report"
-    assert row["error_message"] is None
+    assert row[0] == "completed"
+    assert row[1] == "root cause report"
+    assert row[2] is None
 
 
 def test_aiops_run_repository_persists_events_in_order():
@@ -110,16 +115,17 @@ def test_audit_log_repository_persists_request_context():
         user_agent="pytest",
     )
 
-    with database_manager.get_connection() as connection:
-        row = connection.fetchone(
-            """
-            SELECT request_id, method, path, status_code, subject, role, client_ip, user_agent
-            FROM audit_logs
-            """
-        )
+    engine = get_engine()
+    with engine.connect() as connection:
+        row = connection.execute(
+            text("""
+                SELECT request_id, method, path, status_code, subject, role, client_ip, user_agent
+                FROM audit_logs
+            """)
+        ).fetchone()
 
     assert row is not None
-    assert dict(row) == {
+    assert dict(row._mapping) == {
         "request_id": "req-1",
         "method": "POST",
         "path": "/api/upload",

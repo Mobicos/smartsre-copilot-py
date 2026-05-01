@@ -8,6 +8,7 @@ import { MobileNav } from "@/components/mobile-nav"
 const TITLES: Record<string, { title: string; subtitle: string }> = {
   "/chat": { title: "问答台", subtitle: "把问题说出来，它会查阅资料后回答你" },
   "/diagnose": { title: "故障诊断", subtitle: "描述现象，它会一步步排查并给你结论" },
+  "/agent": { title: "Agent Harness", subtitle: "直接运行后端 Native Agent 场景、工具和历史记录" },
   "/knowledge": { title: "知识库", subtitle: "上传你们的运维资料，让它读懂你们的系统" },
   "/health": { title: "运行状态", subtitle: "实时检测它是否还在正常工作" },
   "/settings": { title: "设置", subtitle: "调整外观与连接方式" },

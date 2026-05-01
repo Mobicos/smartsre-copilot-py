@@ -107,7 +107,6 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_BACKEND: postgres
       POSTGRES_DSN: postgresql://smartsre:smartsre@postgres:5432/smartsre
     depends_on:
       postgres:
@@ -121,7 +120,6 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_BACKEND: postgres
       POSTGRES_DSN: postgresql://smartsre:smartsre@postgres:5432/smartsre
       REDIS_URL: redis://redis:6379/0
       TASK_QUEUE_BACKEND: redis
@@ -149,7 +147,6 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_BACKEND: postgres
       POSTGRES_DSN: postgresql://smartsre:smartsre@postgres:5432/smartsre
       REDIS_URL: redis://redis:6379/0
       TASK_QUEUE_BACKEND: redis
