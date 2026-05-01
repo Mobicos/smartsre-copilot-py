@@ -11,7 +11,7 @@ from app.core.container import service_container
 from app.core.milvus_client import milvus_manager
 from app.infrastructure import redis_manager
 from app.infrastructure.tasks import task_dispatcher
-from app.platform.persistence import database_manager
+from app.platform.persistence.database import health_check as db_health_check
 
 router = APIRouter()
 
@@ -30,7 +30,7 @@ def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
             "message": health.message,
         }
 
-    database_healthy = database_manager.health_check()
+    database_healthy = db_health_check()
     health_data["database"] = {
         "status": "connected" if database_healthy else "disconnected",
         "message": "数据库连接正常" if database_healthy else "数据库连接异常",

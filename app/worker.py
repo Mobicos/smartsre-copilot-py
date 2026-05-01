@@ -8,12 +8,10 @@ import signal
 from loguru import logger
 
 from app.infrastructure.tasks import task_dispatcher
-from app.platform.persistence import database_manager
 
 
 async def run_worker() -> None:
     """启动并保持索引任务 worker 运行。"""
-    database_manager.initialize()
     await task_dispatcher.start()
     logger.info("Indexing worker 已启动，等待任务...")
 
