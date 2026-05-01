@@ -15,7 +15,7 @@ from app.config import config
 from app.core.container import service_container
 from app.core.milvus_client import milvus_manager
 from app.infrastructure.tasks import task_dispatcher
-from app.platform.persistence import audit_log_repository, database_manager
+from app.platform.persistence import audit_log_repository
 from app.security import validate_security_configuration
 
 
@@ -28,10 +28,6 @@ async def lifespan(app: FastAPI):
     logger.info(f"📝 环境: {'开发' if config.debug else '生产'}")
     logger.info(f"🌐 监听地址: http://{config.host}:{config.port}")
     logger.info(f"📚 API 文档: http://{config.host}:{config.port}/docs")
-
-    logger.info("🗄️ 正在初始化持久化存储...")
-    database_manager.initialize()
-    logger.info("✅ 持久化存储初始化成功")
 
     logger.info("🔐 正在校验安全配置...")
     validate_security_configuration()
@@ -69,6 +65,9 @@ app = FastAPI(
     version=config.app_version,
     description="基于 LangChain 的智能oncall运维系统",
     lifespan=lifespan,
+    generate_unique_id_function=lambda route: (
+        f"{route.tags[0]}-{route.name}" if route.tags else route.name
+    ),
 )
 
 # 配置 CORS

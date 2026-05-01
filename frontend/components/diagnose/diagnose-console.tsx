@@ -44,11 +44,12 @@ export function DiagnoseConsole() {
     if (!q) return
     dispatch({ type: "reset", query: q })
     setRunning(true)
+    const sessionId = `diagnose-${crypto.randomUUID()}`
 
     try {
       await start(
         "/api/aiops",
-        { query: q, question: q, problem: q },
+        { session_id: sessionId, goal: q, query: q, question: q, problem: q },
         {
           onEvent: (event, data) => {
             const parsed = tryParseJSON(data)

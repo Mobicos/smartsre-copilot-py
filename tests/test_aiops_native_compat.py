@@ -16,6 +16,9 @@ from app.security.auth import Principal
 
 
 class StaticRuntime:
+    def __init__(self) -> None:
+        self.goals: list[str] = []
+
     async def run(
         self,
         *,
@@ -24,6 +27,7 @@ class StaticRuntime:
         goal: str,
         principal: Principal,
     ) -> AsyncGenerator[dict, None]:
+        self.goals.append(goal)
         yield {
             "type": "run_started",
             "stage": "start",
@@ -41,8 +45,9 @@ class StaticRuntime:
 
 @pytest.mark.asyncio
 async def test_aiops_stream_uses_native_runtime_and_preserves_complete_event():
+    runtime = StaticRuntime()
     service = AIOpsApplicationService(
-        agent_runtime=StaticRuntime(),
+        agent_runtime=runtime,
         aiops_run_repository=aiops_run_repository,
         conversation_repository=conversation_repository,
         workspace_repository=workspace_repository,
@@ -53,10 +58,12 @@ async def test_aiops_stream_uses_native_runtime_and_preserves_complete_event():
         json.loads(chunk["data"])
         async for chunk in service.stream_diagnosis(
             "session-1",
-            Principal(role="admin", subject="pytest"),
+            task_input="Investigate checkout latency",
+            principal=Principal(role="admin", subject="pytest"),
         )
     ]
 
+    assert runtime.goals == ["Investigate checkout latency"]
     assert events[-1]["type"] == "complete"
     assert events[-1]["stage"] == "diagnosis_complete"
     assert events[-1]["diagnosis"]["report"] == "# report"
