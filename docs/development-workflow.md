@@ -72,6 +72,15 @@ Examples:
 fix: resolve CI type check failures
 ci(actions): resolve workflow permissions
 chore(deps): bump cryptography from 46.0.5 to 46.0.7
+chore(docker): bump postgres from 16.1 to 16.2
+```
+
+Dependency bump PRs must use these scopes:
+
+```text
+chore(deps): bump ...
+chore(docker): bump ...
+ci(actions): bump ...
 ```
 
 ## 4. Pull Request Rules
@@ -98,6 +107,19 @@ GitHub Actions is the final shared gate. CI must:
 - Run backend compile, lint, format, type check, security scan, and tests.
 - Run frontend lint, type check, and build when frontend changes are present or
   when the full workflow runs.
+- Keep Dependabot version updates grouped and avoid automatic semver-major
+  updates.
+- Treat runtime and infrastructure upgrades as dedicated change sets, not
+  routine dependency cleanup.
+
+Runtime version boundaries:
+
+- Python application runtime: `3.11` through `3.13`; do not automatically move
+  Docker runtime images to `3.14`.
+- PostgreSQL: stay on the current supported major unless a dedicated migration
+  PR validates upgrade and rollback.
+- Redis, Milvus, etcd, and MinIO: patch updates may be automated, but minor or
+  major upgrades require explicit local compose validation.
 
 Local checks should match CI when the environment permits it:
 

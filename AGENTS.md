@@ -31,8 +31,17 @@ Examples:
 fix: resolve CI type check failures
 ci(actions): enforce ruff format check
 chore(deps): update dependency lock file
+chore(docker): bump postgres from 16.1 to 16.2
 ci: enforce ruff format check
 docs: explain GitHub Actions workflow
+```
+
+Dependency bump PR titles must use these scopes:
+
+```text
+chore(deps): bump ...
+chore(docker): bump ...
+ci(actions): bump ...
 ```
 
 PR titles must use the same format because squash merges use the PR title as
@@ -115,6 +124,11 @@ reason and rely on GitHub Actions as the final verification source.
 - Keep `pyproject.toml` as the source of declared dependencies.
 - Keep `uv.lock` committed because this is an application repository.
 - Do not mix lockfile-only churn into feature or fix commits.
+- Dependabot version updates should group related dependencies and avoid
+  automatic semver-major updates.
+- Runtime and infrastructure major or minor upgrades, such as Python base
+  images, PostgreSQL, Redis, Milvus, etcd, and MinIO, require a dedicated PR and
+  explicit runtime validation.
 - Commit dependency lock updates separately as:
 
 ```text

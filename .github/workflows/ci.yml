@@ -32,10 +32,19 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           pattern='^(feat|fix|ci|chore|docs|test|refactor|perf)(\([a-z0-9][a-z0-9.-]*\))?: [a-z0-9].+$'
+          bump_pattern='^(chore\(deps\)|chore\(docker\)|ci\(actions\)): bump .+$'
           if [[ ! "$PR_TITLE" =~ $pattern ]]; then
             echo "PR title must match: <type>: <concise action summary> or <type>(<scope>): <concise action summary>"
             echo "Allowed types: feat, fix, ci, chore, docs, test, refactor, perf"
             echo "Optional scopes may contain lowercase letters, numbers, dots, and hyphens."
+            echo "Current title: $PR_TITLE"
+            exit 1
+          fi
+          if [[ "$PR_TITLE" == *"bump "* && ! "$PR_TITLE" =~ $bump_pattern ]]; then
+            echo "Dependency bump PR titles must use one of these scopes:"
+            echo "- chore(deps): bump ..."
+            echo "- chore(docker): bump ..."
+            echo "- ci(actions): bump ..."
             echo "Current title: $PR_TITLE"
             exit 1
           fi

@@ -12,6 +12,13 @@ the final commit subject:
 
 Allowed types: `feat`, `fix`, `ci`, `chore`, `docs`, `test`, `refactor`, `perf`.
 Scopes are optional and should be lowercase, for example `chore(deps): ...`.
+Dependency bump PRs must use one of:
+
+```text
+chore(deps): bump ...
+chore(docker): bump ...
+ci(actions): bump ...
+```
 
 ## Changes
 
