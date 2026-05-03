@@ -194,7 +194,7 @@ status:
 # 执行数据库迁移
 db-upgrade:
 	@echo "$(YELLOW)🗄️  执行数据库迁移...$(NC)"
-	@.venv/bin/alembic upgrade head
+	@uv run alembic upgrade head
 
 # 生成新的迁移脚本
 db-revision:
@@ -203,7 +203,7 @@ db-revision:
 		exit 1; \
 	fi
 	@echo "$(YELLOW)📝 生成数据库迁移: $(MESSAGE)$(NC)"
-	@.venv/bin/alembic revision -m "$(MESSAGE)"
+	@uv run alembic revision -m "$(MESSAGE)"
 
 # ============================================================
 # MCP 服务管理
@@ -216,7 +216,7 @@ start-cls:
 		echo "$(GREEN)✅ CLS MCP 服务已经在运行中$(NC)"; \
 	else \
 		echo "$(YELLOW)📦 正在启动 CLS MCP 服务（后台运行）...$(NC)"; \
-		nohup .venv/bin/python mcp_servers/cls_server.py > mcp_cls.log 2>&1 & \
+		nohup uv run python mcp_servers/cls_server.py > mcp_cls.log 2>&1 & \
 		echo $$! > mcp_cls.pid; \
 		sleep 2; \
 		if pgrep -f "mcp_servers/cls_server.py" > /dev/null 2>&1; then \
@@ -237,7 +237,7 @@ start-monitor:
 		echo "$(GREEN)✅ Monitor MCP 服务已经在运行中$(NC)"; \
 	else \
 		echo "$(YELLOW)📦 正在启动 Monitor MCP 服务（后台运行）...$(NC)"; \
-		nohup .venv/bin/python mcp_servers/monitor_server.py > mcp_monitor.log 2>&1 & \
+		nohup uv run python mcp_servers/monitor_server.py > mcp_monitor.log 2>&1 & \
 		echo $$! > mcp_monitor.pid; \
 		sleep 2; \
 		if pgrep -f "mcp_servers/monitor_server.py" > /dev/null 2>&1; then \
@@ -332,7 +332,7 @@ start-api:
 		echo "$(GREEN)✅ FastAPI 服务已经在运行中 ($(SERVER_URL))$(NC)"; \
 	else \
 		echo "$(YELLOW)📦 正在启动 FastAPI 服务（后台运行）...$(NC)"; \
-		nohup .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 9900 > server.log 2>&1 & \
+		nohup uv run uvicorn app.main:app --host 127.0.0.1 --port 9900 > server.log 2>&1 & \
 		echo $$! > server.pid; \
 		echo "$(GREEN)✅ FastAPI 服务启动命令已执行$(NC)"; \
 		echo "$(YELLOW)   PID: $$(cat server.pid)$(NC)"; \
@@ -442,12 +442,12 @@ check:
 # 开发模式运行（前台，热重载）
 dev:
 	@echo "$(YELLOW)🔧 启动开发服务器（热重载）...$(NC)"
-	.venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 9900
+	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 9900
 
 # 生产模式运行（前台）
 run:
 	@echo "$(YELLOW)🏭 启动生产服务器...$(NC)"
-	.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 9900
+	uv run uvicorn app.main:app --host 0.0.0.0 --port 9900
 
 # ============================================================
 # 文档管理
@@ -521,30 +521,30 @@ test-upload:
 
 install:  ## 安装依赖（生产环境）
 	@echo "$(YELLOW)📦 安装依赖...$(NC)"
-	pip install -r requirements.txt 2>/dev/null || pip install -e .
+	uv sync --frozen --no-dev
 	@echo "$(GREEN)✅ 依赖安装完成$(NC)"
 
 install-dev:  ## 安装开发依赖
 	@echo "$(YELLOW)📦 安装开发依赖...$(NC)"
-	pip install -e ".[dev]" 2>/dev/null || pip install -e .
+	uv sync --frozen --extra dev
 	@echo "$(GREEN)✅ 开发依赖安装完成$(NC)"
 
 sync:  ## 同步依赖
 	@echo "$(YELLOW)🔄 同步依赖...$(NC)"
-	pip install -e . --upgrade
+	uv sync --frozen
 	@echo "$(GREEN)✅ 依赖同步完成$(NC)"
 
 add:  ## 添加依赖包 (用法: make add PKG=package_name)
 	@echo "$(YELLOW)📦 添加依赖: $(PKG)...$(NC)"
-	pip install $(PKG)
+	uv add $(PKG)
 
 add-dev:  ## 添加开发依赖 (用法: make add-dev PKG=package_name)
 	@echo "$(YELLOW)📦 添加开发依赖: $(PKG)...$(NC)"
-	pip install $(PKG)
+	uv add --dev $(PKG)
 
 remove:  ## 移除依赖包 (用法: make remove PKG=package_name)
 	@echo "$(YELLOW)🗑️  移除依赖: $(PKG)...$(NC)"
-	pip uninstall $(PKG)
+	uv remove $(PKG)
 
 # ============================================================
 # 代码质量
@@ -552,38 +552,38 @@ remove:  ## 移除依赖包 (用法: make remove PKG=package_name)
 
 format:  ## 格式化代码
 	@echo "$(YELLOW)🎨 格式化代码...$(NC)"
-	python3 -m ruff check --select I --fix app/ 2>/dev/null || true
-	python3 -m ruff format app/ 2>/dev/null || python3 -m black app/
+	uv run ruff check --select I --fix app/
+	uv run ruff format app/
 	@echo "$(GREEN)✅ 格式化完成$(NC)"
 
 lint:  ## 代码检查
 	@echo "$(YELLOW)🔍 代码检查...$(NC)"
-	python3 -m ruff check app/ 2>/dev/null || python3 -m flake8 app/
+	uv run ruff check app/
 	@echo "$(GREEN)✅ 检查完成$(NC)"
 
 fix:  ## 自动修复代码问题
 	@echo "$(YELLOW)🔧 自动修复代码问题...$(NC)"
-	python3 -m ruff check --fix app/ 2>/dev/null || true
-	python3 -m ruff format app/ 2>/dev/null || python3 -m black app/
+	uv run ruff check --fix app/
+	uv run ruff format app/
 	@echo "$(GREEN)✅ 修复完成$(NC)"
 
 type-check:  ## 类型检查
 	@echo "$(YELLOW)🔍 类型检查...$(NC)"
-	python3 -m mypy app/ --ignore-missing-imports
+	uv run mypy app/ --ignore-missing-imports
 	@echo "$(GREEN)✅ 类型检查完成$(NC)"
 
 security:  ## 安全检查
 	@echo "$(YELLOW)🔒 安全检查...$(NC)"
-	python3 -m bandit -r app/ -ll
+	uv run bandit -r app/ -ll
 	@echo "$(GREEN)✅ 安全检查完成$(NC)"
 
 test:  ## 运行测试
 	@echo "$(YELLOW)🧪 运行测试...$(NC)"
-	python3 -m pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=html
+	uv run pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=html
 
 test-quick:  ## 快速测试
 	@echo "$(YELLOW)⚡ 快速测试...$(NC)"
-	python3 -m pytest tests/ -v
+	uv run pytest tests/ -v
 
 check-all:  ## 运行所有检查
 	@echo "$(YELLOW)🚀 运行所有检查...$(NC)"
@@ -594,17 +594,17 @@ check-all:  ## 运行所有检查
 
 pre-commit-install:  ## 安装 pre-commit hooks
 	@echo "$(YELLOW)🔗 安装 pre-commit hooks...$(NC)"
-	python3 -m pre_commit install
-	python3 -m pre_commit install --hook-type commit-msg
+	uv run pre-commit install
+	uv run pre-commit install --hook-type commit-msg
 	@echo "$(GREEN)✅ Pre-commit hooks 安装完成$(NC)"
 
 pre-commit:  ## 运行 pre-commit 检查
 	@echo "$(YELLOW)🔍 运行 pre-commit 检查...$(NC)"
-	python3 -m pre_commit run --all-files
+	uv run pre-commit run --all-files
 
 coverage:  ## 查看测试覆盖率报告
 	@echo "$(YELLOW)📊 生成覆盖率报告...$(NC)"
-	python3 -m pytest tests/ --cov=app --cov-report=html --cov-report=term
+	uv run pytest tests/ --cov=app --cov-report=html --cov-report=term
 	@echo "$(GREEN)✅ 覆盖率报告已生成: htmlcov/index.html$(NC)"
 	@open htmlcov/index.html 2>/dev/null || xdg-open htmlcov/index.html 2>/dev/null || echo "请手动打开 htmlcov/index.html"
 
@@ -629,11 +629,11 @@ clean:  ## 清理临时文件
 
 shell:  ## 启动 Python shell
 	@echo "$(YELLOW)🐍 启动 Python shell...$(NC)"
-	python3 -i -c "import sys; sys.path.insert(0, '.'); from app.config import config; print('环境已加载，config 对象可用')"
+	uv run python -i -c "import sys; sys.path.insert(0, '.'); from app.config import config; print('环境已加载，config 对象可用')"
 
 ipython:  ## 启动 IPython shell
 	@echo "$(YELLOW)🐍 启动 IPython shell...$(NC)"
-	python3 -m IPython
+	uv run ipython
 
 docs:  ## 打开 API 文档
 	@echo "$(YELLOW)📚 API 文档地址: $(SERVER_URL)/docs$(NC)"
@@ -641,7 +641,7 @@ docs:  ## 打开 API 文档
 
 watch:  ## 监视文件变化并自动运行测试
 	@echo "$(YELLOW)👀 监视文件变化...$(NC)"
-	python3 -m pytest_watch -- -v
+	uv run pytest-watch -- -v
 
 logs:  ## 查看服务日志
 	@echo "$(YELLOW)📜 查看服务日志...$(NC)"

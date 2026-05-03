@@ -16,7 +16,11 @@ from app.security.auth import load_api_key_roles
 
 _BASE_DSN_TEMPLATE = "postgresql://smartsre:smartsre@{host}:5432/postgres"
 _TEST_DSN_TEMPLATE = "postgresql://smartsre:smartsre@{host}:5432/{db}"
-_PG_CONTAINER_NAME = "smartsre-dev-postgres"
+_PG_CONTAINER_NAMES = (
+    "smartsre-local-postgres",
+    "smartsre-postgres",
+    "smartsre-dev-postgres",
+)
 _TEST_DB_NAME = f"smartsre_test_{uuid.uuid4().hex[:8]}"
 
 
@@ -26,19 +30,28 @@ def _get_container_host() -> str:
     if configured_host:
         return configured_host
 
-    result = subprocess.run(
-        [
-            "docker",
-            "inspect",
-            "-f",
-            "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
-            _PG_CONTAINER_NAME,
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
+    for container_name in _PG_CONTAINER_NAMES:
+        result = subprocess.run(
+            [
+                "docker",
+                "inspect",
+                "-f",
+                "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+                container_name,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        host = result.stdout.strip()
+        if result.returncode == 0 and host:
+            return host
+
+    joined_names = ", ".join(_PG_CONTAINER_NAMES)
+    raise RuntimeError(
+        "Unable to resolve PostgreSQL test host. Set SMARTSRE_TEST_POSTGRES_HOST "
+        f"or start one of these containers: {joined_names}."
     )
-    return result.stdout.strip()
 
 
 @pytest.fixture(scope="session", autouse=True)
