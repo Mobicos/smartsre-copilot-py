@@ -9,16 +9,16 @@ updates:
       time: "09:00"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 3
+    versioning-strategy: "increase-if-necessary"
     labels:
       - "dependencies"
       - "python"
     commit-message:
       prefix: "chore(deps)"
     groups:
-      python-production:
+      python-production-patches:
         dependency-type: "production"
         update-types:
-          - "minor"
           - "patch"
       python-development:
         dependency-type: "development"
@@ -28,6 +28,38 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "sse-starlette"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "pydantic"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "pydantic-settings"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "sqlmodel"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "alembic"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "redis"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "psycopg"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "psycopg[binary]"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "pymilvus"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "langchain*"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "langgraph*"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "dashscope"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "openai"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "fastmcp"
+        update-types: ["version-update:semver-minor"]
 
   - package-ecosystem: "npm"
     directory: "/frontend"
@@ -37,16 +69,16 @@ updates:
       time: "09:30"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 3
+    versioning-strategy: "increase-if-necessary"
     labels:
       - "dependencies"
       - "frontend"
     commit-message:
       prefix: "chore(deps)"
     groups:
-      frontend-production:
+      frontend-production-patches:
         dependency-type: "production"
         update-types:
-          - "minor"
           - "patch"
       frontend-development:
         dependency-type: "development"

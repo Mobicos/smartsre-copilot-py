@@ -138,8 +138,16 @@ long-running integration branch.
 - Keep frontend dependencies in `frontend/package.json`.
 - Keep `frontend/pnpm-lock.yaml` committed for reproducible frontend installs.
 - Do not mix lockfile-only churn into feature or fix commits.
-- Dependabot version updates should group related dependencies and avoid
-  automatic semver-major updates.
+- Dependabot security updates should remain automatic, but still require CI and
+  review before merge.
+- Dependabot routine version updates should prefer small, reviewable PRs:
+  production patch updates may be grouped, development minor or patch updates
+  may be grouped, and production minor updates should be isolated or planned.
+- High-impact backend runtime dependencies, including FastAPI, SSE, Pydantic,
+  SQLAlchemy, Redis, PostgreSQL drivers, Milvus, LangChain/LangGraph,
+  DashScope/OpenAI SDKs, and MCP tooling, must not be batched into broad
+  production minor update PRs.
+- Dependabot should avoid automatic semver-major updates.
 - Runtime and infrastructure major or minor upgrades, such as Python base
   images, PostgreSQL, Redis, Milvus, etcd, and MinIO, require a dedicated PR and
   explicit runtime validation.

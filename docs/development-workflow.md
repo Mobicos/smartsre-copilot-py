@@ -134,8 +134,16 @@ GitHub Actions is the final shared gate. CI must:
 - Run backend compile, lint, format, type check, security scan, and tests.
 - Run frontend lint, type check, and build when frontend changes are present or
   when the full workflow runs.
-- Keep Dependabot version updates grouped and avoid automatic semver-major
-  updates.
+- Keep Dependabot security updates automatic, but still require CI and review
+  before merge.
+- Keep routine Dependabot version updates small enough to review: group
+  production patch updates, group development minor or patch updates, and avoid
+  broad production minor update batches.
+- Treat high-impact backend runtime dependency minors as planned changes, not
+  routine automation. This includes FastAPI, SSE, Pydantic, SQLAlchemy, Redis,
+  PostgreSQL drivers, Milvus, LangChain/LangGraph, DashScope/OpenAI SDKs, and
+  MCP tooling.
+- Avoid automatic semver-major version updates.
 - Treat runtime and infrastructure upgrades as dedicated change sets, not
   routine dependency cleanup.
 
