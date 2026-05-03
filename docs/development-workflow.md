@@ -5,6 +5,9 @@ GitHub Actions, pull requests, and merges. The goal is to keep `main`
 deployable, make reviews predictable, and prevent local-only configuration from
 leaking into shared history.
 
+For the primary contributor contract, start with `CONTRIBUTING.md`. This file
+provides the detailed workflow reference behind that contract.
+
 ## 1. Start From Main
 
 Update `main` before starting work:

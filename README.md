@@ -300,6 +300,7 @@ Common Make targets:
 make up
 make down
 make status
+make verify
 make db-upgrade
 make test
 make lint
@@ -309,6 +310,7 @@ make security
 
 Development rules:
 
+- Read `CONTRIBUTING.md` before opening a branch or PR.
 - Keep backend dependencies in `pyproject.toml`; commit `uv.lock`.
 - Keep frontend dependencies in `frontend/package.json`; commit `frontend/pnpm-lock.yaml`.
 - Do not commit `.env`, `.venv/`, `uploads/`, `data/`, `volumes/`, `frontend/node_modules/`, or `frontend/.next/`.
@@ -406,15 +408,10 @@ Frontend cannot reach backend:
 
 ## Contributing
 
-Commit messages follow simplified Conventional Commits:
+Read `CONTRIBUTING.md` for the human contributor workflow, commit style, branch
+policy, PR rules, quality gates, and dependency policy.
 
-```text
-docs: update project README
-fix: handle indexing retry failure
-feat: add diagnosis event timeline
-```
-
-See `AGENTS.md` for repository-specific coding, dependency, CI, and frontend policies.
+AI coding agents should also read `AGENTS.md` before making changes.
 
 ## License
 
