@@ -1,6 +1,11 @@
 # AGENTS.md
 
-Project instructions for AI coding agents and maintainers.
+AI coding agent instructions for this repository.
+
+All contributors, including AI coding agents, must follow `CONTRIBUTING.md`.
+This file exists as the root-level instruction entry point for tools such as
+Codex, Claude, and Cursor. It mirrors the key repository rules and adds
+agent-specific expectations for safe execution.
 
 ## Commit Style
 

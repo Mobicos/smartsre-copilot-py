@@ -300,6 +300,7 @@ pnpm build
 make up
 make down
 make status
+make verify
 make db-upgrade
 make test
 make lint
@@ -309,6 +310,7 @@ make security
 
 开发规则：
 
+- 开分支或 PR 前先阅读 `CONTRIBUTING.md`。
 - 后端依赖以 `pyproject.toml` 为准，提交 `uv.lock`。
 - 前端依赖以 `frontend/package.json` 为准，提交 `frontend/pnpm-lock.yaml`。
 - 不要提交 `.env`、`.venv/`、`uploads/`、`data/`、`volumes/`、`frontend/node_modules/` 或 `frontend/.next/`。
@@ -406,15 +408,10 @@ MCP 工具不可用：
 
 ## 贡献
 
-提交信息遵循简化 Conventional Commits：
+人类开发者请先阅读 `CONTRIBUTING.md`，其中包含分支、提交、PR、质量门、
+依赖和合并规范。
 
-```text
-docs: update project README
-fix: handle indexing retry failure
-feat: add diagnosis event timeline
-```
-
-更多工程规范见 `AGENTS.md`。
+AI coding agent 还应在改动前阅读 `AGENTS.md`。
 
 ## 许可证
 
