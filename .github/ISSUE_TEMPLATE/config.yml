@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Repository documentation
-    url: https://github.com/Mobicos/smartsre-copilot-py/blob/main/README.md
+    url: https://github.com/Mobicos/SmartSRE-Copilot/blob/main/README.md
     about: Review the README before opening an issue.

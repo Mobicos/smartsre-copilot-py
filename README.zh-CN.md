@@ -8,7 +8,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-API-green.svg)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Agentic-orange.svg)](https://www.langchain.com/langgraph)
 [![Next.js](https://img.shields.io/badge/Next.js-Frontend-black.svg)](https://nextjs.org/)
-[![CI](https://github.com/Mobicos/smartsre-copilot-py/actions/workflows/ci.yml/badge.svg)](https://github.com/Mobicos/smartsre-copilot-py/actions/workflows/ci.yml)
+[![CI](https://github.com/Mobicos/SmartSRE-Copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Mobicos/SmartSRE-Copilot/actions/workflows/ci.yml)
 
 ## 项目概览
 
