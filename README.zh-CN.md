@@ -415,4 +415,4 @@ AI coding agent 还应在改动前阅读 `AGENTS.md`。
 
 ## 许可证
 
-MIT
+Apache License 2.0。详见 [LICENSE](LICENSE)。
