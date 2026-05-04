@@ -415,4 +415,4 @@ AI coding agents should also read `AGENTS.md` before making changes.
 
 ## License
 
-MIT
+Apache License 2.0. See [LICENSE](LICENSE).
