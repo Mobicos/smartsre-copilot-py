@@ -31,9 +31,12 @@ in the same PR.
 Use Conventional Commits:
 
 ```text
-<type>: <concise action summary>
 <type>(<scope>): <concise action summary>
 ```
+
+Scopes are required. They keep commit history, PR titles, and squash-merge
+subjects easy to scan across backend, frontend, infrastructure, and operations
+work.
 
 Allowed types:
 
@@ -49,10 +52,18 @@ Allowed types:
 Examples:
 
 ```text
-fix: resolve CI type check failures
+fix(ci): resolve type check failures
+feat(agent): stream native agent runs
+docs(local): explain compose workflow
 ci(actions): enforce ruff format check
 chore(deps): update dependency lock file
-docs: explain development workflow
+```
+
+Allowed scopes:
+
+```text
+agent, aiops, api, chat, frontend, knowledge, mcp, persistence, worker,
+docs, local, ci, actions, deps, docker, security, tests, tooling, repo
 ```
 
 Dependency bump PR titles must use one of these scoped forms:

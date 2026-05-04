@@ -99,6 +99,62 @@ ignore = [
     "W191",  # indentation contains tabs
 ]
 
+[tool.commitizen]
+name = "cz_customize"
+
+[tool.commitizen.customize]
+message_template = "{{change_type}}({{scope}}): {{message}}"
+example = "feat(agent): stream native agent runs"
+schema = "<type>(<scope>): <concise action summary>"
+schema_pattern = "^(feat|fix|ci|chore|docs|test|refactor|perf)\\((agent|aiops|api|chat|frontend|knowledge|mcp|persistence|worker|docs|local|ci|actions|deps|docker|security|tests|tooling|repo)\\): [a-z0-9].+$"
+commit_parser = "^(?P<change_type>feat|fix|ci|chore|docs|test|refactor|perf)\\((?P<scope>agent|aiops|api|chat|frontend|knowledge|mcp|persistence|worker|docs|local|ci|actions|deps|docker|security|tests|tooling|repo)\\): (?P<message>.+)$"
+
+[[tool.commitizen.customize.questions]]
+type = "list"
+name = "change_type"
+message = "Select the type of change"
+choices = [
+    {value = "feat", name = "feat: user-facing feature"},
+    {value = "fix", name = "fix: bug fix or behavior correction"},
+    {value = "ci", name = "ci: CI workflow or check configuration"},
+    {value = "chore", name = "chore: dependency, tooling, or maintenance"},
+    {value = "docs", name = "docs: documentation only"},
+    {value = "test", name = "test: tests only"},
+    {value = "refactor", name = "refactor: code restructuring"},
+    {value = "perf", name = "perf: performance improvement"},
+]
+
+[[tool.commitizen.customize.questions]]
+type = "list"
+name = "scope"
+message = "Select the required scope"
+choices = [
+    "agent",
+    "aiops",
+    "api",
+    "chat",
+    "frontend",
+    "knowledge",
+    "mcp",
+    "persistence",
+    "worker",
+    "docs",
+    "local",
+    "ci",
+    "actions",
+    "deps",
+    "docker",
+    "security",
+    "tests",
+    "tooling",
+    "repo",
+]
+
+[[tool.commitizen.customize.questions]]
+type = "input"
+name = "message"
+message = "Write a concise action summary"
+
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # unused imports in __init__.py
 

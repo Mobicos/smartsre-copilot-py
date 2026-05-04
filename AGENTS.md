@@ -12,12 +12,12 @@ agent-specific expectations for safe execution.
 Use the project Conventional Commits format:
 
 ```text
-<type>: <concise action summary>
 <type>(<scope>): <concise action summary>
 ```
 
-Scopes are optional. Use them when they add useful context, especially for
-automated dependency updates and CI/platform work.
+Scopes are required so commit history, PR titles, and squash-merge subjects
+remain easy to scan across backend, frontend, infrastructure, and operations
+work.
 
 Allowed types:
 
@@ -33,12 +33,19 @@ Allowed types:
 Examples:
 
 ```text
-fix: resolve CI type check failures
-ci(actions): enforce ruff format check
+fix(ci): resolve type check failures
+feat(agent): stream native agent runs
+docs(local): explain compose workflow
+ci(actions): enforce quality checks
 chore(deps): update dependency lock file
 chore(docker): bump postgres from 16.1 to 16.2
-ci: enforce ruff format check
-docs: explain GitHub Actions workflow
+```
+
+Allowed scopes:
+
+```text
+agent, aiops, api, chat, frontend, knowledge, mcp, persistence, worker,
+docs, local, ci, actions, deps, docker, security, tests, tooling, repo
 ```
 
 Dependency bump PR titles must use these scopes:

@@ -6,12 +6,17 @@ PR title must use the repository commit style because squash merge uses it as
 the final commit subject:
 
 ```text
-<type>: <concise action summary>
 <type>(<scope>): <concise action summary>
 ```
 
 Allowed types: `feat`, `fix`, `ci`, `chore`, `docs`, `test`, `refactor`, `perf`.
-Scopes are optional and should be lowercase, for example `chore(deps): ...`.
+Scopes are required and must use one of:
+
+```text
+agent, aiops, api, chat, frontend, knowledge, mcp, persistence, worker,
+docs, local, ci, actions, deps, docker, security, tests, tooling, repo
+```
+
 Dependency bump PRs must use one of:
 
 ```text
