@@ -6,11 +6,10 @@
     ".git",
     "logs"
   ],
-  "pythonPath": "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3",
-  "pythonVersion": "3.10",
+  "pythonVersion": "3.11",
   "pythonPlatform": "Darwin",
   "typeCheckingMode": "basic",
-  
+
   "reportMissingImports": "none",
   "reportMissingTypeStubs": "none",
   "reportUnknownParameterType": "none",
@@ -24,26 +23,26 @@
   "reportUntypedBaseClass": "none",
   "reportUntypedNamedTuple": "none",
   "reportCallInDefaultInitializer": "none",
-  
+
   "reportUnusedImport": "information",
   "reportUnusedClass": "information",
   "reportUnusedFunction": "information",
   "reportUnusedVariable": "information",
   "reportDuplicateImport": "warning",
-  
+
   "reportOptionalSubscript": "none",
   "reportOptionalMemberAccess": "none",
   "reportOptionalCall": "none",
   "reportOptionalIterable": "none",
   "reportOptionalContextManager": "none",
   "reportOptionalOperand": "none",
-  
+
   "reportPrivateImportUsage": "none",
   "reportConstantRedefinition": "none",
   "reportIncompatibleMethodOverride": "warning",
   "reportIncompatibleVariableOverride": "warning",
   "reportOverlappingOverload": "warning",
-  
+
   "reportDeprecated": "information",
   "reportArgumentType": "warning",
   "reportGeneralTypeIssues": "none",

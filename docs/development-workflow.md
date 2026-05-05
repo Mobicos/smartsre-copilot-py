@@ -149,8 +149,8 @@ GitHub Actions is the final shared gate. CI must:
 
 Runtime version boundaries:
 
-- Python application runtime: `3.11` through `3.13`; do not automatically move
-  Docker runtime images to `3.14`.
+- Python application runtime: `3.11+`; do not automatically move
+  Docker runtime images to newer major versions without validation.
 - PostgreSQL: stay on the current supported major unless a dedicated migration
   PR validates upgrade and rollback.
 - Redis, Milvus, etcd, and MinIO: patch updates may be automated, but minor or
