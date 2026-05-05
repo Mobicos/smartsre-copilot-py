@@ -27,7 +27,7 @@ ci(actions): bump ...
 
 ## Changes
 
-- 
+-
 
 ## Validation
 
@@ -35,8 +35,13 @@ ci(actions): bump ...
 - [ ] Ran the relevant local checks
 - [ ] Updated docs if behavior or setup changed
 - [ ] Confirmed no secrets or local-only files are included
-- [ ] Confirmed backend API contract changes are reflected in the frontend BFF layer
+- [ ] Confirmed backend API contract changes are reflected in the frontend BFF
+  layer
+- [ ] Updated `docs/openapi.json` when backend routes, schemas, or auth
+  contracts changed
 - [ ] Confirmed database or queue changes include migration and rollback notes
+- [ ] Updated `CHANGELOG.md` for user-visible changes
+- [ ] Reviewed `SECURITY.md` impact for auth, secret, tool, or data-flow changes
 
 Validation details:
 
@@ -54,4 +59,4 @@ Paste commands run, screenshots, or notes here.
 
 Issue / discussion / context:
 
-- 
+-

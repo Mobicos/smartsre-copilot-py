@@ -21,9 +21,9 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
-COPY static ./static
 COPY aiops-docs ./aiops-docs
 COPY mcp_servers ./mcp_servers
+RUN mkdir -p static
 
 # Install the project itself
 RUN uv sync --frozen --no-dev

@@ -56,8 +56,8 @@ chore(docker): bump ...
 ci(actions): bump ...
 ```
 
-PR titles must use the same format because squash merges use the PR title as
-the final commit subject on `main`.
+PR titles must use the same format because squash merges use the PR title as the
+final commit subject on `main`.
 
 If a change contains unrelated dependency lock updates, split the lock update
 into a separate commit named:
@@ -92,7 +92,8 @@ chore(deps): update dependency lock file
 - Persistence changes must include migrations and mention rollback behavior.
 - Local-only files must not be committed. Root-level `docker-compose.local.yml`
   is for local development overrides only.
-- Draft PRs are allowed for early CI feedback, but do not merge draft or red PRs.
+- Draft PRs are allowed for early CI feedback, but do not merge draft or red
+  PRs.
 
 ## Merge Policy
 
@@ -120,11 +121,13 @@ contract expected by CI without formatting or rewriting files.
 The equivalent backend commands are:
 
 ```powershell
-python -m compileall app mcp_servers tests
-python -m ruff check app mcp_servers tests
-python -m ruff format --check app mcp_servers tests
-python -m mypy app --ignore-missing-imports
+python -m compileall app mcp_servers scripts tests
+python -m ruff check app mcp_servers scripts tests
+python -m ruff format --check app mcp_servers scripts tests
+python -m mypy app scripts --ignore-missing-imports
 python -m bandit -r app -ll
+python scripts/export_openapi.py --check
+docker compose -f docker-compose.yml config --quiet
 python -m pytest tests -q
 ```
 
@@ -150,19 +153,26 @@ Repository rules must be enforced by tools, not memory:
   make pre-commit-install
   ```
 
-- Treat hook failures as blockers. Do not bypass hooks with `--no-verify`
-  unless the PR explicitly documents the reason and CI provides the final gate.
+- Treat hook failures as blockers. Do not bypass hooks with `--no-verify` unless
+  the PR explicitly documents the reason and CI provides the final gate.
+
 - Run `make verify` before pushing backend, API, agent, infrastructure, or
   repository-governance changes when the local environment permits it.
+
 - Run frontend gates before pushing changes under `frontend/`.
+
 - Push work on a focused feature branch and open a PR. Do not push directly to
   `main`.
+
 - Keep branch protection enabled so required checks and PR title validation
   block non-compliant merges.
+
 - Use squash merge only after required checks are green and the PR title is a
   valid Conventional Commit subject.
+
 - If local verification cannot run because of Docker, network, platform, or
   credential constraints, record the exact command and failure reason in the PR.
+
 - Never commit local-only files, secrets, `.env` files, IDE metadata, generated
   caches, or root-level `docker-compose.local.yml`.
 
@@ -197,19 +207,28 @@ chore(deps): update dependency lock file
 - Keep `Any` and `cast` close to third-party integration boundaries.
 - Do not let weak third-party types spread into business logic.
 - Use parameterized SQL. Do not interpolate user-controlled values into SQL.
-- Avoid broad exception swallowing unless the fallback behavior is explicit and logged.
+- Avoid broad exception swallowing unless the fallback behavior is explicit and
+  logged.
 - Keep edits scoped to the requested task and avoid unrelated refactors.
 
 ## Frontend Policy
 
-- Keep the Next.js frontend in `frontend/` as a separate pnpm workspace-style app with its own lock file.
-- Do not commit `frontend/node_modules/`, `frontend/.next/`, `frontend/tsconfig.tsbuildinfo`, or local pnpm stores.
-- Do not use `typescript.ignoreBuildErrors` in `next.config.mjs`; type errors must fail builds.
-- Browser components should call local Next.js route handlers, not the FastAPI backend directly.
-- Keep backend API keys server-side in Next.js route handlers. Never expose them through `NEXT_PUBLIC_*`.
-- Keep FastAPI response-envelope parsing in `frontend/lib/api-contracts.ts` or BFF route handlers.
-- When backend request or response models change, update the frontend contract adapter in the same change.
-- Prefer server-side BFF adapters for compatibility with legacy backend field names such as `Id` and `Question`.
+- Keep the Next.js frontend in `frontend/` as a separate pnpm workspace-style
+  app with its own lock file.
+- Do not commit `frontend/node_modules/`, `frontend/.next/`,
+  `frontend/tsconfig.tsbuildinfo`, or local pnpm stores.
+- Do not use `typescript.ignoreBuildErrors` in `next.config.mjs`; type errors
+  must fail builds.
+- Browser components should call local Next.js route handlers, not the FastAPI
+  backend directly.
+- Keep backend API keys server-side in Next.js route handlers. Never expose them
+  through `NEXT_PUBLIC_*`.
+- Keep FastAPI response-envelope parsing in `frontend/lib/api-contracts.ts` or
+  BFF route handlers.
+- When backend request or response models change, update the frontend contract
+  adapter in the same change.
+- Prefer server-side BFF adapters for compatibility with legacy backend field
+  names such as `Id` and `Question`.
 
 ## CI Policy
 

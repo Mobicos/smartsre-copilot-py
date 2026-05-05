@@ -87,20 +87,31 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev
 
+      - name: Check database migrations
+        env:
+          POSTGRES_DSN: postgresql://smartsre:smartsre@localhost:5432/postgres
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+
       - name: Compile source files
-        run: uv run python -m compileall app mcp_servers tests
+        run: uv run python -m compileall app mcp_servers scripts tests
 
       - name: Lint with Ruff
-        run: uv run python -m ruff check app mcp_servers tests
+        run: uv run python -m ruff check app mcp_servers scripts tests
 
       - name: Check formatting with Ruff
-        run: uv run python -m ruff format --check app mcp_servers tests
+        run: uv run python -m ruff format --check app mcp_servers scripts tests
 
       - name: Type check with mypy
-        run: uv run python -m mypy app --ignore-missing-imports
+        run: uv run python -m mypy app scripts --ignore-missing-imports
 
       - name: Security scan with Bandit
         run: uv run python -m bandit -r app -ll
+
+      - name: Check OpenAPI contract
+        run: uv run python scripts/export_openapi.py --check
 
       - name: Run tests
         env:
@@ -145,3 +156,42 @@ jobs:
 
       - name: Build frontend
         run: pnpm build
+
+  docker:
+    name: Docker Build Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Prepare compose environment
+        run: cp .env.example .env
+
+      - name: Validate compose configuration
+        run: docker compose -f docker-compose.yml config --quiet
+
+      - name: Build backend image
+        run: docker build -t smartsre-copilot:ci .
+
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: smartsre-copilot:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+
+  dependency-review:
+    name: Dependency Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v4

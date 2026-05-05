@@ -20,7 +20,7 @@ repos:
 
   # Python import 排序 - isort
   - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+    rev: 7.0.0
     hooks:
       - id: isort
         name: isort (python)
@@ -28,34 +28,27 @@ repos:
 
   # Python 代码格式化 - Black
   - repo: https://github.com/psf/black
-    rev: 23.12.1
+    rev: 26.3.1
     hooks:
       - id: black
-        language_version: python3.10
+        language_version: python3
         args: ["--line-length", "100"]
 
   # Python 代码检查 - Ruff (更快的 flake8 替代品)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.9
+    rev: v0.15.0
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
 
   # Python 代码安全检查 - Bandit
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.6
+    rev: 1.9.4
     hooks:
       - id: bandit
-        args: ["-c", "pyproject.toml"]
+        args: ["-c", "pyproject.toml", "-ll"]
         additional_dependencies: ["bandit[toml]"]
         exclude: ^tests/
-
-  # Python docstring 格式化
-  - repo: https://github.com/PyCQA/docformatter
-    rev: v1.7.5
-    hooks:
-      - id: docformatter
-        args: [--in-place, --wrap-summaries=100, --wrap-descriptions=100]
 
   # Markdown 格式化
   - repo: https://github.com/executablebooks/mdformat
@@ -76,7 +69,7 @@ repos:
 
 # 配置
 default_language_version:
-  python: python3.10
+  python: python3
 
 # 排除的文件和目录
 exclude: |

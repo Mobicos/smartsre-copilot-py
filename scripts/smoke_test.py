@@ -12,7 +12,7 @@ import tempfile
 import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -68,9 +68,11 @@ def require_api_success(response: httpx.Response, label: str) -> dict[str, Any]:
     if response.status_code >= 400:
         raise SmokeFailure(f"{label} returned HTTP {response.status_code}: {response.text[:500]}")
     payload = response.json()
+    if not isinstance(payload, dict):
+        raise SmokeFailure(f"{label} returned non-object JSON payload: {payload!r}")
     if payload.get("code", response.status_code) >= 400:
         raise SmokeFailure(f"{label} returned error payload: {payload}")
-    return payload
+    return cast(dict[str, Any], payload)
 
 
 def check_health(client: httpx.Client) -> None:

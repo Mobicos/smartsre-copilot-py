@@ -1,6 +1,7 @@
 # SmartSRE Copilot
 
-> AI-powered SRE copilot for knowledge-grounded chat, operational document search, and AIOps diagnosis.
+> AI-powered SRE copilot for knowledge-grounded chat, operational document
+> search, and AIOps diagnosis.
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -8,11 +9,16 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-API-green.svg)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Agentic-orange.svg)](https://www.langchain.com/langgraph)
 [![Next.js](https://img.shields.io/badge/Next.js-Frontend-black.svg)](https://nextjs.org/)
+[![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/Mobicos/SmartSRE-Copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Mobicos/SmartSRE-Copilot/actions/workflows/ci.yml)
 
 ## Overview
 
-SmartSRE Copilot is a production-oriented prototype for building an internal SRE assistant. The backend is a FastAPI service with LangChain/LangGraph agents, DashScope/Qwen models, PostgreSQL persistence, Redis-backed background tasks, and Milvus vector search. The frontend is a modern Next.js app that talks to the backend through server-side route handlers.
+SmartSRE Copilot `1.3.0` is the Native Agent Workbench baseline for building an
+internal SRE assistant. The backend is a FastAPI service with
+LangChain/LangGraph agents, DashScope/Qwen models, PostgreSQL persistence,
+Redis-backed background tasks, and Milvus vector search. The frontend is a
+modern Next.js app that talks to the backend through server-side route handlers.
 
 Core capabilities:
 
@@ -20,8 +26,26 @@ Core capabilities:
 - Streaming chat responses and persisted conversation history.
 - Background indexing pipeline with retryable tasks.
 - Plan-Execute-Replan AIOps diagnosis workflow.
-- Native Agent workspace, scene, tool policy, trajectory replay, and feedback APIs.
+- Native Agent workspace, scene, tool policy, trajectory replay, and feedback
+  APIs.
 - Optional MCP tool integration for external logs, metrics, and alert systems.
+
+## Project Status
+
+SmartSRE Copilot is an early open source project with a `1.3.0` Native Agent
+Workbench baseline. It is suitable for local development, internal evaluation,
+and controlled prototype deployments. Production deployments should review
+`SECURITY.md`, `docs/deployment.md`, and the operational notes in this README.
+
+Planned evolution is tracked in `PLAN.md`:
+
+```text
+1.3.x: Native Agent Workbench baseline
+1.4.x: platform middleware modernization
+1.5.x: knowledge, replay, and AgentOps stabilization
+1.6.x-1.9.x: tool harness, API contract, and Decision Runtime release candidates
+2.0.x: LangGraph Decision Runtime
+```
 
 ## Architecture
 
@@ -87,11 +111,14 @@ volumes/          Docker service data, ignored by Git
 Local application data stays local unless you explicitly connect external tools.
 
 - Uploaded files are stored under `uploads/`.
-- Chat history, task status, audit logs, and AIOps run events are stored in PostgreSQL.
-- Native Agent workspaces, scenes, tool policies, trajectories, and feedback are stored in PostgreSQL.
+- Chat history, task status, audit logs, and AIOps run events are stored in
+  PostgreSQL.
+- Native Agent workspaces, scenes, tool policies, trajectories, and feedback are
+  stored in PostgreSQL.
 - Document vectors are stored in Milvus.
 - DashScope receives prompts and embedding inputs required for model calls.
-- MCP tools are optional. A Tencent Cloud CLS MCP server queries Tencent CLS data, not local Postgres or Milvus data.
+- MCP tools are optional. A Tencent Cloud CLS MCP server queries Tencent CLS
+  data, not local Postgres or Milvus data.
 
 ## Prerequisites
 
@@ -136,7 +163,8 @@ ENVIRONMENT=dev
 docker compose up -d --build
 ```
 
-This starts all services: PostgreSQL (5432), Redis (6379), Milvus (19530), Attu (8000), MinIO (9000/9001), migrations, backend app (9900), and worker.
+This starts all services: PostgreSQL (5432), Redis (6379), Milvus (19530), Attu
+(8000), MinIO (9000/9001), migrations, backend app (9900), and worker.
 
 **Option B: Local Development (recommended for development)**
 
@@ -151,9 +179,10 @@ ports, volumes, or service scope locally.
    cp docker-compose.yml docker-compose.local.yml
    ```
 
-2. Edit `docker-compose.local.yml` for your machine.
+1. Edit `docker-compose.local.yml` for your machine.
 
    Common local changes:
+
    - Change exposed ports if PostgreSQL, Redis, Milvus, Attu, or MinIO conflict
      with services already running on your machine.
    - Remove or comment out `app`, `worker`, and `migrate` if you prefer running
@@ -161,7 +190,7 @@ ports, volumes, or service scope locally.
    - Keep service names such as `postgres`, `redis`, and `standalone` unchanged
      if other compose services still depend on them.
 
-3. Start the local compose stack:
+1. Start the local compose stack:
 
    ```bash
    docker compose -f docker-compose.local.yml up -d
@@ -174,7 +203,7 @@ ports, volumes, or service scope locally.
    docker compose -f docker-compose.local.yml up -d postgres redis standalone attu minio
    ```
 
-4. Update your `.env` to match your local exposed ports.
+1. Update your `.env` to match your local exposed ports.
 
    Example when local ports are shifted to avoid conflicts:
 
@@ -185,7 +214,7 @@ ports, volumes, or service scope locally.
    MILVUS_PORT=19531
    ```
 
-5. Run backend and frontend locally with `uv` and `pnpm` (see steps 3-5 below).
+1. Run backend and frontend locally with `uv` and `pnpm` (see steps 3-5 below).
 
 **Note**: `docker-compose.local.yml` is ignored by Git and should be treated as
 local-only configuration. Do not commit personal port mappings, local paths, or
@@ -203,7 +232,8 @@ uv run alembic upgrade head
 uv run uvicorn app.main:app --host 127.0.0.1 --port 9900
 ```
 
-If `TASK_DISPATCHER_MODE=detached`, start the indexing worker in another terminal:
+If `TASK_DISPATCHER_MODE=detached`, start the indexing worker in another
+terminal:
 
 ```bash
 uv run python -m app.worker
@@ -275,14 +305,18 @@ Production guidance:
 
 ## MCP Integration
 
-MCP is optional. The application works without MCP for knowledge-base chat and document RAG. AIOps workflows can use MCP tools when external log, metrics, and alert systems are configured.
+MCP is optional. The application works without MCP for knowledge-base chat and
+document RAG. AIOps workflows can use MCP tools when external log, metrics, and
+alert systems are configured.
 
 Recommended practices:
 
 - Use local or internal self-hosted MCP servers for development and production.
-- Treat cloud-hosted MCP SSE endpoints as quick evaluation links unless you have clear operational guarantees.
+- Treat cloud-hosted MCP SSE endpoints as quick evaluation links unless you have
+  clear operational guarantees.
 - Keep cloud credentials in server-side environment variables only.
-- If MCP tools fail to load, the backend should report unavailable tools instead of inventing tool names.
+- If MCP tools fail to load, the backend should report unavailable tools instead
+  of inventing tool names.
 
 Example local MCP settings:
 
@@ -312,15 +346,18 @@ Backend routes:
 - `GET /api/workspaces`: list Native Agent workspaces
 - `POST /api/scenes`: create a workspace-scoped diagnosis scene
 - `GET /api/scenes`: list scenes, optionally filtered by `workspace_id`
-- `GET /api/scenes/{scene_id}`: fetch scene detail, linked knowledge bases, and tools
+- `GET /api/scenes/{scene_id}`: fetch scene detail, linked knowledge bases, and
+  tools
 - `GET /api/tools`: discover diagnosis tools and persisted policies
-- `PATCH /api/tools/{tool_name}/policy`: enable, disable, or require approval for a tool
+- `PATCH /api/tools/{tool_name}/policy`: enable, disable, or require approval
+  for a tool
 - `POST /api/agent/runs`: run a scene-scoped Native Agent diagnosis
 - `GET /api/agent/runs/{run_id}`: fetch a Native Agent run summary
 - `GET /api/agent/runs/{run_id}/events`: replay a Native Agent trajectory
 - `POST /api/agent/runs/{run_id}/feedback`: capture thumbs-up/down feedback
 
-The frontend calls server-side handlers under `frontend/app/api/*`; browser components should not call FastAPI directly.
+The frontend calls server-side handlers under `frontend/app/api/*`; browser
+components should not call FastAPI directly.
 
 ## Development Workflow
 
@@ -363,9 +400,29 @@ Development rules:
 
 - Read `CONTRIBUTING.md` before opening a branch or PR.
 - Keep backend dependencies in `pyproject.toml`; commit `uv.lock`.
-- Keep frontend dependencies in `frontend/package.json`; commit `frontend/pnpm-lock.yaml`.
-- Do not commit `.env`, `.venv/`, `uploads/`, `data/`, `volumes/`, `frontend/node_modules/`, or `frontend/.next/`.
-- When backend API models change, update `frontend/lib/api-contracts.ts` or the relevant BFF route adapter in the same change.
+- Keep frontend dependencies in `frontend/package.json`; commit
+  `frontend/pnpm-lock.yaml`.
+- Do not commit `.env`, `.venv/`, `uploads/`, `data/`, `volumes/`,
+  `frontend/node_modules/`, or `frontend/.next/`.
+- When backend API models change, update `frontend/lib/api-contracts.ts` or the
+  relevant BFF route adapter in the same change.
+
+## Open Source Governance
+
+- `CHANGELOG.md`: release notes and user-visible changes.
+- `CONTRIBUTING.md`: human and AI contributor workflow.
+- `AGENTS.md`: AI coding agent execution rules.
+- `SECURITY.md`: private vulnerability reporting and security expectations.
+- `CODE_OF_CONDUCT.md`: community behavior expectations.
+- `SUPPORT.md`: support boundaries and issue guidance.
+- `MAINTAINERS.md`: maintainer responsibilities and release authority.
+- `docs/release-process.md`: release checklist, versioning, and rollback notes.
+- `docs/repository-governance.md`: branch protection, labels, and maintainer
+  operating rules.
+- `docs/architecture.md`: current architecture and planned evolution.
+- `docs/deployment.md`: local and production deployment guidance.
+- `docs/security.md`: operational security checklist.
+- `docs/openapi.json`: generated FastAPI contract for SDK and BFF governance.
 
 ## Operational Notes
 
@@ -454,15 +511,22 @@ Frontend cannot reach backend:
 - Use explicit CORS origins in production.
 - Use least-privilege cloud credentials for MCP servers.
 - Store audit logs and AIOps run events in durable storage.
-- Require approval for high-risk tools through tool policies; V1 reports `approval_required` instead of executing those tools.
-- Review uploaded document access rules before exposing the app to multiple teams.
+- Require approval for high-risk tools through tool policies; V1 reports
+  `approval_required` instead of executing those tools.
+- Review uploaded document access rules before exposing the app to multiple
+  teams.
+
+Report vulnerabilities privately by following `SECURITY.md`.
 
 ## Contributing
 
 Read `CONTRIBUTING.md` for the human contributor workflow, commit style, branch
-policy, PR rules, quality gates, and dependency policy.
+policy, PR rules, quality gates, release expectations, and dependency policy.
 
 AI coding agents should also read `AGENTS.md` before making changes.
+
+For release work, read `docs/release-process.md` before changing version
+metadata, tags, or release notes.
 
 ## License
 

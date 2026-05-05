@@ -552,24 +552,24 @@ remove:  ## 移除依赖包 (用法: make remove PKG=package_name)
 
 format:  ## 格式化代码
 	@echo "$(YELLOW)🎨 格式化代码...$(NC)"
-	uv run ruff check --select I --fix app/
-	uv run ruff format app/
+	uv run ruff check --select I --fix app/ mcp_servers/ scripts/ tests/
+	uv run ruff format app/ mcp_servers/ scripts/ tests/
 	@echo "$(GREEN)✅ 格式化完成$(NC)"
 
 lint:  ## 代码检查
 	@echo "$(YELLOW)🔍 代码检查...$(NC)"
-	uv run ruff check app/
+	uv run ruff check app/ mcp_servers/ scripts/ tests/
 	@echo "$(GREEN)✅ 检查完成$(NC)"
 
 fix:  ## 自动修复代码问题
 	@echo "$(YELLOW)🔧 自动修复代码问题...$(NC)"
-	uv run ruff check --fix app/
-	uv run ruff format app/
+	uv run ruff check --fix app/ mcp_servers/ scripts/ tests/
+	uv run ruff format app/ mcp_servers/ scripts/ tests/
 	@echo "$(GREEN)✅ 修复完成$(NC)"
 
 type-check:  ## 类型检查
 	@echo "$(YELLOW)🔍 类型检查...$(NC)"
-	uv run mypy app/ --ignore-missing-imports
+	uv run mypy app/ scripts/ --ignore-missing-imports
 	@echo "$(GREEN)✅ 类型检查完成$(NC)"
 
 security:  ## 安全检查
@@ -587,11 +587,13 @@ test-quick:  ## 快速测试
 
 verify:  ## 运行 CI 等价的非破坏性后端质量门
 	@echo "$(YELLOW)🚦 运行后端质量门...$(NC)"
-	uv run python -m compileall app mcp_servers tests
-	uv run python -m ruff check app mcp_servers tests
-	uv run python -m ruff format --check app mcp_servers tests
-	uv run python -m mypy app --ignore-missing-imports
+	uv run python -m compileall app mcp_servers scripts tests
+	uv run python -m ruff check app mcp_servers scripts tests
+	uv run python -m ruff format --check app mcp_servers scripts tests
+	uv run python -m mypy app scripts --ignore-missing-imports
 	uv run python -m bandit -r app -ll
+	uv run python scripts/export_openapi.py --check
+	docker compose -f $(COMPOSE_FILE) config --quiet
 	uv run python -m pytest tests -q
 	@echo "$(GREEN)✅ 后端质量门通过$(NC)"
 
