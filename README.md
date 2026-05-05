@@ -4,7 +4,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-[![Python](https://img.shields.io/badge/Python-3.11%20--%203.13-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-API-green.svg)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Agentic-orange.svg)](https://www.langchain.com/langgraph)
 [![Next.js](https://img.shields.io/badge/Next.js-Frontend-black.svg)](https://nextjs.org/)
@@ -121,7 +121,7 @@ Local application data stays local unless you explicitly connect external tools.
 
 ## Prerequisites
 
-- Python `3.11` to `3.13`
+- Python `3.11+`
 - `uv` for Python dependency management
 - Docker Desktop, OrbStack, Colima, or another Docker runtime
 - Node.js and `pnpm` for frontend development

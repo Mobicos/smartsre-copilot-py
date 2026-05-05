@@ -67,11 +67,11 @@ include = ["app*"]
 
 [tool.black]
 line-length = 100
-target-version = ['py312']
+target-version = ['py311']
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py311"
 exclude = [
     ".git",
     "__pycache__",
@@ -216,7 +216,7 @@ exclude_lines = [
 ]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
@@ -245,7 +245,7 @@ skips = ["*/test_*.py", "*_test.py"]
 # Editor/local analysis only; CI gate uses Ruff, mypy, Bandit, and pytest.
 include = ["app"]
 exclude = ["**/node_modules", "**/__pycache__", ".git", ".venv", "venv", "logs"]
-pythonVersion = "3.12"
+pythonVersion = "3.11"
 pythonPlatform = "Darwin"
 typeCheckingMode = "basic"
 

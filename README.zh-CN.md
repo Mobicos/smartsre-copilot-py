@@ -4,7 +4,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-[![Python](https://img.shields.io/badge/Python-3.11%20--%203.13-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-API-green.svg)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Agentic-orange.svg)](https://www.langchain.com/langgraph)
 [![Next.js](https://img.shields.io/badge/Next.js-Frontend-black.svg)](https://nextjs.org/)
@@ -113,7 +113,7 @@ volumes/          Docker 服务数据，Git 忽略
 
 ## 前置要求
 
-- Python `3.11` 到 `3.13`
+- Python `3.11+`
 - 使用 `uv` 管理 Python 依赖
 - Docker Desktop、OrbStack、Colima 或其他 Docker 运行时
 - Node.js 和 `pnpm` 用于前端开发
