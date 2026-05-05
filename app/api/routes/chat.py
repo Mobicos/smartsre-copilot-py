@@ -76,7 +76,7 @@ async def chat(
         )
 
 
-@router.post("/chat_stream")
+@router.post("/chat_stream", include_in_schema=False)
 @router.post("/chat/stream")
 async def chat_stream(
     request: ChatRequest,

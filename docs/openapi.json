@@ -1,0 +1,1950 @@
+{
+  "components": {
+    "schemas": {
+      "AIOpsRequest": {
+        "description": "AIOps diagnosis request.\n\nThe compatibility endpoint accepts several frontend field names so older\nand newer clients can both pass the real incident description.",
+        "example": {
+          "goal": "API latency jumped from 80ms to 800ms after 10:20.",
+          "session_id": "session-123"
+        },
+        "properties": {
+          "goal": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Diagnosis goal.",
+            "title": "Goal"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Problem statement.",
+            "title": "Problem"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "User query.",
+            "title": "Query"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "User question.",
+            "title": "Question"
+          },
+          "sessionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "default",
+            "description": "Conversation ID used to track diagnosis history.",
+            "title": "Sessionid"
+          }
+        },
+        "title": "AIOpsRequest",
+        "type": "object"
+      },
+      "AgentFeedbackCreateRequest": {
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "rating": {
+            "pattern": "^(up|down|helpful|not_helpful|wrong|unsafe|incomplete)$",
+            "title": "Rating",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rating"
+        ],
+        "title": "AgentFeedbackCreateRequest",
+        "type": "object"
+      },
+      "AgentRunCreateRequest": {
+        "properties": {
+          "goal": {
+            "minLength": 1,
+            "title": "Goal",
+            "type": "string"
+          },
+          "scene_id": {
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "session_id": {
+            "default": "default",
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scene_id",
+          "goal"
+        ],
+        "title": "AgentRunCreateRequest",
+        "type": "object"
+      },
+      "ApiResponse": {
+        "description": "Generic API response.",
+        "properties": {
+          "data": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "数据",
+            "title": "Data"
+          },
+          "message": {
+            "description": "消息",
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "description": "状态",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "ApiResponse",
+        "type": "object"
+      },
+      "Body_Files-upload_file-post-api_v1_upload": {
+        "properties": {
+          "file": {
+            "format": "binary",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_Files-upload_file-post-api_v1_upload",
+        "type": "object"
+      },
+      "ChatRequest": {
+        "description": "Chat request payload.",
+        "example": {
+          "Id": "session-123",
+          "Question": "什么是向量数据库？"
+        },
+        "properties": {
+          "Id": {
+            "description": "会话 ID",
+            "title": "Id",
+            "type": "string"
+          },
+          "Question": {
+            "description": "用户问题",
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "Id",
+          "Question"
+        ],
+        "title": "ChatRequest",
+        "type": "object"
+      },
+      "ClearRequest": {
+        "description": "Clear chat session request.",
+        "properties": {
+          "sessionId": {
+            "description": "会话 ID",
+            "title": "Sessionid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId"
+        ],
+        "title": "ClearRequest",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "SceneCreateRequest": {
+        "properties": {
+          "agent_config": {
+            "additionalProperties": true,
+            "title": "Agent Config",
+            "type": "object"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "knowledge_base_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Knowledge Base Ids",
+            "type": "array"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "tool_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tool Names",
+            "type": "array"
+          },
+          "workspace_id": {
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "name"
+        ],
+        "title": "SceneCreateRequest",
+        "type": "object"
+      },
+      "SessionInfoResponse": {
+        "description": "Chat session information response.",
+        "properties": {
+          "history": {
+            "description": "历史消息列表",
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "message_count": {
+            "description": "消息数量",
+            "title": "Message Count",
+            "type": "integer"
+          },
+          "session_id": {
+            "description": "会话 ID",
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "message_count",
+          "history"
+        ],
+        "title": "SessionInfoResponse",
+        "type": "object"
+      },
+      "ToolPolicyUpdateRequest": {
+        "properties": {
+          "approval_required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Required"
+          },
+          "capability": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capability"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "risk_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Level"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          }
+        },
+        "title": "ToolPolicyUpdateRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WorkspaceCreateRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "WorkspaceCreateRequest",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "基于 LangChain 的智能oncall运维系统",
+    "title": "SmartSRE Copilot",
+    "version": "1.3.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "description": "返回 API 根信息。",
+        "operationId": "Default-root-get-root",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Root"
+      }
+    },
+    "/api/v1/agent/runs": {
+      "get": {
+        "operationId": "NativeAgent-list_agent_runs-get-api_v1_agent_runs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Agent Runs",
+        "tags": [
+          "NativeAgent"
+        ]
+      },
+      "post": {
+        "operationId": "NativeAgent-create_agent_run-post-api_v1_agent_runs",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRunCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Agent Run",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/agent/runs/stream": {
+      "post": {
+        "description": "Stream agent run events via SSE.",
+        "operationId": "NativeAgent-stream_agent_run-post-api_v1_agent_runs_stream",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRunCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stream Agent Run",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/agent/runs/{run_id}": {
+      "get": {
+        "operationId": "NativeAgent-get_agent_run-get-api_v1_agent_runs_run_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Agent Run",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/agent/runs/{run_id}/events": {
+      "get": {
+        "operationId": "NativeAgent-list_agent_run_events-get-api_v1_agent_runs_run_id_events",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Agent Run Events",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/agent/runs/{run_id}/feedback": {
+      "post": {
+        "operationId": "NativeAgent-create_agent_feedback-post-api_v1_agent_runs_run_id_feedback",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentFeedbackCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Agent Feedback",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/aiops": {
+      "post": {
+        "description": "AIOps 故障诊断接口（流式 SSE）\n\n**功能说明：**\n- 自动获取当前系统的活动告警\n- 使用 Plan-Execute-Replan 模式进行智能诊断\n- 流式返回诊断过程和结果\n\n**SSE 事件类型：**\n\n1. `status` - 状态更新\n   ```json\n   {\n     \"type\": \"status\",\n     \"stage\": \"fetching_alerts\",\n     \"message\": \"正在获取系统告警信息...\"\n   }\n   ```\n\n2. `plan` - 诊断计划制定完成\n   ```json\n   {\n     \"type\": \"plan\",\n     \"stage\": \"plan_created\",\n     \"message\": \"诊断计划已制定，共 6 个步骤\",\n     \"target_alert\": {...},\n     \"plan\": [\"步骤1: ...\", \"步骤2: ...\"]\n   }\n   ```\n\n3. `step_complete` - 步骤执行完成\n   ```json\n   {\n     \"type\": \"step_complete\",\n     \"stage\": \"step_executed\",\n     \"message\": \"步骤执行完成 (2/6)\",\n     \"current_step\": \"查询系统日志\",\n     \"result_preview\": \"...\",\n     \"remaining_steps\": 4\n   }\n   ```\n\n4. `report` - 最终诊断报告\n   ```json\n   {\n     \"type\": \"report\",\n     \"stage\": \"final_report\",\n     \"message\": \"最终诊断报告已生成\",\n     \"report\": \"# 故障诊断报告\\n...\",\n     \"evidence\": {...}\n   }\n   ```\n\n5. `complete` - 诊断完成\n   ```json\n   {\n     \"type\": \"complete\",\n     \"stage\": \"diagnosis_complete\",\n     \"message\": \"诊断流程完成\",\n     \"diagnosis\": {...}\n   }\n   ```\n\n6. `error` - 错误信息\n   ```json\n   {\n     \"type\": \"error\",\n     \"stage\": \"error\",\n     \"message\": \"诊断过程发生错误: ...\"\n   }\n   ```\n\n**使用示例：**\n```bash\ncurl -X POST \"http://localhost:9900/api/aiops\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"session_id\": \"session-123\"}' \\\n  --no-buffer\n```\n\n**前端使用示例：**\n```javascript\nconst eventSource = new EventSource('/api/aiops');\n\neventSource.onmessage = (event) => {\n  const data = JSON.parse(event.data);\n\n  if (data.type === 'plan') {\n    console.log('诊断计划:', data.plan);\n  } else if (data.type === 'step_complete') {\n    console.log('步骤完成:', data.current_step);\n  } else if (data.type === 'report') {\n    console.log('最终报告:', data.report);\n  } else if (data.type === 'complete') {\n    console.log('诊断完成');\n    eventSource.close();\n  }\n};\n```\n\nArgs:\n    request: AIOps 诊断请求\n\nReturns:\n    SSE 事件流",
+        "operationId": "AIOps-diagnose_stream-post-api_v1_aiops",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIOpsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Diagnose Stream",
+        "tags": [
+          "AIOps"
+        ]
+      }
+    },
+    "/api/v1/aiops/runs/{run_id}": {
+      "get": {
+        "description": "查询 AIOps 运行摘要。",
+        "operationId": "AIOps-get_aiops_run-get-api_v1_aiops_runs_run_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Aiops Run",
+        "tags": [
+          "AIOps"
+        ]
+      }
+    },
+    "/api/v1/aiops/runs/{run_id}/events": {
+      "get": {
+        "description": "查询 AIOps 运行过程事件。",
+        "operationId": "AIOps-list_aiops_run_events-get-api_v1_aiops_runs_run_id_events",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Aiops Run Events",
+        "tags": [
+          "AIOps"
+        ]
+      }
+    },
+    "/api/v1/chat": {
+      "post": {
+        "description": "快速对话接口\n{\n    \"code\": 200,\n    \"message\": \"success\",\n    \"data\": {\n        \"success\": true,\n        \"answer\": \"回答内容\",\n        \"errorMessage\": null\n    }\n}\n\nArgs:\n    request: 对话请求\n\nReturns:\n    统一格式的对话响应",
+        "operationId": "Chat-chat-post-api_v1_chat",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chat",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/v1/chat/clear": {
+      "post": {
+        "description": "清空会话历史\n\nArgs:\n    request: 清空请求\n\nReturns:\n    操作结果",
+        "operationId": "Chat-clear_session-post-api_v1_chat_clear",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClearRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear Session",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/v1/chat/session/{session_id}": {
+      "get": {
+        "description": "查询会话历史\n\nArgs:\n    session_id: 会话 ID\n\nReturns:\n    会话信息",
+        "operationId": "Chat-get_session_info-get-api_v1_chat_session_session_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInfoResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Session Info",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/v1/chat/session/{session_id}/tool-events": {
+      "get": {
+        "description": "查询会话工具调用事件。",
+        "operationId": "Chat-get_session_tool_events-get-api_v1_chat_session_session_id_tool_events",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Session Tool Events",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/v1/chat/sessions": {
+      "get": {
+        "description": "列出已持久化的会话摘要。",
+        "operationId": "Chat-list_sessions-get-api_v1_chat_sessions",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Sessions",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/v1/chat/stream": {
+      "post": {
+        "description": "流式对话接口（基于 RAG Agent，SSE）\n\n返回 SSE 格式，data 字段为 JSON：\n\n工具调用事件:\nevent: message\ndata: {\"type\":\"tool_call\",\"data\":{\"tool\":\"工具名\",\"status\":\"start|end\",\"input\":{...}}}\n\n内容流式事件:\nevent: message\ndata: {\"type\":\"content\",\"data\":\"内容块\"}\n\n完成事件:\nevent: message\ndata: {\"type\":\"done\",\"data\":{\"answer\":\"完整答案\",\"tool_calls\":[...]}}\n\nArgs:\n    request: 对话请求\n\nReturns:\n    SSE 事件流",
+        "operationId": "Chat-chat_stream-post-api_v1_chat_stream",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chat Stream",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/v1/index_directory": {
+      "post": {
+        "description": "索引指定目录下的所有文件\n\nArgs:\n    directory_path: 目录路径（可选，默认使用 uploads 目录）\n\nReturns:\n    JSONResponse: 索引结果",
+        "operationId": "Files-index_directory-post-api_v1_index_directory",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory_path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Directory Path"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Index Directory",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/index_tasks/{task_id}": {
+      "get": {
+        "description": "查询索引任务状态。",
+        "operationId": "Files-get_index_task-get-api_v1_index_tasks_task_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Index Task",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/scenes": {
+      "get": {
+        "operationId": "NativeAgent-list_scenes-get-api_v1_scenes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Scenes",
+        "tags": [
+          "NativeAgent"
+        ]
+      },
+      "post": {
+        "operationId": "NativeAgent-create_scene-post-api_v1_scenes",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Scene",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/scenes/{scene_id}": {
+      "get": {
+        "operationId": "NativeAgent-get_scene-get-api_v1_scenes_scene_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scene_id",
+            "required": true,
+            "schema": {
+              "title": "Scene Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Scene",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/tools": {
+      "get": {
+        "operationId": "NativeAgent-list_tools-get-api_v1_tools",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Tools",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/tools/{tool_name}/policy": {
+      "patch": {
+        "operationId": "NativeAgent-update_tool_policy-patch-api_v1_tools_tool_name_policy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tool_name",
+            "required": true,
+            "schema": {
+              "title": "Tool Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolPolicyUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Tool Policy",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/upload": {
+      "post": {
+        "description": "上传文件并自动创建向量索引\n\nArgs:\n    file: 上传的文件\n\nReturns:\n    JSONResponse: 上传结果",
+        "operationId": "Files-upload_file-post-api_v1_upload",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_Files-upload_file-post-api_v1_upload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload File",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/workspaces": {
+      "get": {
+        "operationId": "NativeAgent-list_workspaces-get-api_v1_workspaces",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Workspaces",
+        "tags": [
+          "NativeAgent"
+        ]
+      },
+      "post": {
+        "operationId": "NativeAgent-create_workspace-post-api_v1_workspaces",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Workspace",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "兼容旧路径的健康检查接口。",
+        "operationId": "Health-health_check-get-health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health Check",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/live": {
+      "get": {
+        "description": "进程存活检查。",
+        "operationId": "Health-live_health_check-get-health_live",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Live Health Check",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "description": "服务就绪检查。",
+        "operationId": "Health-ready_health_check-get-health_ready",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ready Health Check",
+        "tags": [
+          "Health"
+        ]
+      }
+    }
+  }
+}

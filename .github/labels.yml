@@ -1,0 +1,71 @@
+- name: type:bug
+  color: d73a4a
+  description: Defect or behavior regression.
+
+- name: type:feature
+  color: a2eeef
+  description: User-facing product capability.
+
+- name: type:docs
+  color: 0075ca
+  description: Documentation-only change.
+
+- name: type:security
+  color: b60205
+  description: Security vulnerability, hardening, or policy work.
+
+- name: type:question
+  color: d876e3
+  description: Usage or clarification request.
+
+- name: area:agent
+  color: 5319e7
+  description: Agent runtime, planning, tools, or orchestration.
+
+- name: area:api
+  color: 1d76db
+  description: FastAPI backend, routes, or API contracts.
+
+- name: area:frontend
+  color: 0e8a16
+  description: Next.js frontend or BFF layer.
+
+- name: area:infra
+  color: fbca04
+  description: Docker, CI/CD, persistence, or deployment infrastructure.
+
+- name: area:docs
+  color: 0075ca
+  description: Project documentation and contributor guidance.
+
+- name: priority:p0
+  color: b60205
+  description: Critical issue requiring immediate attention.
+
+- name: priority:p1
+  color: d93f0b
+  description: High-priority issue for the next planned work cycle.
+
+- name: priority:p2
+  color: fbca04
+  description: Normal-priority issue.
+
+- name: good first issue
+  color: 7057ff
+  description: Good for first-time contributors.
+
+- name: help wanted
+  color: 008672
+  description: Maintainers welcome community contribution.
+
+- name: status:needs-triage
+  color: cfd3d7
+  description: Needs maintainer review and labeling.
+
+- name: status:blocked
+  color: b60205
+  description: Blocked by an external decision or dependency.
+
+- name: status:ready
+  color: 0e8a16
+  description: Ready for implementation or review.

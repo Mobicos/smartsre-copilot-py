@@ -2,7 +2,8 @@
 
 This document is the primary contribution guide for all contributors, including
 human maintainers and AI coding agents. Agent-specific execution rules live in
-`AGENTS.md`; the full workflow reference lives in `docs/development-workflow.md`.
+`AGENTS.md`; the full workflow reference lives in
+`docs/development-workflow.md`.
 
 ## Required Workflow
 
@@ -97,7 +98,8 @@ make verify
 ```
 
 `make verify` is non-mutating and mirrors the backend CI contract: compile,
-lint, format check, type check, security scan, and tests.
+lint, format check, type check, security scan, OpenAPI contract check, Compose
+configuration check, coverage threshold, and tests.
 
 For frontend changes under `frontend/`, also run:
 
@@ -130,6 +132,23 @@ Each PR must include:
 
 Draft PRs are allowed for early CI feedback. Do not merge draft PRs or PRs with
 failing, pending, or unexpectedly skipped required checks.
+
+## Releases
+
+Release work must follow `docs/release-process.md`.
+
+Release PRs must include:
+
+- Version metadata updates in `pyproject.toml`, `app/config.py`, and
+  `app/__init__.py`.
+- `CHANGELOG.md` updates.
+- Migration and rollback notes when persistence changes.
+- Docker Compose or deployment notes when runtime services change.
+- `docs/openapi.json` updates when backend routes, schemas, or auth contracts
+  change.
+- Validation evidence from backend and frontend quality gates.
+
+Use tags in the form `vMAJOR.MINOR.PATCH`, for example `v1.3.0`.
 
 ## Merge Policy
 

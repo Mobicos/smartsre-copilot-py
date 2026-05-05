@@ -8,11 +8,14 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-API-green.svg)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Agentic-orange.svg)](https://www.langchain.com/langgraph)
 [![Next.js](https://img.shields.io/badge/Next.js-Frontend-black.svg)](https://nextjs.org/)
+[![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![CI](https://github.com/Mobicos/SmartSRE-Copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/Mobicos/SmartSRE-Copilot/actions/workflows/ci.yml)
 
 ## 项目概览
 
-SmartSRE Copilot 是一个面向企业内部运维场景的智能助手原型。后端基于 FastAPI、LangChain/LangGraph、DashScope/Qwen、PostgreSQL、Redis 和 Milvus；前端基于 Next.js，通过服务端 BFF 路由访问后端，避免把后端密钥暴露到浏览器。
+SmartSRE Copilot `1.3.0` 是 Native Agent Workbench 基线版本，面向企业内部运维场景构建智能助手。后端基于
+FastAPI、LangChain/LangGraph、DashScope/Qwen、PostgreSQL、Redis 和 Milvus；前端基于
+Next.js，通过服务端 BFF 路由访问后端，避免把后端密钥暴露到浏览器。
 
 核心能力：
 
@@ -22,6 +25,21 @@ SmartSRE Copilot 是一个面向企业内部运维场景的智能助手原型。
 - Planner / Executor / Replanner 模式的 AIOps 诊断流程。
 - Native Agent 工作空间、场景、工具策略、轨迹回放和反馈 API。
 - 可选 MCP 工具接入外部日志、指标和告警系统。
+
+## 项目状态
+
+SmartSRE Copilot 当前是早期开源项目，`1.3.0` 作为 Native Agent Workbench
+基线。它适合本地开发、内部评估和受控原型部署。生产部署前请阅读 `SECURITY.md`、`docs/deployment.md` 和本文的运维说明。
+
+演进路线记录在 `PLAN.md`：
+
+```text
+1.3.x：Native Agent Workbench 基线
+1.4.x：平台中间件现代化
+1.5.x：知识库、Replay、AgentOps 稳定化
+1.6.x-1.9.x：工具治理、API 契约和 Decision Runtime 候选版本
+2.0.x：LangGraph Decision Runtime
+```
 
 ## 架构
 
@@ -138,7 +156,8 @@ docker compose up -d --build
 
 这会启动 PostgreSQL、Redis、Milvus、Attu、MinIO、数据库迁移、后端 app 和 worker。
 
-如果你采用“本地 Python 后端 + Docker 基础设施”的开发模式，可以只保留数据库、Redis、Milvus 等基础设施运行，然后用 `uv` 启动后端。项目根目录中的 `docker-compose.local.yml` 如果存在，通常是本地实验配置，不建议默认提交。
+如果你采用“本地 Python 后端 + Docker 基础设施”的开发模式，可以只保留数据库、Redis、Milvus 等基础设施运行，然后用 `uv`
+启动后端。项目根目录中的 `docker-compose.local.yml` 如果存在，通常是本地实验配置，不建议默认提交。
 
 ### 3. 执行数据库迁移
 
@@ -313,7 +332,8 @@ make security
 - 开分支或 PR 前先阅读 `CONTRIBUTING.md`。
 - 后端依赖以 `pyproject.toml` 为准，提交 `uv.lock`。
 - 前端依赖以 `frontend/package.json` 为准，提交 `frontend/pnpm-lock.yaml`。
-- 不要提交 `.env`、`.venv/`、`uploads/`、`data/`、`volumes/`、`frontend/node_modules/` 或 `frontend/.next/`。
+- 不要提交 `.env`、`.venv/`、`uploads/`、`data/`、`volumes/`、`frontend/node_modules/` 或
+  `frontend/.next/`。
 - 后端 API 模型变化时，同步更新 `frontend/lib/api-contracts.ts` 或相关 BFF 路由适配层。
 
 ## 运行说明
@@ -406,12 +426,31 @@ MCP 工具不可用：
 - 高风险工具通过工具策略要求审批；V1 遇到这类工具会返回 `approval_required`，不会直接执行。
 - 多团队使用前先设计上传文档的权限边界。
 
+漏洞和敏感信息问题请按 `SECURITY.md` 私下报告，不要直接公开 issue。
+
+## 开源治理
+
+- `CHANGELOG.md`：发布说明和用户可见变化。
+- `CONTRIBUTING.md`：人类开发者和 AI coding agent 的协作流程。
+- `AGENTS.md`：AI coding agent 执行规则。
+- `SECURITY.md`：漏洞报告和安全期望。
+- `CODE_OF_CONDUCT.md`：社区行为准则。
+- `SUPPORT.md`：支持边界和 issue 指引。
+- `MAINTAINERS.md`：维护者职责和发版权限。
+- `docs/release-process.md`：发版检查清单、版本策略和回滚说明。
+- `docs/repository-governance.md`：分支保护、标签体系和维护者协作规则。
+- `docs/architecture.md`：当前架构和演进方向。
+- `docs/deployment.md`：本地和生产部署说明。
+- `docs/security.md`：运维安全检查清单。
+- `docs/openapi.json`：生成的 FastAPI 合约，用于 SDK 和 BFF 治理。
+
 ## 贡献
 
-人类开发者请先阅读 `CONTRIBUTING.md`，其中包含分支、提交、PR、质量门、
-依赖和合并规范。
+人类开发者请先阅读 `CONTRIBUTING.md`，其中包含分支、提交、PR、质量门、 依赖、发版和合并规范。
 
 AI coding agent 还应在改动前阅读 `AGENTS.md`。
+
+发版工作请先阅读 `docs/release-process.md`。
 
 ## 许可证
 

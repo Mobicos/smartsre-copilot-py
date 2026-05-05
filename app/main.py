@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRoute
 from loguru import logger
 
 from app.api.main import api_router
@@ -58,15 +59,27 @@ async def lifespan(app: FastAPI):
     logger.info(f"👋 {config.app_name} 关闭")
 
 
+def _generate_operation_id(route: APIRoute) -> str:
+    """Generate stable OpenAPI operation IDs across legacy and versioned prefixes."""
+    tag = str(route.tags[0]) if route.tags else "Default"
+    method = sorted(route.methods or {"GET"})[0].lower()
+    normalized_path = (
+        route.path_format.strip("/")
+        .replace("/", "_")
+        .replace("{", "")
+        .replace("}", "")
+        .replace("-", "_")
+    )
+    return f"{tag}-{route.name}-{method}-{normalized_path or 'root'}"
+
+
 # 创建 FastAPI 应用
 app = FastAPI(
     title=config.app_name,
     version=config.app_version,
     description="基于 LangChain 的智能oncall运维系统",
     lifespan=lifespan,
-    generate_unique_id_function=lambda route: (
-        f"{route.tags[0]}-{route.name}" if route.tags else route.name
-    ),
+    generate_unique_id_function=_generate_operation_id,
 )
 
 # 配置 CORS
@@ -139,7 +152,7 @@ async def request_context_middleware(request: Request, call_next):
 # 注册路由
 app.include_router(health.router, tags=["Health"])
 app.include_router(api_router, prefix="/api/v1")
-app.include_router(api_router, prefix="/api")  # backward compatibility
+app.include_router(api_router, prefix="/api", include_in_schema=False)  # backward compatibility
 
 
 @app.get("/")
