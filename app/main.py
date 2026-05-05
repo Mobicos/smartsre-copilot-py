@@ -77,7 +77,7 @@ def _generate_operation_id(route: APIRoute) -> str:
 app = FastAPI(
     title=config.app_name,
     version=config.app_version,
-    description="基于 LangChain 的智能oncall运维系统",
+    description="AI-powered SRE assistant with knowledge-grounded chat, AIOps diagnosis, and native agent workbench",
     lifespan=lifespan,
     generate_unique_id_function=_generate_operation_id,
 )

@@ -1,6 +1,6 @@
 # SmartSRE Copilot
 
-> 面向 SRE / On-call / AIOps 场景的智能运维助手，支持知识库问答、文档向量化、流式对话和可选 MCP 工具接入。
+> 面向 SRE 的智能运维助手，支持知识库问答、AIOps 诊断和原生 Agent 工作台。
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 

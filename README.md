@@ -1,7 +1,6 @@
 # SmartSRE Copilot
 
-> AI-powered SRE copilot for knowledge-grounded chat, operational document
-> search, and AIOps diagnosis.
+> AI-powered SRE assistant with knowledge-grounded chat, AIOps diagnosis, and native agent workbench.
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
