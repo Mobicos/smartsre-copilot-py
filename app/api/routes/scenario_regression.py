@@ -42,8 +42,8 @@ async def evaluate_scenario_regression_run(
             scenario_id=request.scenario_id,
             run_id=request.run_id,
         )
-    except ValueError as exc:
-        return JSONResponse(status_code=404, content={"code": 404, "message": str(exc)})
+    except ValueError as _exc:
+        return JSONResponse(status_code=404, content={"code": 404, "message": "run_not_found"})
     if evaluation is None:
         return JSONResponse(status_code=404, content={"code": 404, "message": "run_not_found"})
     return json_response(
