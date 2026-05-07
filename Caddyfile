@@ -1,0 +1,36 @@
+# SmartSRE Copilot - Caddy reverse gateway
+# Place this file at the repo root or mount it into the Caddy container.
+
+:80 {
+    # Frontend
+    handle /api/* {
+        reverse_proxy backend:9900
+    }
+
+    handle /docs* {
+        reverse_proxy backend:9900
+    }
+
+    handle /openapi.json {
+        reverse_proxy backend:9900
+    }
+
+    handle /health {
+        reverse_proxy backend:9900
+    }
+
+    # Everything else goes to Next.js
+    handle {
+        reverse_proxy frontend:3000
+    }
+
+    # SSE-friendly settings
+    header {
+        X-Accel-Buffering no
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}

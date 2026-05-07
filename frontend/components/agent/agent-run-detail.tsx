@@ -19,7 +19,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Markdown } from "@/components/markdown"
 import { AgentEventTimeline } from "./agent-event-timeline"
 import { cn } from "@/lib/utils"
-import type { NativeAgentEvent } from "@/lib/native-agent-types"
+import type {
+  NativeAgentDecisionState,
+  NativeAgentEvent,
+  NativeAgentReplay,
+} from "@/lib/native-agent-types"
 
 interface AgentRun {
   run_id: string
@@ -38,36 +42,42 @@ interface AgentRunDetailProps {
 export function AgentRunDetail({ runId }: AgentRunDetailProps) {
   const [run, setRun] = useState<AgentRun | null>(null)
   const [events, setEvents] = useState<NativeAgentEvent[]>([])
+  const [replay, setReplay] = useState<NativeAgentReplay | null>(null)
+  const [decisionState, setDecisionState] = useState<NativeAgentDecisionState | null>(null)
   const [loading, setLoading] = useState(true)
   const [feedbackRating, setFeedbackRating] = useState<string | null>(null)
   const [feedbackComment, setFeedbackComment] = useState("")
   const [submittingFeedback, setSubmittingFeedback] = useState(false)
 
   useEffect(() => {
-    async function loadRun() {
+    async function loadReplay() {
       try {
-        const res = await fetch(`/api/agent/runs/${runId}`)
-        const data = (await res.json()) as { data?: AgentRun } | AgentRun
-        setRun(data && typeof data === "object" && "data" in data ? data.data || null : (data as AgentRun))
+        const [runRes, eventsRes, replayRes, decisionStateRes] = await Promise.all([
+          fetch(`/api/agent/runs/${runId}`, { cache: "no-store" }),
+          fetch(`/api/agent/runs/${runId}/events`, { cache: "no-store" }),
+          fetch(`/api/agent/runs/${runId}/replay`, { cache: "no-store" }),
+          fetch(`/api/agent/runs/${runId}/decision-state`, { cache: "no-store" }),
+        ])
+        const runData = (await runRes.json()) as { data?: AgentRun } | AgentRun
+        const eventsData = (await eventsRes.json()) as { data?: NativeAgentEvent[] } | NativeAgentEvent[]
+        const replayData = (await replayRes.json()) as NativeAgentReplay
+        const decisionStateData = (await decisionStateRes.json()) as NativeAgentDecisionState
+        setRun(
+          runData && typeof runData === "object" && "data" in runData
+            ? runData.data || null
+            : (runData as AgentRun),
+        )
+        setEvents(Array.isArray(eventsData) ? eventsData : eventsData.data || [])
+        setReplay(replayRes.ok ? replayData : null)
+        setDecisionState(decisionStateRes.ok ? decisionStateData : null)
       } catch (err) {
-        toast.error("Failed to load run")
-      }
-    }
-
-    async function loadEvents() {
-      try {
-        const res = await fetch(`/api/agent/runs/${runId}/events`)
-        const data = (await res.json()) as { data?: NativeAgentEvent[] } | NativeAgentEvent[]
-        setEvents(Array.isArray(data) ? data : data.data || [])
-      } catch (err) {
-        toast.error("Failed to load events")
+        toast.error("Failed to load run replay")
       } finally {
         setLoading(false)
       }
     }
 
-    void loadRun()
-    void loadEvents()
+    void loadReplay()
   }, [runId])
 
   async function submitFeedback(rating: string) {
@@ -173,6 +183,112 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
           </div>
         )}
 
+        {/* Replay metrics */}
+        {replay?.metrics && (
+          <Card className="mb-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Replay Snapshot</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid gap-3 text-xs sm:grid-cols-3">
+                <Metric label="Runtime" value={replay.metrics.runtime_version} />
+                <Metric label="Trace" value={replay.metrics.trace_id?.slice(0, 8)} mono />
+                <Metric label="Approval" value={replay.metrics.approval_state} />
+                <Metric label="Steps" value={replay.metrics.steps ?? replay.metrics.step_count} />
+                <Metric label="Tool Calls" value={replay.metrics.tool_calls ?? replay.metrics.tool_call_count} />
+                <Metric label="Retrievals" value={replay.metrics.retrieval_count} />
+                <Metric label="Latency" value={replay.metrics.latency_ms ? `${replay.metrics.latency_ms}ms` : "n/a"} />
+                <Metric label="Cost" value={replay.metrics.cost_estimate_usd ?? replay.metrics.cost_estimate ?? "n/a"} mono />
+                <Metric label="Errors" value={replay.metrics.error_count ?? 0} />
+              </dl>
+              {replay.summary && (
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <Metric label="Events" value={replay.summary.event_count ?? 0} />
+                  <Metric label="Tool Results" value={replay.summary.tool_result_count ?? 0} />
+                  <Metric label="Approvals" value={replay.summary.approval_count ?? 0} />
+                  <Metric label="Resumes" value={replay.summary.approval_resume_count ?? 0} />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {decisionState && (
+          <Card className="mb-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Decision State</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid gap-3 text-xs sm:grid-cols-4">
+                <Metric label="Status" value={decisionState.latest_status} />
+                <Metric label="Decisions" value={decisionState.decisions?.length ?? 0} />
+                <Metric
+                  label="Approvals"
+                  value={decisionState.approval_decisions?.length ?? 0}
+                />
+                <Metric label="Resume" value={decisionState.approval_resume?.length ?? 0} />
+                <Metric label="Recovery" value={decisionState.recovery_events?.length ?? 0} />
+              </dl>
+              {decisionState.decisions?.at(-1)?.message && (
+                <p className="mt-3 rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                  {decisionState.decisions.at(-1)?.message}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {replay?.tool_trajectory && replay.tool_trajectory.length > 0 && (
+          <Card className="mb-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Tool Trajectory</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {replay.tool_trajectory.map((item, index) => (
+                <div key={`${item.tool_name || "tool"}-${index}`} className="rounded-md border border-border p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs font-medium">{item.tool_name || "unknown"}</span>
+                    {item.execution_status && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
+                        {item.execution_status}
+                      </span>
+                    )}
+                    {item.approval_state && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase text-muted-foreground">
+                        {item.approval_state}
+                      </span>
+                    )}
+                  </div>
+                  {item.call?.message && <p className="mt-1 text-xs text-muted-foreground">{item.call.message}</p>}
+                  {item.result?.message && <p className="mt-1 text-xs text-muted-foreground">{item.result.message}</p>}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {replay?.knowledge_citations && replay.knowledge_citations.length > 0 && (
+          <Card className="mb-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Knowledge Evidence</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {replay.knowledge_citations.slice(0, 6).map((citation, index) => (
+                  <div
+                    key={index}
+                    className="rounded-md border border-border bg-muted/20 p-3 text-xs text-muted-foreground"
+                  >
+                    <pre className="whitespace-pre-wrap break-words">
+                      {JSON.stringify(citation, null, 2)}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Report */}
         {run.final_report && (
           <Card className="mb-4">
@@ -223,6 +339,25 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
           </Card>
         )}
       </div>
+    </div>
+  )
+}
+
+function Metric({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string
+  value: unknown
+  mono?: boolean
+}) {
+  return (
+    <div className="rounded-md border bg-muted/20 p-2">
+      <dt className="text-[10px] uppercase text-muted-foreground">{label}</dt>
+      <dd className={cn("mt-1 truncate text-sm font-medium", mono && "font-mono")}>
+        {value === undefined || value === null || value === "" ? "n/a" : String(value)}
+      </dd>
     </div>
   )
 }

@@ -365,7 +365,7 @@ Frontend diagnose
   -> Native Agent 轨迹 + AIOps 兼容运行事件
 ```
 
-Native Agent V1：
+Native Agent 开发运行时：
 
 ```text
 Workspace
@@ -413,7 +413,7 @@ MCP 工具不可用：
 - 生产环境使用明确 CORS 白名单。
 - MCP 云账号使用最小权限。
 - 审计日志和 AIOps 运行事件使用持久化存储。
-- 高风险工具通过工具策略要求审批；V1 遇到这类工具会返回 `approval_required`，不会直接执行。
+- 高风险工具通过工具策略要求审批；当前开发运行时遇到这类工具会返回 `approval_required`，不会直接执行。
 - 多团队使用前先设计上传文档的权限边界。
 
 漏洞和敏感信息问题请按 `SECURITY.md` 私下报告，不要直接公开 issue。

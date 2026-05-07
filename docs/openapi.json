@@ -77,6 +77,31 @@
         "title": "AIOpsRequest",
         "type": "object"
       },
+      "AgentApprovalDecisionRequest": {
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "decision": {
+            "pattern": "^(approved|rejected)$",
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "AgentApprovalDecisionRequest",
+        "type": "object"
+      },
       "AgentFeedbackCreateRequest": {
         "properties": {
           "comment": {
@@ -222,6 +247,26 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ScenarioEvaluationRequest": {
+        "properties": {
+          "run_id": {
+            "minLength": 1,
+            "title": "Run Id",
+            "type": "string"
+          },
+          "scenario_id": {
+            "minLength": 1,
+            "title": "Scenario Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scenario_id",
+          "run_id"
+        ],
+        "title": "ScenarioEvaluationRequest",
         "type": "object"
       },
       "SceneCreateRequest": {
@@ -443,7 +488,7 @@
   "paths": {
     "/": {
       "get": {
-        "description": "返回 API 根信息。",
+        "description": "Basic API root endpoint.",
         "operationId": "Default-root-get-root",
         "responses": {
           "200": {
@@ -456,6 +501,63 @@
           }
         },
         "summary": "Root"
+      }
+    },
+    "/api/v1/agent/approvals": {
+      "get": {
+        "operationId": "NativeAgent-list_agent_approvals-get-api_v1_agent_approvals",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Agent Approvals",
+        "tags": [
+          "NativeAgent"
+        ]
       }
     },
     "/api/v1/agent/runs": {
@@ -684,6 +786,202 @@
         ]
       }
     },
+    "/api/v1/agent/runs/{run_id}/approvals/{tool_name}": {
+      "post": {
+        "operationId": "NativeAgent-decide_agent_approval-post-api_v1_agent_runs_run_id_approvals_tool_name",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tool_name",
+            "required": true,
+            "schema": {
+              "title": "Tool Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentApprovalDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide Agent Approval",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/agent/runs/{run_id}/approvals/{tool_name}/resume": {
+      "post": {
+        "operationId": "NativeAgent-resume_agent_approval-post-api_v1_agent_runs_run_id_approvals_tool_name_resume",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tool_name",
+            "required": true,
+            "schema": {
+              "title": "Tool Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Agent Approval",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/agent/runs/{run_id}/decision-state": {
+      "get": {
+        "operationId": "NativeAgent-get_agent_decision_state-get-api_v1_agent_runs_run_id_decision_state",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Agent Decision State",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
     "/api/v1/agent/runs/{run_id}/events": {
       "get": {
         "operationId": "NativeAgent-list_agent_run_events-get-api_v1_agent_runs_run_id_events",
@@ -801,6 +1099,62 @@
           }
         },
         "summary": "Create Agent Feedback",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/agent/runs/{run_id}/replay": {
+      "get": {
+        "operationId": "NativeAgent-get_agent_run_replay-get-api_v1_agent_runs_run_id_replay",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Agent Run Replay",
         "tags": [
           "NativeAgent"
         ]
@@ -1318,9 +1672,123 @@
         ]
       }
     },
+    "/api/v1/contracts/openapi": {
+      "get": {
+        "operationId": "Contracts-get_openapi_contract-get-api_v1_contracts_openapi",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_spec",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Spec",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Openapi Contract",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/api/v1/documents/{filename}": {
+      "delete": {
+        "description": "Delete an uploaded document and remove its vector-store entries.",
+        "operationId": "Files-delete_uploaded_document-delete-api_v1_documents_filename",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "filename",
+            "required": true,
+            "schema": {
+              "title": "Filename",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Uploaded Document",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
     "/api/v1/index_directory": {
       "post": {
-        "description": "索引指定目录下的所有文件\n\nArgs:\n    directory_path: 目录路径（可选，默认使用 uploads 目录）\n\nReturns:\n    JSONResponse: 索引结果",
+        "description": "Index a local directory of supported knowledge documents.",
         "operationId": "Files-index_directory-post-api_v1_index_directory",
         "parameters": [
           {
@@ -1382,9 +1850,76 @@
         ]
       }
     },
+    "/api/v1/index_tasks": {
+      "get": {
+        "description": "List indexing tasks by status.",
+        "operationId": "Files-list_index_tasks-get-api_v1_index_tasks",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Index Tasks",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
     "/api/v1/index_tasks/{task_id}": {
       "get": {
-        "description": "查询索引任务状态。",
+        "description": "Return one indexing task.",
         "operationId": "Files-get_index_task-get-api_v1_index_tasks_task_id",
         "parameters": [
           {
@@ -1436,6 +1971,167 @@
         "summary": "Get Index Task",
         "tags": [
           "Files"
+        ]
+      }
+    },
+    "/api/v1/index_tasks/{task_id}/retry": {
+      "post": {
+        "description": "Requeue a failed or queued indexing task.",
+        "operationId": "Files-retry_index_task-post-api_v1_index_tasks_task_id_retry",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Index Task",
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/api/v1/scenario-regression/evaluations": {
+      "post": {
+        "operationId": "ScenarioRegression-evaluate_scenario_regression_run-post-api_v1_scenario_regression_evaluations",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioEvaluationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Evaluate Scenario Regression Run",
+        "tags": [
+          "ScenarioRegression"
+        ]
+      }
+    },
+    "/api/v1/scenario-regression/scenarios": {
+      "get": {
+        "operationId": "ScenarioRegression-list_scenario_regression_scenarios-get-api_v1_scenario_regression_scenarios",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Scenario Regression Scenarios",
+        "tags": [
+          "ScenarioRegression"
         ]
       }
     },
@@ -1728,7 +2424,7 @@
     },
     "/api/v1/upload": {
       "post": {
-        "description": "上传文件并自动创建向量索引\n\nArgs:\n    file: 上传的文件\n\nReturns:\n    JSONResponse: 上传结果",
+        "description": "Upload a knowledge document and enqueue indexing.",
         "operationId": "Files-upload_file-post-api_v1_upload",
         "parameters": [
           {
@@ -1888,7 +2584,6 @@
     },
     "/health": {
       "get": {
-        "description": "兼容旧路径的健康检查接口。",
         "operationId": "Health-health_check-get-health",
         "responses": {
           "200": {
@@ -1908,7 +2603,6 @@
     },
     "/health/live": {
       "get": {
-        "description": "进程存活检查。",
         "operationId": "Health-live_health_check-get-health_live",
         "responses": {
           "200": {
@@ -1928,7 +2622,6 @@
     },
     "/health/ready": {
       "get": {
-        "description": "服务就绪检查。",
         "operationId": "Health-ready_health_check-get-health_ready",
         "responses": {
           "200": {

@@ -4,10 +4,10 @@
 """
 
 import json
-import logging
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -15,8 +15,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = BASE_DIR / ".env"
 UPLOADS_DIR = BASE_DIR / "uploads"
 LOGS_DIR = BASE_DIR / "logs"
-
-logger = logging.getLogger(__name__)
 
 _DEFAULT_SECRETS = {
     "changethis",
@@ -58,6 +56,14 @@ class Settings(BaseSettings):
     indexing_task_max_retries: int = 3
     redis_url: str = "redis://localhost:6379/0"
     redis_task_queue_name: str = "smartsre:indexing:queue"
+    object_storage_backend: str = "local"
+    object_storage_local_path: str = str(UPLOADS_DIR)
+    object_storage_local_cache_path: str = str(UPLOADS_DIR)
+    minio_endpoint: str = "localhost:9000"
+    minio_access_key: str = ""
+    minio_secret_key: str = ""
+    minio_bucket: str = "smartsre-knowledge"
+    minio_secure: bool = False
 
     # DashScope 配置
     dashscope_api_key: str = ""  # 默认空字符串，实际使用需从环境变量加载
@@ -65,8 +71,15 @@ class Settings(BaseSettings):
     dashscope_embedding_model: str = "text-embedding-v4"  # v4 支持多种维度（默认 1024）
 
     # Milvus 配置
+    llm_request_timeout_seconds: float = 60.0
+    llm_max_retries: int = 3
+    llm_retry_delay_seconds: float = 1.0
+
+    vector_store_backend: str = "pgvector"
     milvus_host: str = "localhost"
     milvus_port: int = 19530
+    pgvector_collection_name: str = "biz"
+    pgvector_embedding_dimensions: int = 1024
     milvus_timeout: int = 10000  # 毫秒
 
     # RAG 配置
@@ -75,6 +88,12 @@ class Settings(BaseSettings):
     chat_recursion_limit: int = 12
     aiops_recursion_limit: int = 24
     aiops_max_steps: int = 8
+    agent_decision_provider: str = "deterministic"
+    agent_max_steps: int = 5
+    agent_step_timeout_seconds: float = 30.0
+    agent_total_timeout_seconds: float = 120.0
+    agent_approval_timeout_seconds: int = 3600
+    agent_resume_queue_name: str = "smartsre:agent:resume:queue"
 
     # 文档分块配置
     chunk_max_size: int = 800

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { backendFetch } from "@/lib/backend"
+import { backendErrorStatus, backendFetch } from "@/lib/backend"
 import { unwrapBackendEnvelope } from "@/lib/api-contracts"
 
 export const dynamic = "force-dynamic"
@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   } catch (err) {
     return NextResponse.json(
       { error: (err as Error).message ?? "backend unreachable" },
-      { status: 502 },
+      { status: backendErrorStatus(err) },
     )
   }
 }
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   } catch (err) {
     return NextResponse.json(
       { error: (err as Error).message ?? "backend unreachable" },
-      { status: 502 },
+      { status: backendErrorStatus(err) },
     )
   }
 }

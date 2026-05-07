@@ -44,6 +44,9 @@ class LLMFactory:
             streaming=streaming,
             base_url=base_url,
             api_key=SecretStr(api_key),
+            timeout=config.llm_request_timeout_seconds,
+            max_retries=config.llm_max_retries,
+            model_kwargs={"retry_delay": config.llm_retry_delay_seconds},
             extra_body=extra_body if extra_body else None,
         )
 

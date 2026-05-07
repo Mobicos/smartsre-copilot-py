@@ -1,4 +1,6 @@
-"""健康检查接口。"""
+"""Health check APIs."""
+
+from __future__ import annotations
 
 from typing import Any
 
@@ -6,19 +8,26 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from loguru import logger
 
-from app.api.providers import get_service_health
+from app.api.providers import get_service_health, get_vector_store_manager
 from app.config import config
-from app.core.milvus_client import milvus_manager
 from app.infrastructure import redis_manager
-from app.infrastructure.tasks import task_dispatcher
+from app.infrastructure.tasks import agent_resume_dispatcher, task_dispatcher
 from app.platform.persistence.database import health_check as db_health_check
+from app.platform.persistence.repositories.indexing import indexing_task_repository
 
 router = APIRouter()
 
+_DEGRADED_STATUSES = {
+    "configured",
+    "degraded",
+    "external",
+    "idle",
+    "not_initialized",
+}
+
 
 def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
-    """构造 readiness 响应载荷。"""
-    health_data: dict[str, Any] = {  # pyright: ignore[reportExplicitAny]
+    health_data: dict[str, Any] = {
         "service": config.app_name,
         "version": config.app_version,
         "status": "healthy",
@@ -28,83 +37,122 @@ def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
         health_data[service_name] = {
             "status": health.status,
             "message": health.message,
+            **({"detail": health.detail} if health.detail else {}),
         }
 
     database_healthy = db_health_check()
     health_data["database"] = {
         "status": "connected" if database_healthy else "disconnected",
-        "message": "数据库连接正常" if database_healthy else "数据库连接异常",
+        "message": "Database connected" if database_healthy else "Database disconnected",
     }
+
     if config.task_queue_backend == "redis":
         redis_healthy = redis_manager.health_check()
         health_data["redis"] = {
             "status": "connected" if redis_healthy else "disconnected",
-            "message": "Redis 连接正常" if redis_healthy else "Redis 连接异常",
+            "message": "Redis connected" if redis_healthy else "Redis disconnected",
         }
+
     health_data["task_dispatcher"] = {
         "status": "running" if task_dispatcher.is_started else "external",
         "message": (
-            "嵌入式任务调度器运行中"
+            "Embedded task dispatcher is running"
             if task_dispatcher.is_started
-            else f"任务调度模式: {config.task_dispatcher_mode}"
+            else f"Task dispatcher mode: {config.task_dispatcher_mode}"
         ),
+    }
+    health_data["agent_resume_dispatcher"] = {
+        "status": "running" if agent_resume_dispatcher.is_started else "idle",
+        "queue": config.agent_resume_queue_name,
     }
 
     try:
-        milvus_healthy = milvus_manager.health_check()
-        milvus_status: str = "connected" if milvus_healthy else "disconnected"
-        milvus_message: str = "Milvus 连接正常" if milvus_healthy else "Milvus 连接异常"
-        health_data["milvus"] = {"status": milvus_status, "message": milvus_message}
-    except Exception as e:
-        logger.warning(f"Milvus 健康检查失败: {e}")
-        health_data["milvus"] = {"status": "error", "message": f"Milvus 检查失败: {str(e)}"}
+        task_counts = {
+            status: len(indexing_task_repository.list_tasks_by_status([status]))
+            for status in sorted(indexing_task_repository.ALLOWED_TASK_STATUSES)
+        }
+        active_count = task_counts.get("queued", 0) + task_counts.get("processing", 0)
+        health_data["indexing_tasks"] = {
+            "status": "active" if active_count else "idle",
+            "counts": task_counts,
+        }
+    except Exception as exc:
+        logger.warning(f"Indexing task health summary failed: {exc}")
+        health_data["indexing_tasks"] = {
+            "status": "error",
+            "message": "Indexing task status unavailable",
+        }
 
-    # 判断整体健康状态
+    try:
+        vector_manager = get_vector_store_manager()
+        vector_healthy = vector_manager.health_check()
+        health_data["vector_backend"] = {
+            "backend": vector_manager.backend_name,
+            "status": "connected" if vector_healthy else "disconnected",
+        }
+    except Exception as exc:
+        logger.warning(f"Vector backend health check failed: {exc}")
+        health_data["vector_backend"] = {
+            "backend": config.vector_store_backend,
+            "status": "error",
+            "message": str(exc),
+        }
+
+    degraded_components: list[str] = [
+        service_name
+        for service_name, health in get_service_health().items()
+        if health.status in _DEGRADED_STATUSES
+    ]
     overall_status = "healthy"
     status_code = 200
 
-    # 如果 Milvus 不可用，服务不可用
-    if health_data["milvus"]["status"] != "connected":
+    if health_data["vector_backend"]["status"] != "connected":
         overall_status = "unhealthy"
         status_code = 503
-        health_data["error"] = "数据库不可用"
+        health_data["error"] = "Vector backend unavailable"
 
     if health_data["embedding"]["status"] != "ready":
         overall_status = "unhealthy"
         status_code = 503
-        health_data["error"] = "Embedding 服务未就绪"
+        health_data["error"] = "Embedding service unavailable"
 
     if health_data["vector_store"]["status"] != "ready":
         overall_status = "unhealthy"
         status_code = 503
-        health_data["error"] = "VectorStore 未就绪"
+        health_data["error"] = "Vector store unavailable"
 
     if health_data["database"]["status"] != "connected":
         overall_status = "unhealthy"
         status_code = 503
-        health_data["error"] = "数据库不可用"
+        health_data["error"] = "Database unavailable"
 
     if config.task_queue_backend == "redis" and health_data["redis"]["status"] != "connected":
         overall_status = "unhealthy"
         status_code = 503
-        health_data["error"] = "Redis 不可用"
+        health_data["error"] = "Redis unavailable"
+
+    if overall_status == "healthy" and degraded_components:
+        overall_status = "degraded"
+        health_data["warning"] = "Some runtime services are configured but not yet initialized"
+
+    if degraded_components:
+        health_data["degraded_components"] = degraded_components
 
     health_data["status"] = overall_status
     return status_code, {
         "code": status_code,
-        "message": "服务运行正常" if overall_status == "healthy" else "服务不可用",
+        "message": overall_status,
         "data": health_data,
     }
 
 
 @router.get("/health/live")
 async def live_health_check():
-    """进程存活检查。"""
     return JSONResponse(
         status_code=200,
         content={
             "code": 200,
-            "message": "服务存活",
+            "message": "alive",
             "data": {
                 "service": config.app_name,
                 "version": config.app_version,
@@ -116,13 +164,11 @@ async def live_health_check():
 
 @router.get("/health/ready")
 async def ready_health_check():
-    """服务就绪检查。"""
     status_code, payload = _build_ready_health_payload()
     return JSONResponse(status_code=status_code, content=payload)
 
 
 @router.get("/health")
 async def health_check():
-    """兼容旧路径的健康检查接口。"""
     status_code, payload = _build_ready_health_payload()
     return JSONResponse(status_code=status_code, content=payload)

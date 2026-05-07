@@ -7,6 +7,7 @@ from app.api.routes.file import (
     MAX_FILE_SIZE,
     _get_file_extension,
     _sanitize_filename,
+    _validate_upload_content,
 )
 
 
@@ -38,3 +39,22 @@ def test_get_file_extension_normalizes_case(filename: str, expected: str):
 def test_upload_policy_limits_supported_file_types_and_size():
     assert set(ALLOWED_EXTENSIONS) == {"md", "txt"}
     assert MAX_FILE_SIZE == 10 * 1024 * 1024
+
+
+@pytest.mark.parametrize(
+    ("content", "detail"),
+    [
+        (b"", "empty_file"),
+        (b"   \n\t", "empty_text"),
+        (b"\xff\xfe\x00", "file_must_be_utf8"),
+    ],
+)
+def test_validate_upload_content_rejects_empty_or_non_utf8_payloads(content: bytes, detail: str):
+    with pytest.raises(Exception) as exc_info:
+        _validate_upload_content(content)
+
+    assert exc_info.value.detail == detail
+
+
+def test_validate_upload_content_accepts_utf8_text():
+    _validate_upload_content(b"runbook content\n")

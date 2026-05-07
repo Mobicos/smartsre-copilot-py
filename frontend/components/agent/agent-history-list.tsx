@@ -21,6 +21,9 @@ interface AgentRun {
   goal: string
   final_report?: string | null
   error_message?: string | null
+  runtime_version?: string | null
+  trace_id?: string | null
+  approval_state?: string | null
   created_at?: string
   updated_at?: string
 }
@@ -127,6 +130,11 @@ export function AgentHistoryList() {
                               {formatDate(run.created_at)}
                             </span>
                           )}
+                          {run.runtime_version && <span>{run.runtime_version}</span>}
+                          {run.trace_id && (
+                            <span className="font-mono">{run.trace_id.slice(0, 8)}</span>
+                          )}
+                          {run.approval_state && <span>{run.approval_state}</span>}
                         </div>
                         {run.error_message && (
                           <p className="mt-1 flex items-center gap-1 text-xs text-destructive">

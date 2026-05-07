@@ -60,7 +60,11 @@ export interface AiopsRun {
 
 export interface IndexingTask {
   id: string
+  taskId?: string
   filename: string
+  filePath?: string
+  objectUri?: string
+  storageBackend?: string
   size: number
   status: "queued" | "processing" | "completed" | "failed_permanently" | "running" | "succeeded" | "failed"
   chunks?: number
@@ -73,10 +77,17 @@ export interface HealthPayload {
   ok: boolean
   status: number
   payload?: {
-    status?: string
+    status?: "healthy" | "degraded" | "unhealthy" | string
     milvus?: string | { status?: string; collection?: string }
     redis?: string
     mcp?: Record<string, string>
+    decision_runtime?: {
+      status?: string
+      message?: string
+      detail?: Record<string, unknown>
+    }
+    warning?: string
+    degraded_components?: string[]
     [k: string]: unknown
   }
   error?: string

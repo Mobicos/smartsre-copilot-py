@@ -32,12 +32,13 @@ Core capabilities:
 
 ## Project Status
 
-SmartSRE Copilot is an early open source project in active development. It is
-suitable for local development, internal evaluation, and controlled prototype
-deployments. Public delivery tags, GitHub delivery artifacts, package
-distribution, and container image distribution are intentionally disabled while
-core Agent capabilities, product flows, and validation coverage are still being
-completed.
+**Development stage** — SmartSRE Copilot has not published a stable product
+version.
+
+SmartSRE Copilot is an open source SRE Agentic Workbench with a LangGraph
+Decision Runtime, evidence-driven reporting, approval workflow, and tool
+governance pipeline. It is currently in active development and suitable for
+local development and internal evaluation only.
 
 ## Architecture
 
@@ -58,15 +59,59 @@ FastAPI backend (app/)
   +-- Upload / indexing ---------> Redis queue
   |                                + worker
   |                                + DashScope embeddings
-  |                                + Milvus collection: biz
+  |                                + pgvector (default) / Milvus (optional)
   |
   +-- Native Agent diagnosis ----> AgentRuntime
   |                                + ToolCatalog / ToolPolicy / ToolExecutor
   |                                + trajectory events
   |                                + optional MCP tools
   |
+  +-- Decision Runtime ----------> LangGraph StateGraph
+  |                                + deterministic / LLM routing
+  |                                + step-by-step execution
+  |                                + evidence-driven synthesis
+  |
+  +-- Checkpoint Resume ---------> DatabaseCheckpointSaver
+  |                                + approval gate per high-risk step
+  |                                + auto-resume after approval
+  |
+  +-- Approval Workflow ---------> agent_events table
+  |                                + approval_required flag per tool
+  |                                + UI approval queue
+  |
   +-- Persistence ---------------> PostgreSQL
 ```
+
+## Middleware Architecture
+
+SmartSRE Copilot follows a layered BFF (Backend-for-Frontend) pattern:
+
+```text
+Internet
+  |
+  v
+Caddy reverse proxy (TLS, static assets, /api proxy)
+  |
+  +-- / ------------> Next.js frontend (SSR + BFF route handlers)
+  |
+  +-- /api ---------> FastAPI backend
+                        |
+                        +-- OpenTelemetry SDK ---> OTel Collector ---> Prometheus / Loki
+                        |
+                        +-- PostgreSQL (persistence + pgvector)
+                        +-- Redis (task queue + cache)
+```
+
+**Layers:**
+
+- **Caddy** — TLS termination, automatic HTTPS, static asset serving, reverse proxy
+  to backend and frontend. Deployed via `docker compose --profile gateway up`.
+- **Next.js BFF** — Server-side route handlers in `frontend/app/api/` that call
+  the FastAPI backend, keeping API keys and internal URLs off the client.
+- **FastAPI** — Core business logic, LangGraph agents, vector search, persistence.
+- **Observability** — OpenTelemetry SDK (conditional via `OTEL_ENABLED`) exports
+  traces to OTel Collector; Prometheus scrapes `/metrics`; Loki collects logs.
+  Deployed via `docker compose --profile observability up`.
 
 ## Tech Stack
 
@@ -74,7 +119,7 @@ Backend:
 
 - FastAPI, Pydantic Settings, Server-Sent Events
 - LangChain, LangGraph, Qwen via DashScope
-- PostgreSQL, Alembic, Redis, Milvus
+- PostgreSQL (with pgvector), Alembic, Redis
 - MCP client support for external tool servers
 - Native Agent runtime, tool policy, scene, and trajectory persistence
 
@@ -107,7 +152,7 @@ Local application data stays local unless you explicitly connect external tools.
   PostgreSQL.
 - Native Agent workspaces, scenes, tool policies, trajectories, and feedback are
   stored in PostgreSQL.
-- Document vectors are stored in Milvus.
+- Document vectors are stored in pgvector (default) or Milvus (optional).
 - DashScope receives prompts and embedding inputs required for model calls.
 - MCP tools are optional. A Tencent Cloud CLS MCP server queries Tencent CLS
   data, not local Postgres or Milvus data.
@@ -276,11 +321,13 @@ Key backend variables:
 - `DASHSCOPE_API_KEY`: DashScope model access
 - `DASHSCOPE_MODEL`, `RAG_MODEL`: chat models
 - `DASHSCOPE_EMBEDDING_MODEL`: embedding model
-- `POSTGRES_DSN`: PostgreSQL DSN
+- `POSTGRES_DSN`: PostgreSQL DSN (with pgvector extension)
 - `REDIS_URL`: Redis connection string
 - `TASK_QUEUE_BACKEND`: `redis` or `database`
 - `TASK_DISPATCHER_MODE`: `embedded` or `detached`
-- `MILVUS_HOST`, `MILVUS_PORT`: vector database connection
+- `VECTOR_STORE_BACKEND`: `pgvector` (default) or `milvus`
+- `PGVECTOR_COLLECTION_NAME`: pgvector collection name (default `biz`)
+- `MILVUS_HOST`, `MILVUS_PORT`: Milvus connection (only when using Milvus backend)
 - `RAG_TOP_K`: retrieval result count
 - `CHUNK_MAX_SIZE`, `CHUNK_OVERLAP`: document splitting
 - `MCP_CLS_TRANSPORT`, `MCP_CLS_URL`: optional CLS MCP server
@@ -453,7 +500,7 @@ Frontend diagnose
   -> persisted Native Agent trajectory + AIOps-compatible run events
 ```
 
-Native Agent V1:
+Native Agent development runtime:
 
 ```text
 Workspace
@@ -465,6 +512,27 @@ Workspace
   -> Trajectory replay
   -> Feedback and analytics inputs
 ```
+
+### Agent Workbench User Guide
+
+The Agent Workbench at `/agent` provides an interactive interface for
+running SRE diagnoses:
+
+1. **Create a Workspace**: Go to `/agent` and create a workspace (e.g. "SRE-Team").
+2. **Create a Scene**: Within the workspace, create a scene that selects which
+   tools and knowledge bases are available for diagnosis runs.
+3. **Run a Diagnosis**: Enter a goal (e.g. "Diagnose latency spike on /api/orders")
+   and start a run. The Agent will plan tool calls, collect evidence, and produce
+   a final report.
+4. **Review Approvals**: High-risk tools require explicit approval before execution.
+   Visit `/agent/approvals` to approve or reject pending actions.
+5. **Replay Runs**: Visit `/agent/history` to browse past runs. Click a run to see
+   the full trajectory, tool calls, evidence, and final report.
+6. **Manage Tools**: Visit `/agent/tools` to view available tools, their risk levels,
+   and policy configurations. Use `PATCH /api/tools/{tool_name}/policy` to adjust
+   tool governance settings.
+7. **Feedback**: After reviewing a run, submit thumbs-up/down feedback to help
+   improve the Agent's performance over time.
 
 ## Troubleshooting
 
@@ -494,6 +562,19 @@ Frontend cannot reach backend:
 - Ensure `SMARTSRE_BACKEND_URL` points to the FastAPI service.
 - If backend auth is enabled, set `SMARTSRE_API_KEY` server-side only.
 
+SSE streaming issues:
+
+- Streaming endpoints (`/api/chat_stream`, `/api/aiops`, `/api/agent/runs/stream`)
+  use Server-Sent Events. Ensure no reverse proxy or CDN buffers SSE responses.
+- In Nginx, set `proxy_buffering off` and `X-Accel-Buffering: no`.
+- In Caddy, no special configuration is needed for SSE by default.
+- If the browser shows no incremental updates, check the browser DevTools Network
+  tab for `text/event-stream` responses. A `502` or `504` status usually means
+  the backend is unreachable or timed out.
+- The BFF layer uses a 30-second timeout (`SMARTSRE_BACKEND_TIMEOUT_MS`). For
+  long-running diagnoses, consider increasing this value in `frontend/.env.local`.
+- If MCP tool discovery is slow, increase `MCP_TOOLS_LOAD_TIMEOUT_SECONDS`.
+
 ## Security Best Practices
 
 - Keep all secrets in environment variables or a secret manager.
@@ -501,12 +582,25 @@ Frontend cannot reach backend:
 - Use explicit CORS origins in production.
 - Use least-privilege cloud credentials for MCP servers.
 - Store audit logs and AIOps run events in durable storage.
-- Require approval for high-risk tools through tool policies; V1 reports
-  `approval_required` instead of executing those tools.
+- Require approval for high-risk tools through tool policies; the current
+  development build reports `approval_required` instead of executing those
+  tools.
 - Review uploaded document access rules before exposing the app to multiple
   teams.
 
 Report vulnerabilities privately by following `SECURITY.md`.
+
+## Development Focus
+
+The project remains in development stage while the core platform is being
+completed and verified. Current engineering focus areas include
+knowledge-grounded chat, AIOps diagnosis, the native agent workbench, tool
+policy governance, pgvector as the default vector backend, scenario regression
+coverage, production deployment shape, decision runtime reliability, and
+checkpoint-based approval resume.
+
+Stable versioning and public delivery artifacts will be handled only after the
+core functionality and validation gates are complete.
 
 ## Contributing
 

@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
-import { CheckCircle2, FileText, FileUp, Loader2, Trash2, UploadCloud, XCircle } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { CheckCircle2, FileText, FileUp, Loader2, RefreshCw, Trash2, UploadCloud, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -41,8 +41,64 @@ function isFailure(status: IndexingTask["status"]) {
 
 export function KnowledgeConsole() {
   const [tasks, setTasks] = useState<IndexingTask[]>([])
+  const [loadingTasks, setLoadingTasks] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const loadPersistedTasks = useCallback(async () => {
+    setLoadingTasks(true)
+    try {
+      const res = await fetch("/api/index-tasks", { cache: "no-store" })
+      const json = (await res.json()) as {
+        tasks?: unknown[]
+        data?: { tasks?: unknown[] }
+        error?: string
+      }
+      const rows = Array.isArray(json.tasks)
+        ? json.tasks
+        : Array.isArray(json.data?.tasks)
+          ? json.data.tasks
+          : []
+      const persistedTasks = rows.flatMap((row) => {
+        if (!row || typeof row !== "object") return []
+        const item = row as Record<string, unknown>
+        const taskId = typeof item.task_id === "string" ? item.task_id : crypto.randomUUID()
+        const filename = typeof item.filename === "string" ? item.filename : "unknown"
+        return [
+          {
+            id: taskId,
+            taskId,
+            filename,
+            filePath: typeof item.file_path === "string" ? item.file_path : undefined,
+            objectUri: typeof item.object_uri === "string" ? item.object_uri : undefined,
+            storageBackend:
+              typeof item.storage_backend === "string" ? item.storage_backend : undefined,
+            size: 0,
+            status: toTaskStatus(item.status),
+            message: typeof item.error_message === "string" ? item.error_message : undefined,
+            startedAt:
+              typeof item.created_at === "string"
+                ? new Date(item.created_at).getTime()
+                : Date.now(),
+            finishedAt: isTerminal(toTaskStatus(item.status))
+              ? typeof item.updated_at === "string"
+                ? new Date(item.updated_at).getTime()
+                : Date.now()
+              : undefined,
+          } satisfies IndexingTask,
+        ]
+      })
+      setTasks(persistedTasks)
+    } catch (err) {
+      toast.error("Failed to load indexing tasks")
+    } finally {
+      setLoadingTasks(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadPersistedTasks()
+  }, [loadPersistedTasks])
 
   const pollIndexTask = useCallback(async (localId: string, taskId: string) => {
     for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -73,6 +129,7 @@ export function KnowledgeConsole() {
           item.id === localId
             ? {
                 ...item,
+                taskId,
                 status,
                 message: typeof json.error_message === "string" ? json.error_message : undefined,
                 finishedAt: isTerminal(status) ? Date.now() : item.finishedAt,
@@ -134,12 +191,20 @@ export function KnowledgeConsole() {
           }
 
           const taskId = typeof json.taskId === "string" ? json.taskId : undefined
+          const filePath = typeof json.filePath === "string" ? json.filePath : undefined
+          const objectUri = typeof json.objectUri === "string" ? json.objectUri : undefined
+          const storageBackend =
+            typeof json.storageBackend === "string" ? json.storageBackend : undefined
           const status = toTaskStatus(json.status ?? "queued")
           setTasks((items) =>
             items.map((item) =>
               item.id === id
                 ? {
                     ...item,
+                    taskId,
+                    filePath,
+                    objectUri,
+                    storageBackend,
                     status,
                     message: typeof json.message === "string" ? json.message : undefined,
                     finishedAt: isTerminal(status) ? Date.now() : undefined,
@@ -168,6 +233,59 @@ export function KnowledgeConsole() {
     },
     [pollIndexTask],
   )
+
+  const deleteUploadedDocument = useCallback(async (task: IndexingTask) => {
+    try {
+      const res = await fetch(`/api/documents/${encodeURIComponent(task.filename)}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) {
+        const json = (await res.json()) as { error?: string; detail?: string }
+        toast.error(json.error || json.detail || "Delete failed")
+        return
+      }
+      setTasks((items) => items.filter((item) => item.id !== task.id))
+      toast.success(`${task.filename}: deleted`)
+    } catch (err) {
+      toast.error(`${task.filename}: delete failed`)
+    }
+  }, [])
+
+  const retryIndexTask = useCallback(async (task: IndexingTask) => {
+    if (!task.taskId) return
+    try {
+      const res = await fetch(`/api/index-tasks/${encodeURIComponent(task.taskId)}/retry`, {
+        method: "POST",
+      })
+      const json = (await res.json()) as Record<string, unknown>
+      if (!res.ok) {
+        toast.error(
+          typeof json.error === "string"
+            ? json.error
+            : typeof json.detail === "string"
+              ? json.detail
+              : "Retry failed",
+        )
+        return
+      }
+      setTasks((items) =>
+        items.map((item) =>
+          item.id === task.id
+            ? {
+                ...item,
+                status: "queued",
+                message: "Retry queued",
+                finishedAt: undefined,
+              }
+            : item,
+        ),
+      )
+      void pollIndexTask(task.id, task.taskId)
+      toast.success(`${task.filename}: retry queued`)
+    } catch (err) {
+      toast.error(`${task.filename}: retry failed`)
+    }
+  }, [pollIndexTask])
 
   const onDrop: React.DragEventHandler<HTMLDivElement> = (event) => {
     event.preventDefault()
@@ -226,18 +344,29 @@ export function KnowledgeConsole() {
         <section aria-label="Indexing tasks">
           <header className="flex items-center justify-between mb-2">
             <h2 className="text-xs font-medium text-muted-foreground">Indexing tasks</h2>
-            {tasks.length > 0 && (
+            <div className="flex items-center gap-1">
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-7 text-xs text-muted-foreground"
-                onClick={() => setTasks([])}
+                onClick={() => void loadPersistedTasks()}
+                disabled={loadingTasks}
               >
-                <Trash2 className="size-3.5" /> Clear
+                <RefreshCw className={cn("size-3.5", loadingTasks && "animate-spin")} /> Refresh
               </Button>
-            )}
+              {tasks.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs text-muted-foreground"
+                  onClick={() => setTasks([])}
+                >
+                  <Trash2 className="size-3.5" /> Clear
+                </Button>
+              )}
+            </div>
           </header>
-          {tasks.length === 0 ? (
+          {tasks.length === 0 && !loadingTasks ? (
             <Empty>
               <EmptyHeader>
                 <EmptyMedia variant="icon">
@@ -292,6 +421,35 @@ export function KnowledgeConsole() {
                         >
                           {STATUS_LABEL[task.status]}
                         </span>
+                        {task.filename && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-7 text-muted-foreground hover:text-destructive"
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              void deleteUploadedDocument(task)
+                            }}
+                            aria-label={`Delete ${task.filename}`}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        )}
+                        {isFailure(task.status) && task.taskId && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              void retryIndexTask(task)
+                            }}
+                          >
+                            <RefreshCw className="size-3.5" /> Retry
+                          </Button>
+                        )}
                       </div>
                       {task.message && !isSuccess(task.status) && (
                         <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
@@ -301,6 +459,11 @@ export function KnowledgeConsole() {
                       {isSuccess(task.status) && (
                         <p className="mt-1 text-xs text-muted-foreground">
                           Indexed and ready for retrieval.
+                        </p>
+                      )}
+                      {task.storageBackend && (
+                        <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+                          {task.storageBackend}: {task.objectUri || task.filePath}
                         </p>
                       )}
                     </div>

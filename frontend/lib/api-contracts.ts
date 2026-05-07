@@ -35,6 +35,8 @@ export interface ChatResponsePayload {
 export interface BackendIndexingData {
   filename?: string
   file_path?: string
+  object_uri?: string
+  storage_backend?: string
   size?: number
   indexing?: {
     taskId?: string
@@ -84,6 +86,8 @@ export function normalizeUploadResponse(payload: unknown) {
     return {
       filename: data.filename,
       filePath: data.file_path,
+      objectUri: data.object_uri,
+      storageBackend: data.storage_backend,
       size: data.size,
       taskId: data.indexing?.taskId,
       status: data.indexing?.status,

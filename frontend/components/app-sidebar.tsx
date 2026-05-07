@@ -4,10 +4,15 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   BookOpen,
+  FileText,
   History,
   MessageSquare,
+  ServerCog,
+  Route,
+  ShieldCheck,
   Stethoscope,
   Terminal,
+  Wrench,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -15,7 +20,12 @@ const NAV = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/agent", label: "Diagnose", icon: Stethoscope },
   { href: "/agent/history", label: "History", icon: History },
+  { href: "/agent/approvals", label: "Approvals", icon: ShieldCheck },
+  { href: "/agent/tools", label: "Tools", icon: Wrench },
+  { href: "/scenarios", label: "Scenarios", icon: Route },
   { href: "/knowledge", label: "Knowledge", icon: BookOpen },
+  { href: "/operations", label: "Operations", icon: ServerCog },
+  { href: "/contracts", label: "API Contracts", icon: FileText },
 ]
 
 export function AppSidebar() {

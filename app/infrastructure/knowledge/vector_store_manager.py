@@ -1,22 +1,119 @@
-"""向量存储管理器 - 封装 Milvus VectorStore 操作。"""
+"""Vector store manager with Milvus and pgvector backends."""
+
+from __future__ import annotations
+
+import json
+import time
+import uuid
+from typing import Any, Protocol
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_milvus import Milvus
 from loguru import logger
+from sqlalchemy import text
 
 from app.config import config
 from app.core.milvus_client import milvus_manager
+from app.platform.persistence.database import get_engine
 
-# 统一使用 biz collection
 COLLECTION_NAME = "biz"
 
 
+class VectorStoreBackend(Protocol):
+    backend_name: str
+
+    @property
+    def is_initialized(self) -> bool: ...
+
+    def add_documents(self, documents: list[Document]) -> list[str]: ...
+
+    def delete_by_source(self, file_path: str) -> int: ...
+
+    def similarity_search(
+        self, query: str, k: int = 3, *, collection_name: str | None = None
+    ) -> list[Document]: ...
+
+    def health_check(self) -> bool: ...
+
+
+class DegradedVectorStoreAdapter:
+    """No-op vector backend used when the configured store is unavailable."""
+
+    def __init__(self, *, backend_name: str) -> None:
+        self.backend_name = backend_name
+
+    @property
+    def is_initialized(self) -> bool:
+        return False
+
+    def add_documents(self, documents: list[Document]) -> list[str]:
+        logger.warning(
+            f"Vector store is degraded; skipped indexing {len(documents)} document chunks"
+        )
+        return []
+
+    def delete_by_source(self, file_path: str) -> int:
+        logger.warning(f"Vector store is degraded; skipped delete for source {file_path}")
+        return 0
+
+    def similarity_search(
+        self, query: str, k: int = 3, *, collection_name: str | None = None
+    ) -> list[Document]:
+        logger.warning(f"Vector store is degraded; returning empty search results for k={k}")
+        return []
+
+    def health_check(self) -> bool:
+        return False
+
+
 class VectorStoreManager:
-    """向量存储管理器"""
+    """Facade over the configured vector-store backend."""
 
     def __init__(self, embedding_service: Embeddings):
-        """初始化向量存储管理器"""
+        self.embedding_service = embedding_service
+        backend = config.vector_store_backend.strip().lower()
+        try:
+            if backend == "pgvector":
+                self._backend: VectorStoreBackend = PgVectorStoreAdapter(
+                    embedding_service=embedding_service,
+                    collection_name=config.pgvector_collection_name,
+                )
+            else:
+                self._backend = MilvusVectorStoreAdapter(embedding_service=embedding_service)
+        except Exception as exc:
+            logger.warning(f"Vector store backend '{backend}' degraded during init: {exc}")
+            self._backend = DegradedVectorStoreAdapter(backend_name=f"{backend}_degraded")
+
+    @property
+    def backend_name(self) -> str:
+        return self._backend.backend_name
+
+    @property
+    def is_initialized(self) -> bool:
+        return self._backend.is_initialized
+
+    def add_documents(self, documents: list[Document]) -> list[str]:
+        return self._backend.add_documents(documents)
+
+    def delete_by_source(self, file_path: str) -> int:
+        return self._backend.delete_by_source(file_path)
+
+    def similarity_search(
+        self, query: str, k: int = 3, *, collection_name: str | None = None
+    ) -> list[Document]:
+        return self._backend.similarity_search(query, k=k, collection_name=collection_name)
+
+    def health_check(self) -> bool:
+        return self._backend.health_check()
+
+
+class MilvusVectorStoreAdapter:
+    """Milvus-backed vector store."""
+
+    backend_name = "milvus"
+
+    def __init__(self, embedding_service: Embeddings):
         self.embedding_service = embedding_service
         self.vector_store: Milvus | None = None
         self.collection_name = COLLECTION_NAME
@@ -24,138 +121,322 @@ class VectorStoreManager:
 
     @property
     def is_initialized(self) -> bool:
-        """当前 VectorStore 是否已初始化。"""
         return self.vector_store is not None
 
     def _initialize_vector_store(self) -> None:
-        """初始化 Milvus VectorStore"""
         if self.vector_store is not None:
             return
 
         try:
-            # 必须在 PyMilvus / langchain_milvus 访问 Collection 之前建立连接，
-            # 否则会出现 ConnectionNotExistException: should create connection first.
             _ = milvus_manager.connect()
-
             connection_args = {
                 "uri": f"http://{config.milvus_host}:{config.milvus_port}",
             }
-
-            # 创建 LangChain Milvus VectorStore
-            # 使用 biz collection，字段映射：text_field -> content, vector_field -> vector
             self.vector_store = Milvus(
                 embedding_function=self.embedding_service,
                 collection_name=self.collection_name,
                 connection_args=connection_args,
-                auto_id=False,  # 使用自定义 id
+                auto_id=False,
                 drop_old=False,
-                text_field="content",  # 文本内容存储到 content 字段
-                vector_field="vector",  # 向量存储到 vector 字段
-                primary_field="id",  # 主键字段
-                metadata_field="metadata",  # 元数据字段
+                text_field="content",
+                vector_field="vector",
+                primary_field="id",
+                metadata_field="metadata",
             )
-
             logger.info(
-                f"VectorStore 初始化成功: {config.milvus_host}:{config.milvus_port}, "
-                f"collection: {self.collection_name}"
+                f"Milvus VectorStore initialized: {config.milvus_host}:{config.milvus_port}, "
+                f"collection={self.collection_name}"
             )
-
-        except Exception as e:
-            logger.error(f"VectorStore 初始化失败: {e}")
+        except Exception as exc:
+            logger.warning(f"Milvus VectorStore initialization degraded: {exc}")
             raise
 
     def add_documents(self, documents: list[Document]) -> list[str]:
-        """
-        批量添加文档到向量存储（自动批量向量化）
-
-        Args:
-            documents: 文档列表
-
-        Returns:
-            List[str]: 文档 ID 列表
-        """
         try:
             self._initialize_vector_store()
-            import time
-            import uuid
-
             start_time = time.time()
-            vector_store = self.get_vector_store()
-
-            # 为每个文档生成唯一 id（因为 auto_id=False）
             ids = [str(uuid.uuid4()) for _ in documents]
-
-            # LangChain Milvus 的 add_documents 会自动调用 embedding_function
-            # 并进行批量处理，性能更好
-            result_ids = vector_store.add_documents(documents, ids=ids)
-
+            result_ids = self.get_vector_store().add_documents(documents, ids=ids)
             elapsed = time.time() - start_time
-            logger.info(
-                f"批量添加 {len(documents)} 个文档到 VectorStore 完成, "
-                f"耗时: {elapsed:.2f}秒, 平均: {elapsed / len(documents):.2f}秒/个"
-            )
+            logger.info(f"Added {len(documents)} documents to Milvus in {elapsed:.2f}s")
             return result_ids
-        except Exception as e:
-            logger.error(f"添加文档失败: {e}")
+        except Exception as exc:
+            logger.error(f"Adding documents to Milvus failed: {exc}")
             raise
 
     def delete_by_source(self, file_path: str) -> int:
-        """
-        删除指定文件的所有文档
-
-        Args:
-            file_path: 文件路径
-
-        Returns:
-            int: 删除的文档数量
-        """
         try:
             self._initialize_vector_store()
-            # 使用 milvus_manager 获取已连接的 collection
             collection = milvus_manager.get_collection()
-
-            # metadata 是 JSON 字段，使用 JSON 路径查询语法
-            # _source 是文档的来源文件路径
             expr = f'metadata["_source"] == "{file_path}"'
-
             result = collection.delete(expr)
             deleted_count = result.delete_count if hasattr(result, "delete_count") else 0
-
-            logger.info(f"删除文件旧数据: {file_path}, 删除数量: {deleted_count}")
-            return deleted_count
-
-        except Exception as e:
-            logger.warning(f"删除旧数据失败 (可能是首次索引): {e}")
+            logger.info(f"Deleted {deleted_count} Milvus chunks for source {file_path}")
+            return int(deleted_count)
+        except Exception as exc:
+            logger.warning(f"Deleting Milvus chunks for source failed: {exc}")
             return 0
 
     def get_vector_store(self) -> Milvus:
-        """
-        获取 VectorStore 实例
-
-        Returns:
-            Milvus: VectorStore 实例
-        """
         self._initialize_vector_store()
         if self.vector_store is None:
             raise RuntimeError("VectorStore is not initialized")
         return self.vector_store
 
-    def similarity_search(self, query: str, k: int = 3) -> list[Document]:
-        """
-        相似度搜索
+    def similarity_search(
+        self, query: str, k: int = 3, *, collection_name: str | None = None
+    ) -> list[Document]:
+        try:
+            store = self.get_vector_store()
+            if collection_name:
+                filter_expr = f'metadata["collection_name"] == "{collection_name}"'
+                return store.similarity_search(query, k=k, expr=filter_expr)
+            return store.similarity_search(query, k=k)
+        except Exception as exc:
+            logger.error(f"Milvus similarity search failed: {exc}")
+            return []
 
-        Args:
-            query: 查询文本
-            k: 返回结果数量
-
-        Returns:
-            List[Document]: 相关文档列表
-        """
+    def health_check(self) -> bool:
         try:
             self._initialize_vector_store()
-            docs = self.get_vector_store().similarity_search(query, k=k)
-            logger.debug(f"相似度搜索完成: query='{query}', 结果数={len(docs)}")
-            return docs
-        except Exception as e:
-            logger.error(f"相似度搜索失败: {e}")
+            return self.vector_store is not None and milvus_manager.health_check()
+        except Exception:
+            return False
+
+
+class PgVectorStoreAdapter:
+    """PostgreSQL pgvector-backed vector store."""
+
+    backend_name = "pgvector"
+
+    def __init__(self, *, embedding_service: Embeddings, collection_name: str) -> None:
+        self.embedding_service = embedding_service
+        self.collection_name = collection_name
+        self._initialized = False
+        self._initialize_vector_store()
+
+    @property
+    def is_initialized(self) -> bool:
+        return self._initialized
+
+    def _initialize_vector_store(self) -> None:
+        if self._initialized:
+            return
+        engine = get_engine()
+        with engine.begin() as connection:
+            connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS knowledge_documents (
+                        document_id TEXT PRIMARY KEY,
+                        collection_name TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS knowledge_chunks (
+                        chunk_id TEXT PRIMARY KEY,
+                        document_id TEXT NOT NULL REFERENCES knowledge_documents(document_id) ON DELETE CASCADE,
+                        collection_name TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        metadata JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+                        embedding vector({config.pgvector_embedding_dimensions}) NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_knowledge_documents_collection_source
+                    ON knowledge_documents(collection_name, source)
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_collection_source
+                    ON knowledge_chunks(collection_name, source)
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_embedding_hnsw
+                    ON knowledge_chunks USING hnsw (embedding vector_cosine_ops)
+                    """
+                )
+            )
+        self._initialized = True
+        logger.info(f"pgvector VectorStore initialized: collection={self.collection_name}")
+
+    def add_documents(self, documents: list[Document]) -> list[str]:
+        try:
+            self._initialize_vector_store()
+        except Exception as exc:
+            logger.warning(f"pgvector add degraded before write: {exc}")
             return []
+        if not documents:
+            return []
+
+        contents = [document.page_content for document in documents]
+        embeddings = self.embedding_service.embed_documents(contents)
+        ids: list[str] = []
+        engine = get_engine()
+        try:
+            with engine.begin() as connection:
+                for document, embedding in zip(documents, embeddings, strict=True):
+                    chunk_id = str(uuid.uuid4())
+                    source = str(
+                        document.metadata.get("_source")
+                        or document.metadata.get("source")
+                        or document.metadata.get("file_path")
+                        or "unknown"
+                    )
+                    metadata = _json_metadata(document.metadata)
+                    document_id = _document_id(source)
+                    connection.execute(
+                        text(
+                            """
+                            INSERT INTO knowledge_documents (
+                                document_id, collection_name, source, content, metadata
+                            )
+                            VALUES (
+                                :document_id, :collection_name, :source, :content, CAST(:metadata AS jsonb)
+                            )
+                            ON CONFLICT (document_id) DO UPDATE SET
+                                content = EXCLUDED.content,
+                                metadata = EXCLUDED.metadata
+                            """
+                        ),
+                        {
+                            "document_id": document_id,
+                            "collection_name": self.collection_name,
+                            "source": source,
+                            "content": document.page_content,
+                            "metadata": metadata,
+                        },
+                    )
+                    connection.execute(
+                        text(
+                            """
+                            INSERT INTO knowledge_chunks (
+                                chunk_id, document_id, collection_name, source, content, metadata, embedding
+                            )
+                            VALUES (
+                                :chunk_id,
+                                :document_id,
+                                :collection_name,
+                                :source,
+                                :content,
+                                CAST(:metadata AS jsonb),
+                                CAST(:embedding AS vector)
+                            )
+                            """
+                        ),
+                        {
+                            "chunk_id": chunk_id,
+                            "document_id": document_id,
+                            "collection_name": self.collection_name,
+                            "source": source,
+                            "content": document.page_content,
+                            "metadata": metadata,
+                            "embedding": _vector_literal(embedding),
+                        },
+                    )
+                    ids.append(chunk_id)
+        except Exception as exc:
+            logger.warning(f"pgvector add degraded during write: {exc}")
+            return []
+        logger.info(f"Added {len(ids)} documents to pgvector collection={self.collection_name}")
+        return ids
+
+    def delete_by_source(self, file_path: str) -> int:
+        try:
+            self._initialize_vector_store()
+        except Exception as exc:
+            logger.warning(f"pgvector delete degraded before write: {exc}")
+            return 0
+        engine = get_engine()
+        with engine.begin() as connection:
+            result = connection.execute(
+                text(
+                    """
+                    DELETE FROM knowledge_documents
+                    WHERE collection_name = :collection_name AND source = :source
+                    """
+                ),
+                {"collection_name": self.collection_name, "source": file_path},
+            )
+        deleted = int(result.rowcount or 0)
+        logger.info(f"Deleted {deleted} pgvector documents for source {file_path}")
+        return deleted
+
+    def similarity_search(
+        self, query: str, k: int = 3, *, collection_name: str | None = None
+    ) -> list[Document]:
+        try:
+            self._initialize_vector_store()
+            query_embedding = self.embedding_service.embed_query(query)
+            effective_collection = collection_name or self.collection_name
+            engine = get_engine()
+            with engine.connect() as connection:
+                rows = connection.execute(
+                    text(
+                        """
+                        SELECT content, metadata, 1 - (embedding <=> CAST(:embedding AS vector)) AS score
+                        FROM knowledge_chunks
+                        WHERE collection_name = :collection_name
+                        ORDER BY embedding <=> CAST(:embedding AS vector)
+                        LIMIT :limit
+                        """
+                    ),
+                    {
+                        "collection_name": effective_collection,
+                        "embedding": _vector_literal(query_embedding),
+                        "limit": k,
+                    },
+                ).mappings()
+                documents = []
+                for row in rows:
+                    metadata = dict(row["metadata"] or {})
+                    metadata["score"] = row["score"]
+                    documents.append(Document(page_content=str(row["content"]), metadata=metadata))
+                return documents
+        except Exception as exc:
+            logger.warning(f"pgvector search degraded: {exc}")
+            return []
+
+    def health_check(self) -> bool:
+        try:
+            self._initialize_vector_store()
+            with get_engine().connect() as connection:
+                row = connection.execute(text("SELECT 1")).fetchone()
+            return row is not None
+        except Exception as exc:
+            logger.warning(f"pgvector health check failed: {exc}")
+            return False
+
+
+def _vector_literal(values: list[float]) -> str:
+    return "[" + ",".join(str(float(value)) for value in values) + "]"
+
+
+def _json_metadata(metadata: dict[str, Any]) -> str:
+    return json.dumps(metadata, ensure_ascii=False, default=str)
+
+
+def _document_id(source: str) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, source))

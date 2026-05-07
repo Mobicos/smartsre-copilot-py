@@ -5,13 +5,21 @@ import { StatusDot } from "@/components/status-dot"
 import { useHealth } from "@/lib/use-health"
 import { cn } from "@/lib/utils"
 
-function pickTone(status: unknown): "ok" | "warn" | "error" | "muted" {
+type Tone = "ok" | "warn" | "error" | "muted"
+
+function pickTone(status: unknown): Tone {
   if (status == null) return "muted"
   if (typeof status === "string") {
-    const s = status.toLowerCase()
-    if (s.includes("ok") || s.includes("up") || s.includes("healthy") || s === "connected") return "ok"
-    if (s.includes("degrad") || s.includes("warn")) return "warn"
-    if (s.includes("down") || s.includes("error") || s.includes("fail")) return "error"
+    const value = status.toLowerCase()
+    if (value.includes("ok") || value.includes("up") || value.includes("healthy") || value === "connected") {
+      return "ok"
+    }
+    if (value.includes("degrad") || value.includes("warn") || value === "configured") {
+      return "warn"
+    }
+    if (value.includes("down") || value.includes("error") || value.includes("fail")) {
+      return "error"
+    }
     return "muted"
   }
   if (typeof status === "object" && status && "status" in status) {
@@ -22,38 +30,49 @@ function pickTone(status: unknown): "ok" | "warn" | "error" | "muted" {
 
 export function HealthIndicator() {
   const { data, loading } = useHealth()
-  const top: "ok" | "warn" | "error" | "muted" = !data
-    ? "muted"
-    : !data.ok
-      ? "error"
-      : pickTone(data.payload?.status ?? "ok")
+  const status = data?.payload?.status ?? (data?.ok ? "healthy" : "unhealthy")
+  const tone: Tone = !data ? "muted" : !data.ok ? "error" : pickTone(status)
+  const label = tone === "ok" ? "Healthy" : tone === "warn" ? "Degraded" : tone === "error" ? "Down" : "Unknown"
 
-  const label =
-    top === "ok" ? "运行正常" : top === "warn" ? "状态不太好" : top === "error" ? "连不上" : "—"
-
-  const subs: Array<{ key: string; tone: ReturnType<typeof pickTone>; label: string; detail: string }> = []
-  if (data?.payload) {
-    const p = data.payload
-    if ("milvus" in p) {
-      const v = p.milvus
-      subs.push({
+  const services: Array<{ key: string; tone: Tone; label: string; detail: string }> = []
+  const payload = data?.payload
+  if (payload) {
+    if ("milvus" in payload) {
+      const value = payload.milvus
+      services.push({
         key: "milvus",
-        tone: pickTone(v),
+        tone: pickTone(value),
         label: "Milvus",
-        detail: typeof v === "string" ? v : JSON.stringify(v),
+        detail: typeof value === "string" ? value : JSON.stringify(value),
       })
     }
-    if ("redis" in p) {
-      subs.push({
+    if ("redis" in payload) {
+      services.push({
         key: "redis",
-        tone: pickTone(p.redis),
+        tone: pickTone(payload.redis),
         label: "Redis",
-        detail: String(p.redis),
+        detail: String(payload.redis),
       })
     }
-    if (p.mcp && typeof p.mcp === "object") {
-      for (const [k, v] of Object.entries(p.mcp)) {
-        subs.push({ key: `mcp-${k}`, tone: pickTone(v), label: `MCP · ${k}`, detail: String(v) })
+    if ("decision_runtime" in payload && payload.decision_runtime) {
+      const runtime = payload.decision_runtime
+      services.push({
+        key: "decision-runtime",
+        tone: pickTone(runtime.status),
+        label: "Decision Runtime",
+        detail:
+          runtime.message ||
+          (runtime.detail ? JSON.stringify(runtime.detail) : String(runtime.status ?? "unknown")),
+      })
+    }
+    if (payload.mcp && typeof payload.mcp === "object") {
+      for (const [name, value] of Object.entries(payload.mcp)) {
+        services.push({
+          key: `mcp-${name}`,
+          tone: pickTone(value),
+          label: `MCP ${name}`,
+          detail: String(value),
+        })
       }
     }
   }
@@ -67,42 +86,36 @@ export function HealthIndicator() {
             "flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium transition-colors",
             "hover:bg-accent hover:text-accent-foreground",
           )}
-          aria-label={`系统状态：${label}`}
+          aria-label={`System health: ${label}`}
         >
-          <StatusDot tone={top} pulse={top === "ok" || loading} />
-          <span className="hidden sm:inline">{loading ? "检测中" : label}</span>
+          <StatusDot tone={tone} pulse={tone === "ok" || loading} />
+          <span className="hidden sm:inline">{loading ? "Checking" : label}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-0">
         <div className="border-b border-border px-3 py-2.5">
-          <p className="text-sm font-medium">它现在好不好？</p>
+          <p className="text-sm font-medium">System health</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {loading
-              ? "刚问过它…"
-              : data?.ok
-                ? "刚才检查过，一切正常"
-                : data?.error
-                  ? `连不上：${data.error}`
-                  : "状态有点不对劲"}
+            {loading ? "Checking current service status" : data?.error ? `Unreachable: ${data.error}` : "Live service snapshot"}
           </p>
         </div>
         <ul className="p-2">
-          {subs.length === 0 ? (
+          {services.length === 0 ? (
             <li className="px-2 py-1.5 text-xs text-muted-foreground">
-              {loading ? "正在打听…" : "没拿到更详细的信息"}
+              {loading ? "Loading details..." : "No component details available"}
             </li>
           ) : (
-            subs.map((s) => (
+            services.map((service) => (
               <li
-                key={s.key}
+                key={service.key}
                 className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-xs hover:bg-muted"
               >
                 <span className="flex items-center gap-2">
-                  <StatusDot tone={s.tone} />
-                  <span className="font-medium">{s.label}</span>
+                  <StatusDot tone={service.tone} />
+                  <span className="font-medium">{service.label}</span>
                 </span>
-                <span className="text-muted-foreground truncate max-w-[140px]" title={s.detail}>
-                  {s.detail}
+                <span className="max-w-[140px] truncate text-muted-foreground" title={service.detail}>
+                  {service.detail}
                 </span>
               </li>
             ))

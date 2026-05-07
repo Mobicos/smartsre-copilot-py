@@ -2,6 +2,8 @@ services:
   etcd:
     container_name: milvus-etcd
     image: quay.io/coreos/etcd:v3.6.11
+    profiles:
+      - vector-milvus
     environment:
       - ETCD_AUTO_COMPACTION_MODE=revision
       - ETCD_AUTO_COMPACTION_RETENTION=1000
@@ -19,6 +21,8 @@ services:
   minio:
     container_name: milvus-minio
     image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    profiles:
+      - vector-milvus
     environment:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
@@ -37,6 +41,8 @@ services:
   standalone:
     container_name: milvus-standalone
     image: milvusdb/milvus:v2.6.15
+    profiles:
+      - vector-milvus
     command: ["milvus", "run", "standalone"]
     security_opt:
       - seccomp:unconfined
@@ -61,6 +67,8 @@ services:
   attu:
     container_name: milvus-attu
     image: zilliz/attu:v2.6
+    profiles:
+      - vector-milvus
     ports:
       - "8000:3000"
     environment:
@@ -69,7 +77,7 @@ services:
       - standalone
 
   postgres:
-    image: postgres:18
+    image: pgvector/pgvector:pg18
     container_name: smartsre-postgres
     environment:
       POSTGRES_DB: smartsre
@@ -112,11 +120,11 @@ services:
       postgres:
         condition: service_healthy
 
-  app:
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: smartsre-app
+    container_name: smartsre-backend
     env_file:
       - .env
     environment:
@@ -124,13 +132,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       TASK_QUEUE_BACKEND: redis
       TASK_DISPATCHER_MODE: detached
-      MILVUS_HOST: standalone
-      MILVUS_PORT: 19530
     ports:
       - "9900:9900"
     depends_on:
-      standalone:
-        condition: service_healthy
       migrate:
         condition: service_completed_successfully
       postgres:
@@ -151,17 +155,90 @@ services:
       REDIS_URL: redis://redis:6379/0
       TASK_QUEUE_BACKEND: redis
       TASK_DISPATCHER_MODE: detached
-      MILVUS_HOST: standalone
-      MILVUS_PORT: 19530
     depends_on:
-      standalone:
-        condition: service_healthy
       migrate:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Gateway profile: Caddy reverse proxy + frontend
+  # ---------------------------------------------------------------------------
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: smartsre-frontend
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      SMARTSRE_BACKEND_URL: http://backend:9900
+    profiles:
+      - gateway
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: smartsre-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./volumes/caddy:/data
+    depends_on:
+      - backend
+      - frontend
+    profiles:
+      - gateway
+
+  # ---------------------------------------------------------------------------
+  # Observability profile: OTel Collector + Prometheus + Grafana + Loki
+  # ---------------------------------------------------------------------------
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.121.0
+    container_name: smartsre-otel
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./config/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    profiles:
+      - observability
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    container_name: smartsre-prometheus
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./volumes/prometheus:/prometheus
+    ports:
+      - "9090:9090"
+    profiles:
+      - observability
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    container_name: smartsre-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./volumes/grafana:/var/lib/grafana
+    profiles:
+      - observability
+
+  loki:
+    image: grafana/loki:3.4.2
+    container_name: smartsre-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./volumes/loki:/loki
+    profiles:
+      - observability
 
 networks:
   default:

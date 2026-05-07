@@ -26,11 +26,18 @@ class SearchResult:
 
     def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
+        citation = {
+            "source": self.metadata.get("source") or self.metadata.get("_file_name"),
+            "file_path": self.metadata.get("file_path") or self.metadata.get("source"),
+            "chunk_id": self.metadata.get("chunk_id") or self.id,
+            "score": self.score,
+        }
         return {
             "id": self.id,
             "content": self.content,
             "score": self.score,
             "metadata": self.metadata,
+            "citation": citation,
         }
 
 

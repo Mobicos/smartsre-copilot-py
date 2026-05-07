@@ -131,4 +131,4 @@ from tencentcloud.cls.v20201016 import cls_client
 
 ---
 
-**注意**: 当前版本返回模拟数据，生产环境需配置真实 API。
+**注意**: 当前开发实现返回模拟数据，生产环境需配置真实 API。

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field, replace
 from typing import Any
+
+_MAX_TOOL_OUTPUT_CHARS = 4000
 
 
 @dataclass(frozen=True)
@@ -142,15 +145,18 @@ class ToolAction:
 
     def result_event_payload(self, result: Any) -> dict[str, Any]:
         executed = self.mark_executed(str(getattr(result, "status", "unknown")))
+        policy = getattr(result, "policy", None) or executed.policy_snapshot.to_dict()
+        governance = _result_governance_payload(result, policy=policy)
         return {
             "tool_name": str(getattr(result, "tool_name", self.tool_name)),
             "status": executed.execution_status,
             "arguments": getattr(result, "arguments", self.arguments),
             "output": getattr(result, "output", None),
             "error": getattr(result, "error", None),
-            "policy": executed.policy_snapshot.to_dict(),
+            "policy": policy,
             "approval_state": executed.approval_state,
             "execution_status": executed.execution_status,
+            "governance": governance,
         }
 
 
@@ -165,10 +171,12 @@ class EvidenceItem:
 
     @classmethod
     def from_tool_result(cls, result: Any) -> EvidenceItem:
+        output = getattr(result, "output", None)
+        output = _truncate_output(output)
         return cls(
             tool_name=str(getattr(result, "tool_name", "unknown")),
             status=str(getattr(result, "status", "unknown")),
-            output=getattr(result, "output", None),
+            output=output,
             error=getattr(result, "error", None),
         )
 
@@ -176,7 +184,7 @@ class EvidenceItem:
         if self.status == "success":
             return f"{self.tool_name}: {self.output}"
         if self.status == "approval_required":
-            return f"{self.tool_name}: 需要人工审批，V1 未执行该工具"
+            return f"{self.tool_name}: 需要人工审批，当前开发运行时未执行该工具"
         if self.status == "disabled":
             return f"{self.tool_name}: 工具已禁用，未执行"
         return f"{self.tool_name}: 执行失败: {self.error}"
@@ -207,3 +215,49 @@ class AgentRunState:
 
     def evidence_report_lines(self) -> list[str]:
         return [item.to_report_line() for item in self.evidence]
+
+
+def _result_governance_payload(result: Any, *, policy: dict[str, Any]) -> dict[str, Any]:
+    if hasattr(result, "governance_payload"):
+        payload = result.governance_payload()
+        if isinstance(payload, dict):
+            return {
+                "decision": payload.get("decision") or _governance_decision_from_status(result),
+                "reason": payload.get("reason"),
+                "policy": payload.get("policy") or policy,
+            }
+    return {
+        "decision": _governance_decision_from_status(result),
+        "reason": getattr(result, "error", None),
+        "policy": policy,
+    }
+
+
+def _governance_decision_from_status(result: Any) -> str:
+    status = str(getattr(result, "status", "unknown"))
+    if status in {"disabled", "forbidden"}:
+        return "denied"
+    if status == "approval_required":
+        return "approval_required"
+    if status == "timeout":
+        return "timeout"
+    return "executed"
+
+
+def _truncate_output(output: Any, max_chars: int = _MAX_TOOL_OUTPUT_CHARS) -> Any:
+    if output is None:
+        return None
+    if isinstance(output, str):
+        if len(output) <= max_chars:
+            return output
+        return output[:max_chars] + f"\n... [truncated, total {len(output)} chars]"
+    try:
+        serialized = json.dumps(output, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        text = str(output)
+        if len(text) <= max_chars:
+            return output
+        return text[:max_chars] + f"\n... [truncated, total {len(text)} chars]"
+    if len(serialized) <= max_chars:
+        return output
+    return serialized[:max_chars] + f"\n... [truncated, total {len(serialized)} chars]"

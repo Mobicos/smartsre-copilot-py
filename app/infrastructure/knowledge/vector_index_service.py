@@ -2,13 +2,19 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from loguru import logger
 
 from app.config import UPLOADS_DIR
 from app.infrastructure.knowledge.document_splitter_service import DocumentSplitterService
 from app.infrastructure.knowledge.vector_store_manager import VectorStoreManager
+
+
+class _ObjectStoragePort(Protocol):
+    """Structural typing stub for ObjectStoragePort."""
+
+    def local_path_for(self, key: str) -> Path: ...
 
 
 class IndexingResult:
@@ -65,11 +71,13 @@ class VectorIndexService:
         *,
         document_splitter_service: DocumentSplitterService,
         vector_store_manager: VectorStoreManager,
+        object_storage: _ObjectStoragePort | None = None,
     ):
         """初始化向量索引服务"""
         self.upload_path = str(UPLOADS_DIR)
         self.document_splitter_service = document_splitter_service
         self.vector_store_manager = vector_store_manager
+        self._object_storage = object_storage
         logger.info("向量索引服务初始化完成")
 
     def index_directory(self, directory_path: str | None = None) -> IndexingResult:
@@ -136,21 +144,24 @@ class VectorIndexService:
             result.end_time = datetime.now()
             return result
 
-    def index_single_file(self, file_path: str):
+    def index_single_file(self, file_key: str):
         """
         索引单个文件 (使用新的 LangChain 分割器)
 
         Args:
-            file_path: 文件路径
+            file_key: 存储 key（通过 ObjectStoragePort 解析）或本地文件路径
 
         Raises:
             ValueError: 文件不存在时抛出
             RuntimeError: 索引失败时抛出
         """
-        path = Path(file_path).resolve()
+        if self._object_storage is not None:
+            path = self._object_storage.local_path_for(file_key).resolve()
+        else:
+            path = Path(file_key).resolve()
 
         if not path.exists() or not path.is_file():
-            raise ValueError(f"文件不存在: {file_path}")
+            raise ValueError(f"文件不存在: {file_key}")
 
         logger.info(f"开始索引文件: {path}")
 
@@ -165,15 +176,15 @@ class VectorIndexService:
 
             # 3. 使用新的文档分割器
             documents = self.document_splitter_service.split_document(content, normalized_path)
-            logger.info(f"文档分割完成: {file_path} -> {len(documents)} 个分片")
+            logger.info(f"文档分割完成: {file_key} -> {len(documents)} 个分片")
 
             # 4. 添加文档到向量存储
             if documents:
                 self.vector_store_manager.add_documents(documents)
-                logger.info(f"文件索引完成: {file_path}, 共 {len(documents)} 个分片")
+                logger.info(f"文件索引完成: {file_key}, 共 {len(documents)} 个分片")
             else:
-                logger.warning(f"文件内容为空或无法分割: {file_path}")
+                logger.warning(f"文件内容为空或无法分割: {file_key}")
 
         except Exception as e:
-            logger.error(f"索引文件失败: {file_path}, 错误: {e}")
+            logger.error(f"索引文件失败: {file_key}, 错误: {e}")
             raise RuntimeError(f"索引文件失败: {e}") from e

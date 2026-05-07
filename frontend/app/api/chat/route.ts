@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { backendFetch } from "@/lib/backend"
+import { backendErrorStatus, backendFetch } from "@/lib/backend"
 import {
   normalizeChatResponse,
   toBackendChatRequest,
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   } catch (err) {
     return NextResponse.json(
       { error: (err as Error).message ?? "backend unreachable" },
-      { status: 502 },
+      { status: backendErrorStatus(err) },
     )
   }
 }

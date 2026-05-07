@@ -71,9 +71,10 @@ class IndexingTaskService:
             logger.info(f"索引任务执行完成: {task_id}")
             return "completed"
         except Exception as exc:
+            error_message = _format_indexing_error(exc, file_path=file_path)
             task = self._repository.mark_retry_or_failed(
                 task_id,
-                error_message=str(exc),
+                error_message=error_message,
             )
             if task is None:
                 logger.error(f"索引任务执行失败且任务不存在: {task_id}, 错误: {exc}")
@@ -84,3 +85,9 @@ class IndexingTaskService:
                 f"attempt={task['attempt_count']}/{task['max_retries']}, 错误: {exc}"
             )
             return str(task["status"])
+
+
+def _format_indexing_error(exc: Exception, *, file_path: str) -> str:
+    error_type = type(exc).__name__
+    error_message = str(exc) or error_type
+    return f"{error_type}: {error_message}; file_path={file_path}"

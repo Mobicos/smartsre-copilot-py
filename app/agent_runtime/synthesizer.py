@@ -6,23 +6,77 @@ from app.agent_runtime.state import AgentRunState, KnowledgeContext
 
 
 class ReportSynthesizer:
-    """Build user-facing reports from accumulated Agent state."""
+    """Build user-facing, evidence-driven reports from accumulated Agent state."""
 
     @staticmethod
     def build_report(state: AgentRunState) -> str:
         evidence = state.evidence_report_lines()
         evidence_text = (
-            "\n".join(f"- {item}" for item in evidence) if evidence else "- 暂无工具证据"
+            "\n".join(f"- {item}" for item in evidence)
+            if evidence
+            else "- No tool evidence was collected."
         )
         knowledge_lines = state.knowledge_context.to_report_lines()
-        knowledge_text = "\n".join(knowledge_lines) if knowledge_lines else "- 当前场景未配置知识库"
+        knowledge_text = (
+            "\n".join(knowledge_lines)
+            if knowledge_lines
+            else "- No scene knowledge base is configured."
+        )
+        tool_failures = [
+            item.to_report_line() for item in state.evidence if item.status not in {"success"}
+        ]
+        tool_failure_text = (
+            "\n".join(f"- {item}" for item in tool_failures)
+            if tool_failures
+            else "- No tool failure, denial, timeout, or approval block was observed."
+        )
+        confirmed_facts = evidence_text if evidence else "- No facts are confirmed yet."
+        conclusion = (
+            "The collected evidence supports the observations above, but the final root "
+            "cause still requires operator confirmation."
+            if evidence
+            else "No deterministic root cause is claimed because no evidence was collected."
+        )
         return (
-            "# SmartSRE Agent 诊断报告\n\n"
-            f"## 目标\n{state.goal}\n\n"
-            f"## 初始假设\n{state.hypothesis.summary}\n\n"
-            f"## 知识上下文\n{knowledge_text}\n\n"
-            f"## 证据\n{evidence_text}\n\n"
-            "## 结论\n以上结论基于当前场景已授权工具的返回结果生成。"
+            "# SmartSRE Agent Evidence Report\n\n"
+            f"## Goal\n{state.goal}\n\n"
+            "## Success Criteria\n"
+            "- Use only scene-approved tools and knowledge context.\n"
+            "- Preserve auditable evidence, tool status, and uncertainty.\n\n"
+            f"## Confirmed Facts\n{confirmed_facts}\n\n"
+            f"## Key Evidence\n{evidence_text}\n\n"
+            f"## Knowledge Context\n{knowledge_text}\n\n"
+            f"## Inference Conclusion\n{conclusion}\n\n"
+            "## Uncertainty\n"
+            "- Evidence can be incomplete, stale, or scoped to the configured scene.\n\n"
+            f"## Executed Actions\n{evidence_text}\n\n"
+            f"## Unexecuted Or Blocked Actions\n{tool_failure_text}\n\n"
+            "## Recovery And Degradation\n"
+            "- Approval-required, denied, timed-out, or failed tools are non-authoritative.\n\n"
+            "## Recommended Next Step\n"
+            "- Review cited evidence and run targeted follow-up checks for unresolved uncertainty."
+        )
+
+    @staticmethod
+    def build_bounded_report(
+        state: AgentRunState,
+        *,
+        max_steps: int,
+        executed_tools: list[str],
+        skipped_tools: list[str],
+    ) -> str:
+        base_report = ReportSynthesizer.build_report(state)
+        prefix = "# SmartSRE Agent Evidence Report\n\n"
+        body = base_report[len(prefix) :] if base_report.startswith(prefix) else base_report
+        executed_text = ", ".join(executed_tools) if executed_tools else "none"
+        skipped_text = ", ".join(skipped_tools) if skipped_tools else "none"
+        return (
+            f"{prefix}"
+            "## Execution Boundaries\n"
+            f"- Maximum tool steps: {max_steps}\n"
+            f"- Executed tools: {executed_text}\n"
+            f"- Skipped tools: {skipped_text}\n\n"
+            f"{body}"
         )
 
     @staticmethod
@@ -32,11 +86,20 @@ class ReportSynthesizer:
     ) -> str:
         context = knowledge_context or KnowledgeContext.empty()
         knowledge_lines = context.to_report_lines()
-        knowledge_text = "\n".join(knowledge_lines) if knowledge_lines else "- 当前场景未配置知识库"
+        knowledge_text = (
+            "\n".join(knowledge_lines)
+            if knowledge_lines
+            else "- No scene knowledge base is configured."
+        )
         return (
-            "# SmartSRE Agent 诊断报告\n\n"
-            f"## 目标\n{goal}\n\n"
-            f"## 知识上下文\n{knowledge_text}\n\n"
-            "## 结论\n外部 MCP 工具不可用或当前场景未配置可执行工具，"
-            "Agent 未编造工具名称或诊断证据。请先在场景中关联日志、监控或告警工具后重试。"
+            "# SmartSRE Agent Evidence Report\n\n"
+            f"## Goal\n{goal}\n\n"
+            f"## Knowledge Context\n{knowledge_text}\n\n"
+            "## Inference Conclusion\n"
+            "No deterministic root cause is claimed because no executable tool evidence "
+            "was collected.\n\n"
+            "## Recovery And Degradation\n"
+            "- External MCP tools are unavailable or the scene has no executable tools.\n"
+            "- å¤–éƒ¨ MCP å·¥å…·ä¸å¯ç”¨ or the scene has no executable tools.\n"
+            "- Configure log, metric, alert, or knowledge tools before retrying."
         )

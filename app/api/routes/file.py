@@ -1,24 +1,29 @@
-"""文件上传接口模块"""
+"""Knowledge document upload and indexing APIs."""
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 from loguru import logger
 
-from app.api.providers import get_indexing_task_service, get_vector_index_service
+from app.api.providers import (
+    get_indexing_task_service,
+    get_object_storage,
+    get_vector_index_service,
+    get_vector_store_manager,
+)
 from app.api.responses import json_response
 from app.config import UPLOADS_DIR
+from app.core.exceptions import InfrastructureException
 from app.infrastructure.tasks import task_dispatcher
 from app.platform.persistence.repositories.indexing import indexing_task_repository
 from app.security import Principal, require_capability
 
 router = APIRouter()
 
-# 文件上传后存储的路径
 UPLOAD_DIR = UPLOADS_DIR
-# 支持的文件类型
 ALLOWED_EXTENSIONS = ["txt", "md"]
-# 单个文件支持最大大小
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
 @router.post("/upload")
@@ -26,65 +31,36 @@ async def upload_file(
     file: UploadFile = File(...),
     _principal: Principal = Depends(require_capability("knowledge:write")),
 ):
-    """
-    上传文件并自动创建向量索引
-
-    Args:
-        file: 上传的文件
-
-    Returns:
-        JSONResponse: 上传结果
-    """
+    """Upload a knowledge document and enqueue indexing."""
     try:
-        # 1. 验证文件
         if not file.filename:
-            raise HTTPException(status_code=400, detail="文件名不能为空")
+            raise HTTPException(status_code=400, detail="filename_required")
 
-        # 2. 规范化文件名（去除空格，处理 Windows 上传的文件）
         safe_filename = _sanitize_filename(file.filename)
-
-        # 3. 验证文件扩展名
         file_extension = _get_file_extension(safe_filename)
         if file_extension not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
-                detail=f"不支持的文件格式，仅支持: {', '.join(ALLOWED_EXTENSIONS)}",
+                detail=f"unsupported_file_type:{','.join(ALLOWED_EXTENSIONS)}",
             )
 
-        # 4. 创建上传目录
-        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-        # 5. 保存文件
-        file_path = UPLOAD_DIR / safe_filename
-
-        # 如果文件已存在，先删除旧文件（实现覆盖更新）
-        if file_path.exists():
-            logger.info(f"文件已存在，将覆盖: {file_path}")
-            file_path.unlink()
-
-        # 读取并保存文件内容
         content = await file.read()
+        _validate_upload_content(content)
 
-        # 验证文件大小
-        if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=400, detail=f"文件大小超过限制（最大 {MAX_FILE_SIZE} 字节）"
-            )
+        stored_object = get_object_storage().put_bytes(safe_filename, content)
+        file_path = stored_object.local_path
+        logger.info(f"Uploaded knowledge object {stored_object.uri} to {file_path}")
 
-        file_path.write_bytes(content)
-
-        logger.info(f"文件上传成功: {file_path}")
         task_id = get_indexing_task_service().submit_task(
             safe_filename,
-            str(file_path),
+            safe_filename,
         )
         await task_dispatcher.enqueue_indexing_task(
             task_id,
-            str(file_path),
+            safe_filename,
         )
 
-        # 6. 返回响应
-        return JSONResponse(
+        return json_response(
             status_code=202,
             content={
                 "code": 202,
@@ -92,7 +68,9 @@ async def upload_file(
                 "data": {
                     "filename": safe_filename,
                     "file_path": str(file_path),
-                    "size": len(content),
+                    "object_uri": stored_object.uri,
+                    "storage_backend": stored_object.backend,
+                    "size": stored_object.size,
                     "indexing": {
                         "taskId": task_id,
                         "status": "queued",
@@ -100,12 +78,11 @@ async def upload_file(
                 },
             },
         )
-
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"文件上传失败: {e}")
-        raise HTTPException(status_code=500, detail=f"文件上传失败: {e}") from e
+    except Exception as exc:
+        logger.error(f"File upload failed: {exc}")
+        raise InfrastructureException("file_upload_failed", code="file_upload_failed") from exc
 
 
 @router.post("/index_directory")
@@ -113,21 +90,10 @@ async def index_directory(
     directory_path: str | None = None,
     _principal: Principal = Depends(require_capability("knowledge:write")),
 ):
-    """
-    索引指定目录下的所有文件
-
-    Args:
-        directory_path: 目录路径（可选，默认使用 uploads 目录）
-
-    Returns:
-        JSONResponse: 索引结果
-    """
+    """Index a local directory of supported knowledge documents."""
     try:
-        logger.info(f"开始索引目录: {directory_path or 'uploads'}")
-
-        # 执行索引
+        logger.info(f"Indexing directory: {directory_path or 'uploads'}")
         result = get_vector_index_service().index_directory(directory_path)
-
         return JSONResponse(
             status_code=200,
             content={
@@ -136,10 +102,36 @@ async def index_directory(
                 "data": result.to_dict(),
             },
         )
+    except Exception as exc:
+        logger.error(f"Index directory failed: {exc}")
+        raise InfrastructureException(
+            "index_directory_failed", code="index_directory_failed"
+        ) from exc
 
-    except Exception as e:
-        logger.error(f"索引目录失败: {e}")
-        raise HTTPException(status_code=500, detail=f"索引目录失败: {e}") from e
+
+@router.get("/index_tasks")
+async def list_index_tasks(
+    status: list[str] | None = Query(default=None),
+    _principal: Principal = Depends(require_capability("knowledge:read")),
+):
+    """List indexing tasks by status."""
+    statuses = status or sorted(indexing_task_repository.ALLOWED_TASK_STATUSES)
+    try:
+        tasks = indexing_task_repository.list_tasks_by_status(statuses)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return json_response(
+        status_code=200,
+        content={
+            "code": 200,
+            "message": "success",
+            "data": {
+                "statuses": statuses,
+                "tasks": tasks,
+            },
+        },
+    )
 
 
 @router.get("/index_tasks/{task_id}")
@@ -147,10 +139,10 @@ async def get_index_task(
     task_id: str,
     _principal: Principal = Depends(require_capability("knowledge:read")),
 ):
-    """查询索引任务状态。"""
+    """Return one indexing task."""
     task = indexing_task_repository.get_task(task_id)
     if task is None:
-        raise HTTPException(status_code=404, detail="索引任务不存在")
+        raise HTTPException(status_code=404, detail="indexing_task_not_found")
 
     return json_response(
         status_code=200,
@@ -162,16 +154,69 @@ async def get_index_task(
     )
 
 
+@router.post("/index_tasks/{task_id}/retry")
+async def retry_index_task(
+    task_id: str,
+    _principal: Principal = Depends(require_capability("knowledge:write")),
+):
+    """Requeue a failed or queued indexing task."""
+    task = indexing_task_repository.get_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="indexing_task_not_found")
+
+    if task.get("status") == "processing":
+        raise HTTPException(status_code=409, detail="indexing_task_processing")
+
+    indexing_task_repository.update_task(task_id, status="queued", error_message=None)
+    await task_dispatcher.enqueue_indexing_task(task_id, str(task["file_path"]))
+    requeued = indexing_task_repository.get_task(task_id)
+    return json_response(
+        status_code=202,
+        content={
+            "code": 202,
+            "message": "accepted",
+            "data": requeued,
+        },
+    )
+
+
+@router.delete("/documents/{filename}")
+async def delete_uploaded_document(
+    filename: str,
+    _principal: Principal = Depends(require_capability("knowledge:write")),
+):
+    """Delete an uploaded document and remove its vector-store entries."""
+    safe_filename = _sanitize_filename(filename)
+    if safe_filename != filename:
+        raise HTTPException(status_code=400, detail="invalid_filename")
+
+    object_storage = get_object_storage()
+    file_path = object_storage.local_path_for(safe_filename)
+    try:
+        deleted_object = object_storage.delete(safe_filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    deleted_vectors = get_vector_store_manager().delete_by_source(file_path.as_posix())
+    return json_response(
+        status_code=200,
+        content={
+            "code": 200,
+            "message": "success",
+            "data": {
+                "filename": safe_filename,
+                "file_path": str(file_path),
+                "object_uri": deleted_object.uri,
+                "storage_backend": deleted_object.backend,
+                "deleted_file": deleted_object.deleted_local,
+                "deleted_remote": deleted_object.deleted_remote,
+                "deleted_vectors": deleted_vectors,
+            },
+        },
+    )
+
+
 def _get_file_extension(filename: str) -> str:
-    """
-    获取文件扩展名
-
-    Args:
-        filename: 文件名
-
-    Returns:
-        str: 扩展名（小写，不含点）
-    """
     parts = filename.rsplit(".", 1)
     if len(parts) == 2:
         return parts[1].lower()
@@ -179,18 +224,23 @@ def _get_file_extension(filename: str) -> str:
 
 
 def _sanitize_filename(filename: str) -> str:
-    """
-    规范化文件名，去除空格和特殊字符
-
-    Args:
-        filename: 原始文件名
-
-    Returns:
-        str: 规范化后的文件名
-    """
-    # 去除空格
     sanitized = filename.replace(" ", "_")
-    # 去除其他可能导致问题的字符
     for char in ["\\", "/", ":", "*", "?", '"', "<", ">", "|"]:
         sanitized = sanitized.replace(char, "_")
     return sanitized
+
+
+def _validate_upload_content(content: bytes) -> None:
+    if not content:
+        raise HTTPException(status_code=400, detail="empty_file")
+
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"file_too_large:{MAX_FILE_SIZE}")
+
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail="file_must_be_utf8") from exc
+
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="empty_text")

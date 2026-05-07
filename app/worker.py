@@ -7,12 +7,16 @@ import signal
 
 from loguru import logger
 
-from app.infrastructure.tasks import task_dispatcher
+from app.infrastructure.tasks import agent_resume_dispatcher, task_dispatcher
+from app.utils.logger import setup_logger
+
+setup_logger()
 
 
 async def run_worker() -> None:
     """启动并保持索引任务 worker 运行。"""
     await task_dispatcher.start()
+    await agent_resume_dispatcher.start()
     logger.info("Indexing worker 已启动，等待任务...")
 
     stop_event = asyncio.Event()
@@ -29,6 +33,7 @@ async def run_worker() -> None:
             signal.signal(sig, lambda *_args: _stop())
 
     await stop_event.wait()
+    await agent_resume_dispatcher.shutdown()
     await task_dispatcher.shutdown()
     logger.info("Indexing worker 已停止")
 

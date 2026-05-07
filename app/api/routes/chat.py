@@ -1,7 +1,6 @@
 """对话接口。"""
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends
 from loguru import logger
 from sse_starlette.sse import EventSourceResponse
 
@@ -9,6 +8,7 @@ from app.api.providers import get_chat_application_service, get_rag_agent_servic
 from app.api.responses import json_response
 from app.application.chat import RagAgentService
 from app.application.chat_application_service import ChatApplicationService
+from app.core.exceptions import InfrastructureException
 from app.domains.chat import ApiResponse, ChatRequest, ClearRequest, SessionInfoResponse
 from app.platform.persistence import chat_tool_event_repository, conversation_repository
 from app.security import Principal, require_capability
@@ -62,18 +62,7 @@ async def chat(
 
     except Exception as e:
         logger.error(f"对话接口错误: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "code": 500,
-                "message": "error",
-                "data": {
-                    "success": False,
-                    "answer": None,
-                    "errorMessage": str(e),
-                },
-            },
-        )
+        raise InfrastructureException("chat_request_failed", code="chat_request_failed") from e
 
 
 @router.post("/chat_stream", include_in_schema=False)
@@ -136,7 +125,7 @@ async def clear_session(
 
     except Exception as e:
         logger.error(f"清空会话错误: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise InfrastructureException("chat_clear_failed", code="chat_clear_failed") from e
 
 
 @router.get("/chat/sessions")
@@ -156,7 +145,7 @@ async def list_sessions(
         )
     except Exception as e:
         logger.error(f"获取会话列表错误: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise InfrastructureException("chat_sessions_failed", code="chat_sessions_failed") from e
 
 
 @router.get("/chat/session/{session_id}", response_model=SessionInfoResponse)
@@ -187,7 +176,7 @@ async def get_session_info(
 
     except Exception as e:
         logger.error(f"获取会话信息错误: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise InfrastructureException("chat_session_failed", code="chat_session_failed") from e
 
 
 @router.get("/chat/session/{session_id}/tool-events")
@@ -207,4 +196,6 @@ async def get_session_tool_events(
         )
     except Exception as e:
         logger.error(f"获取工具事件错误: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise InfrastructureException(
+            "chat_tool_events_failed", code="chat_tool_events_failed"
+        ) from e

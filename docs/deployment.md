@@ -1,7 +1,7 @@
 # Deployment Guide
 
 SmartSRE Copilot can run as a local development stack or as a controlled
-internal evaluation deployment. The current development baseline uses
+internal evaluation deployment. The current development stack uses
 PostgreSQL, Redis, Milvus, FastAPI, and Next.js.
 
 ## Local Development

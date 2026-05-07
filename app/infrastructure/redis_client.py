@@ -44,6 +44,9 @@ class RedisManager:
     def initialize(self) -> None:
         if self._client is not None:
             return
+        self._connect()
+
+    def _connect(self) -> None:
         if RedisClient is None:
             raise RuntimeError("Redis support requires the optional 'redis' dependency")
 
@@ -51,26 +54,52 @@ class RedisManager:
         self._client.ping()
         logger.info(f"Redis initialized: {self.redis_url}")
 
-    def health_check(self) -> bool:
+    def _ensure_connection(self) -> None:
         try:
             self.initialize()
             assert self._client is not None
-            return bool(self._client.ping())
+            self._client.ping()
+        except RedisError as exc:
+            logger.warning(f"Redis connection unhealthy, reconnecting: {exc}")
+            self._client = None
+            self._connect()
+
+    def health_check(self) -> bool:
+        try:
+            self._ensure_connection()
+            return True
         except Exception as exc:
             logger.error(f"Redis health check failed: {exc}")
             return False
 
     def enqueue_json(self, queue_name: str, payload: dict[str, Any]) -> None:
-        self.initialize()
+        self._ensure_connection()
         assert self._client is not None
-        self._client.rpush(queue_name, json.dumps(payload, ensure_ascii=False))
+        raw_payload = json.dumps(payload, ensure_ascii=False)
+        try:
+            self._client.rpush(queue_name, raw_payload)
+        except RedisError as exc:
+            logger.warning(f"Redis enqueue failed, reconnecting once: {exc}")
+            self._client = None
+            self._connect()
+            assert self._client is not None
+            self._client.rpush(queue_name, raw_payload)
 
     def dequeue_json(self, queue_name: str, timeout_seconds: int) -> dict[str, Any] | None:
-        self.initialize()
+        self._ensure_connection()
         assert self._client is not None
-        result = cast(
-            tuple[Any, str] | None, self._client.blpop(queue_name, timeout=timeout_seconds)
-        )
+        try:
+            result = cast(
+                tuple[Any, str] | None, self._client.blpop(queue_name, timeout=timeout_seconds)
+            )
+        except RedisError as exc:
+            logger.warning(f"Redis dequeue failed, reconnecting once: {exc}")
+            self._client = None
+            self._connect()
+            assert self._client is not None
+            result = cast(
+                tuple[Any, str] | None, self._client.blpop(queue_name, timeout=timeout_seconds)
+            )
         if result is None:
             return None
 

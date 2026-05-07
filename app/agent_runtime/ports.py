@@ -35,6 +35,15 @@ class AgentRunStore(Protocol):
     ) -> None:
         """Update run lifecycle state."""
 
+    def update_run_metrics(self, run_id: str, **metrics: Any) -> None:
+        """Persist run-level observability metrics."""
+
+    def get_run(self, run_id: str) -> dict[str, Any] | None:
+        """Return a persisted run snapshot."""
+
+    def list_events(self, run_id: str) -> list[dict[str, Any]]:
+        """Return persisted trajectory events for a run."""
+
     def append_event(
         self,
         run_id: str,

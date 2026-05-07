@@ -23,11 +23,10 @@ def retrieve_knowledge(query: str) -> tuple[str, list[Document]]:
     try:
         logger.info(f"知识检索工具被调用: query='{query}'")
 
-        # 从向量存储中检索相关文档
-        vector_store = get_vector_store_manager().get_vector_store()
-        retriever = vector_store.as_retriever(search_kwargs={"k": config.rag_top_k})
-
-        docs = retriever.invoke(query)
+        # 从向量存储中检索相关文档（通过 VectorStoreManager 以支持 collection_name 过滤）
+        docs = get_vector_store_manager().similarity_search(
+            query, k=config.rag_top_k, collection_name=config.pgvector_collection_name
+        )
 
         if not docs:
             logger.warning("未检索到相关文档")
