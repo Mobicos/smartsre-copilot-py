@@ -852,7 +852,6 @@ async def test_decision_runtime_records_observation_evidence_recovery_and_handof
         )
     ]
     event_types = [event["type"] for event in run_store.events]
-    assessments = [event for event in run_store.events if event["type"] == "evidence_assessment"]
 
     assert events[-1].type in ("handoff", "complete")
     assert run_store.status in ("handoff_required", "completed")
