@@ -26,7 +26,7 @@ def client():
 
 
 def test_health_returns_200(client):
-    response = client.get("/api/health")
+    response = client.get("/health")
     assert response.status_code == 200
     data = response.json()
     assert "status" in data
@@ -39,13 +39,13 @@ def test_health_returns_200(client):
 
 
 def test_list_workspaces_returns_array(client):
-    response = client.get("/api/agent/workspaces")
+    response = client.get("/api/workspaces")
     assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    assert isinstance(response.json()["data"], list)
 
 
 def test_create_workspace_requires_name(client):
-    response = client.post("/api/agent/workspaces", json={})
+    response = client.post("/api/workspaces", json={})
     assert response.status_code in (400, 422)
 
 
@@ -55,9 +55,9 @@ def test_create_workspace_requires_name(client):
 
 
 def test_list_scenes_returns_array(client):
-    response = client.get("/api/agent/scenes")
+    response = client.get("/api/scenes")
     assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    assert isinstance(response.json()["data"], list)
 
 
 # ---------------------------------------------------------------------------
@@ -66,9 +66,9 @@ def test_list_scenes_returns_array(client):
 
 
 def test_list_tools_returns_array(client):
-    response = client.get("/api/agent/tools")
+    response = client.get("/api/tools")
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert isinstance(data, list)
     if data:
         tool = data[0]
@@ -84,7 +84,7 @@ def test_list_tools_returns_array(client):
 def test_list_runs_returns_array(client):
     response = client.get("/api/agent/runs")
     assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    assert isinstance(response.json()["data"], list)
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ def test_list_runs_returns_array(client):
 def test_list_approvals_returns_array(client):
     response = client.get("/api/agent/approvals")
     assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    assert isinstance(response.json()["data"], list)
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +106,7 @@ def test_list_approvals_returns_array(client):
 def test_list_scenarios_returns_array(client):
     response = client.get("/api/scenario-regression/scenarios")
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert isinstance(data, list)
 
 
@@ -128,5 +128,6 @@ def test_upload_requires_file(client):
 def test_openapi_spec_available(client):
     response = client.get("/api/contracts/openapi")
     assert response.status_code == 200
-    data = response.json()
-    assert "openapi" in data or "info" in data
+    body = response.json()
+    data = body.get("data", body)
+    assert "current" in data
