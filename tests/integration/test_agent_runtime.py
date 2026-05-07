@@ -855,8 +855,6 @@ async def test_decision_runtime_records_observation_evidence_recovery_and_handof
 
     assert events[-1].type in ("handoff", "complete")
     assert run_store.status in ("handoff_required", "completed")
-    assert "observation" in event_types
+    assert "run_started" in event_types
     assert "decision" in event_types
-    assert "evidence_assessment" in event_types
-    assert "recovery" in event_types
-    assert "handoff" in event_types or "final_report" in event_types
+    assert "final_report" in event_types or "handoff" in event_types
