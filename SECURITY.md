@@ -2,13 +2,8 @@
 
 ## Supported Versions
 
-SmartSRE Copilot is currently in an early release line. Security fixes target
-the latest `main` branch and the latest published minor version.
-
-| Version | Supported   |
-| ------- | ----------- |
-| `1.3.x` | Yes         |
-| `< 1.3` | Best effort |
+SmartSRE Copilot is currently in development stage. Security fixes target the
+latest `main` branch unless maintainers announce otherwise.
 
 ## Reporting a Vulnerability
 

@@ -4,7 +4,7 @@ SmartSRE Copilot is an SRE Agent workbench with a FastAPI backend, Next.js BFF
 frontend, PostgreSQL persistence, Redis-backed tasks, vector search, and
 optional MCP tool integrations.
 
-## 1.3 Baseline
+## Current Development Baseline
 
 ```text
 Browser
@@ -42,12 +42,13 @@ Workspace
   -> Replayable Events
 ```
 
-## Planned Evolution
+## Development Direction
 
-- 1.4 moves the platform middleware toward PostgreSQL + pgvector, Redis, MinIO,
+- Move the platform middleware toward PostgreSQL + pgvector, Redis, MinIO,
   Caddy, and OpenTelemetry.
-- 1.5 stabilizes knowledge indexing, replay snapshots, and AgentOps metrics.
-- 1.6 and 1.7 harden tool governance and API contracts.
-- 1.8 and 1.9 introduce Decision Runtime contracts, providers, and LangGraph
-  runtime release candidates.
-- 2.0 enables LangGraph Decision Runtime by default.
+- Stabilize knowledge indexing, replay snapshots, and AgentOps metrics.
+- Harden tool governance, approval flows, and API contracts.
+- Introduce Decision Runtime contracts, deterministic providers, and LangGraph
+  runtime hardening.
+- Enable the native Agent decision runtime by default when the product and
+  validation scope is complete.

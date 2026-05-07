@@ -40,7 +40,6 @@ ci(actions): bump ...
 - [ ] Updated `docs/openapi.json` when backend routes, schemas, or auth
   contracts changed
 - [ ] Confirmed database or queue changes include migration and rollback notes
-- [ ] Updated `CHANGELOG.md` for user-visible changes
 - [ ] Reviewed `SECURITY.md` impact for auth, secret, tool, or data-flow changes
 
 Validation details:
