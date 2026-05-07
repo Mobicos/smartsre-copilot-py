@@ -1,4 +1,4 @@
-import { backendFetch } from "@/lib/backend"
+import { backendErrorStatus, backendFetch } from "@/lib/backend"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   } catch (err) {
     const msg = (err as Error).message ?? "backend unreachable"
     return new Response(`event: error\ndata: ${JSON.stringify({ error: msg })}\n\n`, {
-      status: 502,
+      status: backendErrorStatus(err),
       headers: sseHeaders(),
     })
   }

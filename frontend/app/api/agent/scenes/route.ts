@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { backendFetch } from "@/lib/backend"
+import { backendErrorStatus, backendFetch } from "@/lib/backend"
 import { unwrapBackendEnvelope } from "@/lib/api-contracts"
 
 export const dynamic = "force-dynamic"
@@ -27,7 +27,7 @@ async function proxyJson(path: string, init: RequestInit) {
   } catch (err) {
     return NextResponse.json(
       { error: (err as Error).message ?? "backend unreachable" },
-      { status: 502 },
+      { status: backendErrorStatus(err) },
     )
   }
 }

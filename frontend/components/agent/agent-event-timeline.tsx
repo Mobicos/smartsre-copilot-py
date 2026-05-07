@@ -8,6 +8,8 @@ import {
   FileText,
   Loader2,
   PlayCircle,
+  Route,
+  ShieldCheck,
   Wrench,
 } from "lucide-react"
 import type { NativeAgentEvent } from "@/lib/native-agent-types"
@@ -17,22 +19,40 @@ const EVENT_ICONS: Record<string, ElementType> = {
   run_started: PlayCircle,
   hypothesis: Bot,
   knowledge_context: FileText,
+  decision: Route,
+  approval_decision: ShieldCheck,
+  approval_resume: ShieldCheck,
+  approval_resumed_tool_result: ShieldCheck,
   tool_call: Wrench,
   tool_result: CheckCircle2,
+  limit_reached: AlertTriangle,
+  timeout: AlertTriangle,
+  recover: Route,
+  handoff: Route,
   final_report: FileText,
   complete: CheckCircle2,
   error: AlertTriangle,
+  cancelled: AlertTriangle,
 }
 
 const EVENT_COLORS: Record<string, string> = {
   run_started: "text-primary",
   hypothesis: "text-blue-500",
   knowledge_context: "text-purple-500",
+  decision: "text-cyan-500",
+  approval_decision: "text-amber-500",
+  approval_resume: "text-amber-500",
+  approval_resumed_tool_result: "text-green-500",
   tool_call: "text-orange-500",
   tool_result: "text-green-500",
+  limit_reached: "text-amber-500",
+  timeout: "text-destructive",
+  recover: "text-cyan-500",
+  handoff: "text-cyan-500",
   final_report: "text-primary",
   complete: "text-success",
   error: "text-destructive",
+  cancelled: "text-muted-foreground",
 }
 
 interface AgentEventTimelineProps {
@@ -91,6 +111,11 @@ export function AgentEventTimeline({ events, isRunning }: AgentEventTimelineProp
                     {event.message}
                   </p>
                 )}
+                {event.payload !== undefined && event.payload !== null && (
+                  <p className="mt-2 rounded-sm bg-muted px-2 py-1 font-mono text-[10px] text-muted-foreground line-clamp-3">
+                    {formatPayloadSummary(event.payload)}
+                  </p>
+                )}
               </div>
             </div>
           )
@@ -118,13 +143,32 @@ function formatEventType(type: string): string {
     run_started: "Run Started",
     hypothesis: "Hypothesis",
     knowledge_context: "Knowledge Context",
+    decision: "Decision",
+    approval_decision: "Approval Decision",
+    approval_resume: "Approval Resume",
+    approval_resumed_tool_result: "Approved Tool Result",
     tool_call: "Tool Call",
     tool_result: "Tool Result",
+    limit_reached: "Limit Reached",
+    timeout: "Timeout",
+    recover: "Recover",
+    handoff: "Handoff",
     final_report: "Final Report",
     complete: "Complete",
     error: "Error",
+    cancelled: "Cancelled",
   }
   return labels[type] || type
+}
+
+function formatPayloadSummary(payload: unknown): string {
+  if (typeof payload === "string") return payload
+  try {
+    const text = JSON.stringify(payload)
+    return text.length > 260 ? `${text.slice(0, 260)}...` : text
+  } catch {
+    return String(payload)
+  }
 }
 
 function formatTime(timestamp: string): string {

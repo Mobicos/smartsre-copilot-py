@@ -1,21 +1,34 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Activity, Bot, BookOpen, Menu, MessageSquare, Settings, Stethoscope, Terminal } from "lucide-react"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import {
+  BookOpen,
+  FileText,
+  History,
+  Menu,
+  MessageSquare,
+  Route,
+  ServerCog,
+  ShieldCheck,
+  Stethoscope,
+  Terminal,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
-import { useState } from "react"
 
 const NAV = [
-  { href: "/chat", label: "问答台", icon: MessageSquare },
-  { href: "/diagnose", label: "故障诊断", icon: Stethoscope },
-  { href: "/agent", label: "Agent Harness", icon: Bot },
-  { href: "/knowledge", label: "知识库", icon: BookOpen },
-  { href: "/health", label: "运行状态", icon: Activity },
-  { href: "/settings", label: "设置", icon: Settings },
-]
+  { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/agent", label: "Diagnose", icon: Stethoscope },
+  { href: "/agent/history", label: "History", icon: History },
+  { href: "/agent/approvals", label: "Approvals", icon: ShieldCheck },
+  { href: "/scenarios", label: "Scenarios", icon: Route },
+  { href: "/operations", label: "Operations", icon: ServerCog },
+  { href: "/contracts", label: "API Contracts", icon: FileText },
+  { href: "/knowledge", label: "Knowledge", icon: BookOpen },
+] as const
 
 export function MobileNav() {
   const pathname = usePathname()
@@ -24,7 +37,7 @@ export function MobileNav() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="md:hidden" aria-label="打开菜单">
+        <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open navigation">
           <Menu className="size-5" />
         </Button>
       </SheetTrigger>
@@ -49,9 +62,7 @@ export function MobileNav() {
                     onClick={() => setOpen(false)}
                     className={cn(
                       "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                      active
-                        ? "bg-accent text-accent-foreground"
-                        : "hover:bg-accent/60",
+                      active ? "bg-accent text-accent-foreground" : "hover:bg-accent/60",
                     )}
                   >
                     <Icon className="size-4 text-muted-foreground" />
