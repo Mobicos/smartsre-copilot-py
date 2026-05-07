@@ -133,11 +133,11 @@ Each PR must include:
 Draft PRs are allowed for early CI feedback. Do not merge draft PRs or PRs with
 failing, pending, or unexpectedly skipped required checks.
 
-## Publication Lock
+## Development Stage Lock
 
-SmartSRE Copilot is currently in development stage. Do not create public version
-tags, GitHub publication artifacts, package publication automation, container
-image publication automation, or long-running publication branches.
+SmartSRE Copilot is currently in development stage. Do not create public
+delivery tags, GitHub delivery artifacts, package distribution automation,
+container image distribution automation, or long-running delivery branches.
 
 Keep user-visible and operational changes documented in the PR body and in the
 relevant project documentation. Persistence changes still require migration and

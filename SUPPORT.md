@@ -5,7 +5,7 @@ SmartSRE Copilot is an early-stage open source SRE Agent workbench.
 ## Where To Ask
 
 - Use GitHub Issues for reproducible bugs and scoped feature requests.
-- Use GitHub Discussions if enabled for questions, roadmap conversation, and
+- Use GitHub Discussions if enabled for questions, planning conversation, and
   deployment experience sharing.
 - Use `SECURITY.md` for vulnerabilities and secret leaks.
 

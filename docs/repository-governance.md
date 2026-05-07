@@ -32,11 +32,11 @@ Required checks should include:
 - `Dependency Review`
 - `CodeQL / Analyze`
 
-## Publication Lock
+## Development Stage Lock
 
-SmartSRE Copilot is currently in development stage. Do not create public version
-tags, GitHub publication artifacts, package publication automation, container
-image publication automation, or long-running publication branches.
+SmartSRE Copilot is currently in development stage. Do not create public
+delivery tags, GitHub delivery artifacts, package distribution automation,
+container image distribution automation, or long-running delivery branches.
 
 User-visible changes, operational notes, migration notes, and rollback guidance
 belong in the PR body and the relevant project documentation while the project
@@ -61,5 +61,5 @@ Baseline label groups:
 - Triage new issues weekly.
 - Review dependency PRs in small batches.
 - Merge security updates before routine dependency updates.
-- Keep large architecture changes behind roadmap issues or design documents.
+- Keep large architecture changes behind planning issues or design documents.
 - Close stale support questions only after pointing users to `SUPPORT.md`.
