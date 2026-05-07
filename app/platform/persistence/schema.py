@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
@@ -266,6 +267,19 @@ class AgentRun(SQLModel, table=True):
     goal: str
     final_report: str | None = None
     error_message: str | None = None
+    runtime_version: str | None = None
+    trace_id: str | None = None
+    model_name: str | None = None
+    step_count: int | None = None
+    tool_call_count: int | None = None
+    latency_ms: int | None = None
+    error_type: str | None = None
+    approval_state: str | None = None
+    retrieval_count: int | None = None
+    token_usage: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=sa.Column(sa.JSON, nullable=True),
+    )
     created_at: datetime = Field(sa_column=sa.Column(sa.TIMESTAMP(timezone=True), nullable=False))
     updated_at: datetime = Field(sa_column=sa.Column(sa.TIMESTAMP(timezone=True), nullable=False))
 

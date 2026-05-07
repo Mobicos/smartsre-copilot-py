@@ -490,6 +490,42 @@ class AgentRunRepository:
             )
             db.commit()
 
+    def update_run_metrics_with_session(
+        self,
+        db: Session,
+        run_id: str,
+        *,
+        runtime_version: str | None = None,
+        trace_id: str | None = None,
+        model_name: str | None = None,
+        step_count: int | None = None,
+        tool_call_count: int | None = None,
+        latency_ms: int | None = None,
+        error_type: str | None = None,
+        approval_state: str | None = None,
+        retrieval_count: int | None = None,
+        token_usage: dict[str, Any] | None = None,
+    ) -> None:
+        run = db.get(AgentRun, run_id)
+        if run is None:
+            return
+        run.runtime_version = runtime_version
+        run.trace_id = trace_id
+        run.model_name = model_name
+        run.step_count = step_count
+        run.tool_call_count = tool_call_count
+        run.latency_ms = latency_ms
+        run.error_type = error_type
+        run.approval_state = approval_state
+        run.retrieval_count = retrieval_count
+        run.token_usage = token_usage
+        db.add(run)
+
+    def update_run_metrics(self, run_id: str, **metrics: Any) -> None:
+        with Session(bind=get_engine()) as db:
+            self.update_run_metrics_with_session(db, run_id, **metrics)
+            db.commit()
+
     def get_run_with_session(self, db: Session, run_id: str) -> dict[str, Any] | None:
         row = db.get(AgentRun, run_id)
         return self._row_to_dict(row) if row is not None else None
@@ -583,6 +619,16 @@ class AgentRunRepository:
             "goal": row.goal,
             "final_report": row.final_report,
             "error_message": row.error_message,
+            "runtime_version": row.runtime_version,
+            "trace_id": row.trace_id,
+            "model_name": row.model_name,
+            "step_count": row.step_count,
+            "tool_call_count": row.tool_call_count,
+            "latency_ms": row.latency_ms,
+            "error_type": row.error_type,
+            "approval_state": row.approval_state,
+            "retrieval_count": row.retrieval_count,
+            "token_usage": row.token_usage,
             "created_at": row.created_at,
             "updated_at": row.updated_at,
         }

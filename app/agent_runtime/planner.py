@@ -8,7 +8,7 @@ from app.agent_runtime.state import AgentRunState
 
 
 class AgentPlanner:
-    """Create deterministic V1 plans from scene context and user goals."""
+    """Create deterministic development-runtime plans from scene context and user goals."""
 
     @staticmethod
     def create_initial_state(goal: str) -> AgentRunState:

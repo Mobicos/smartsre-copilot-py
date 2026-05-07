@@ -1,6 +1,19 @@
 """Native Agent runtime platform package."""
 
 from app.agent_runtime.context import KnowledgeContextProvider
+from app.agent_runtime.decision import (
+    AgentDecision,
+    AgentDecisionRuntime,
+    AgentDecisionState,
+    AgentGoalContract,
+    DeterministicDecisionProvider,
+    EvidenceAssessment,
+    LangChainQwenDecisionInvoker,
+    QwenDecisionProvider,
+    RecoveryDecision,
+    RuntimeBudget,
+    build_initial_decision_state,
+)
 from app.agent_runtime.events import AgentRuntimeEvent
 from app.agent_runtime.executor import AgentToolExecutor
 from app.agent_runtime.planner import AgentPlanner
@@ -16,7 +29,7 @@ from app.agent_runtime.state import (
     ToolPolicySnapshot,
 )
 from app.agent_runtime.synthesizer import ReportSynthesizer
-from app.agent_runtime.tool_catalog import ToolCatalog
+from app.agent_runtime.tool_catalog import ToolCatalog, ToolSchema
 from app.agent_runtime.tool_executor import (
     ToolExecutionResult,
     ToolExecutor,
@@ -26,18 +39,29 @@ from app.agent_runtime.tool_executor import (
 
 __all__ = [
     "AgentRuntime",
+    "AgentDecision",
+    "AgentDecisionRuntime",
+    "AgentDecisionState",
+    "AgentGoalContract",
     "AgentRuntimeEvent",
     "AgentRunStore",
     "AgentRunState",
     "AgentPlanner",
     "AgentToolExecutor",
+    "DeterministicDecisionProvider",
     "EvidenceItem",
+    "EvidenceAssessment",
     "Hypothesis",
     "KnowledgeContext",
     "KnowledgeContextProvider",
+    "LangChainQwenDecisionInvoker",
+    "QwenDecisionProvider",
+    "RecoveryDecision",
     "ReportSynthesizer",
+    "RuntimeBudget",
     "SceneStore",
     "ToolCatalog",
+    "ToolSchema",
     "ToolAction",
     "ToolPolicyGate",
     "ToolPolicySnapshot",
@@ -45,4 +69,5 @@ __all__ = [
     "ToolExecutor",
     "ToolPolicyRepositoryAdapter",
     "ToolPolicyStore",
+    "build_initial_decision_state",
 ]

@@ -6,11 +6,14 @@ import json
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from app.api.providers import get_native_agent_application_service
+from app.api.providers import get_agent_resume_service, get_native_agent_application_service
 from app.api.responses import json_response
+from app.application.agent_resume_service import AgentResumeService
 from app.application.native_agent_application_service import NativeAgentApplicationService
+from app.core.exceptions import InfrastructureException
 from app.domains.native_agent import (
     AgentFeedbackCreateRequest,
     AgentRunCreateRequest,
@@ -21,6 +24,11 @@ from app.domains.native_agent import (
 from app.security import Principal, require_capability
 
 router = APIRouter()
+
+
+class AgentApprovalDecisionRequest(BaseModel):
+    decision: str = Field(pattern="^(approved|rejected)$")
+    comment: str | None = None
 
 
 @router.post("/workspaces")
@@ -178,10 +186,7 @@ async def create_agent_run(
     )
 
     if run is None:
-        return JSONResponse(
-            status_code=500,
-            content={"code": 500, "message": "agent_run_empty"},
-        )
+        raise InfrastructureException("agent_run_empty", code="agent_run_empty")
     return json_response(
         status_code=200,
         content={
@@ -232,6 +237,21 @@ async def list_agent_runs(
     )
 
 
+@router.get("/agent/approvals")
+async def list_agent_approvals(
+    limit: int = 50,
+    _principal: Principal = Depends(require_capability("aiops:run")),
+    native_agent_service: NativeAgentApplicationService = Depends(
+        get_native_agent_application_service
+    ),
+):
+    approvals = native_agent_service.list_agent_approvals(limit=limit)
+    return json_response(
+        status_code=200,
+        content={"code": 200, "message": "success", "data": approvals},
+    )
+
+
 @router.get("/agent/runs/{run_id}")
 async def get_agent_run(
     run_id: str,
@@ -267,6 +287,101 @@ async def list_agent_run_events(
             "message": "success",
             "data": events,
         },
+    )
+
+
+@router.get("/agent/runs/{run_id}/replay")
+async def get_agent_run_replay(
+    run_id: str,
+    _principal: Principal = Depends(require_capability("aiops:run")),
+    native_agent_service: NativeAgentApplicationService = Depends(
+        get_native_agent_application_service
+    ),
+):
+    replay = native_agent_service.get_agent_run_replay(run_id)
+    if replay is None:
+        return JSONResponse(status_code=404, content={"code": 404, "message": "not_found"})
+    return json_response(
+        status_code=200,
+        content={
+            "code": 200,
+            "message": "success",
+            "data": replay,
+        },
+    )
+
+
+@router.get("/agent/runs/{run_id}/decision-state")
+async def get_agent_decision_state(
+    run_id: str,
+    _principal: Principal = Depends(require_capability("aiops:run")),
+    native_agent_service: NativeAgentApplicationService = Depends(
+        get_native_agent_application_service
+    ),
+):
+    state = native_agent_service.get_agent_decision_state(run_id)
+    if state is None:
+        return JSONResponse(status_code=404, content={"code": 404, "message": "not_found"})
+    return json_response(
+        status_code=200,
+        content={"code": 200, "message": "success", "data": state},
+    )
+
+
+@router.post("/agent/runs/{run_id}/approvals/{tool_name}")
+async def decide_agent_approval(
+    run_id: str,
+    tool_name: str,
+    request: AgentApprovalDecisionRequest,
+    principal: Principal = Depends(require_capability("aiops:run")),
+    native_agent_service: NativeAgentApplicationService = Depends(
+        get_native_agent_application_service
+    ),
+):
+    try:
+        decision = native_agent_service.decide_agent_approval(
+            run_id,
+            tool_name=tool_name,
+            decision=request.decision,
+            comment=request.comment,
+            actor=principal.subject,
+        )
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"code": 400, "message": str(exc)})
+    if decision is None:
+        return JSONResponse(status_code=404, content={"code": 404, "message": "not_found"})
+    return json_response(
+        status_code=200,
+        content={"code": 200, "message": "success", "data": decision},
+    )
+
+
+@router.post("/agent/runs/{run_id}/approvals/{tool_name}/resume")
+async def resume_agent_approval(
+    run_id: str,
+    tool_name: str,
+    principal: Principal = Depends(require_capability("aiops:run")),
+    agent_resume_service: AgentResumeService = Depends(get_agent_resume_service),
+):
+    result = await agent_resume_service.process_resume_task(
+        {
+            "run_id": run_id,
+            "tool_name": tool_name,
+            "decision": "approved",
+            "actor": principal.subject,
+            "checkpoint_ns": "agent-v2",
+        }
+    )
+    if result.get("reason") == "run_not_found":
+        return JSONResponse(status_code=404, content={"code": 404, "message": "not_found"})
+    if result.get("reason") == "approval_not_found":
+        return JSONResponse(
+            status_code=400,
+            content={"code": 400, "message": "approval_not_found", "data": result},
+        )
+    return json_response(
+        status_code=200,
+        content={"code": 200, "message": "success", "data": result},
     )
 
 
