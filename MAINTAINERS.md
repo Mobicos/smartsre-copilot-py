@@ -20,9 +20,9 @@ Maintainers are responsible for:
 - Security reports should be acknowledged privately before public disclosure.
 - Large architecture changes should be split into reviewable PRs.
 
-## Publication Authority
+## Development Stage Authority
 
 The project is currently in development stage. Maintainers must not create
-public version tags, GitHub publication artifacts, package publication
-automation, or container image publication automation until the project is
+public delivery tags, GitHub delivery artifacts, package distribution
+automation, or container image distribution automation until the project is
 explicitly marked ready.

@@ -34,9 +34,9 @@ Core capabilities:
 
 SmartSRE Copilot is an early open source project in active development. It is
 suitable for local development, internal evaluation, and controlled prototype
-deployments. Public version tags, GitHub publication artifacts, package
-publication, and container publication are intentionally disabled while core
-Agent capabilities, product flows, and validation coverage are still being
+deployments. Public delivery tags, GitHub delivery artifacts, package
+distribution, and container image distribution are intentionally disabled while
+core Agent capabilities, product flows, and validation coverage are still being
 completed.
 
 ## Architecture
@@ -511,12 +511,12 @@ Report vulnerabilities privately by following `SECURITY.md`.
 ## Contributing
 
 Read `CONTRIBUTING.md` for the human contributor workflow, commit style, branch
-policy, PR rules, quality gates, publication lock, and dependency policy.
+policy, PR rules, quality gates, development stage lock, and dependency policy.
 
 AI coding agents should also read `AGENTS.md` before making changes.
 
-Do not create public version tags, GitHub publication artifacts, or package and
-container publication automation while the project is in development stage.
+Do not create public delivery tags, GitHub delivery artifacts, or package and
+container distribution automation while the project is in development stage.
 
 ## License
 
