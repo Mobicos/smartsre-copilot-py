@@ -6,7 +6,7 @@ coding agents.
 
 ## Required GitHub Settings
 
-Enable these settings before treating `main` as a protected release branch:
+Enable these settings before treating `main` as a protected integration branch:
 
 - Protect `main` with required pull requests before merging.
 - Require at least one approving review.
@@ -34,6 +34,9 @@ Required checks should include:
 
 ## Release Checklist
 
+Public releases are paused until the native Agent 1.0 scope is complete and the
+maintainer explicitly reopens the process in `docs/release-process.md`.
+
 Before creating a release tag:
 
 - Update all version metadata in one change.
@@ -44,8 +47,9 @@ Before creating a release tag:
 - Confirm GitHub Actions is green on the release PR.
 - Merge by squash with a compliant Conventional Commit subject.
 - Create an annotated tag named `vMAJOR.MINOR.PATCH`.
-- Let `.github/workflows/release.yml` build the Python package, scan the image,
-  push GHCR tags, and create GitHub Releases notes.
+- Restore and approve `.github/workflows/release.yml` automation before using it
+  to build the Python package, scan the image, push GHCR tags, and create GitHub
+  Releases notes.
 
 ## Issue Labels
 

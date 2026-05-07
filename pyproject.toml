@@ -1,6 +1,6 @@
 [project]
 name = "smartsre-copilot"
-version = "1.3.0"
+version = "0.1.0.dev0"
 description = "AI-powered SRE assistant with knowledge-grounded chat, AIOps diagnosis, and native agent workbench"
 authors = [{name = "Mobicos"}]
 readme = "README.md"

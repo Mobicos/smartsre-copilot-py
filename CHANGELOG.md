@@ -5,7 +5,10 @@ All notable changes to SmartSRE Copilot are documented in this file.
 This project follows Semantic Versioning and uses Conventional Commits for
 commit messages and pull request titles.
 
-## \[1.3.0\] - 2026-05-05
+## Unreleased
+
+Public releases are paused until the native Agent 1.0 scope is complete,
+feature-complete, and covered by the required validation gates.
 
 ### Added
 
@@ -14,19 +17,14 @@ commit messages and pull request titles.
 - Server-Sent Events support for streaming Native Agent run events.
 - Tool policy controls for enabled state, risk level, capability, and approval
   requirement.
-- Repository governance baseline with release, security, support, and roadmap
+- Repository governance baseline with security, support, and contributor
   documentation.
 
 ### Changed
 
-- Standardized the project version as `1.3.0` across package and runtime
-  metadata.
+- Marked package and runtime metadata as a development snapshot before the first
+  official `1.0.0` release.
 
 ### Security
 
 - Documented the supported private vulnerability reporting process.
-
-## \[1.2.1\] - Previous baseline
-
-- Pre-1.3 SmartSRE Copilot baseline before the Native Agent Workbench release
-  line was formalized.

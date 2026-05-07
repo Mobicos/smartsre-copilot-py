@@ -1,6 +1,18 @@
 # Release Process
 
-SmartSRE Copilot uses Semantic Versioning and Conventional Commits.
+SmartSRE Copilot public releases are paused.
+
+Do not create version tags, GitHub Releases, GHCR release images, or release
+branches until the native Agent 1.0 scope is complete, feature-complete, and
+validated by the required backend, frontend, Agent, integration, and deployment
+checks.
+
+The first official release will be re-evaluated as `1.0.0` after that readiness
+review. Until then, version metadata should remain a development snapshot and
+all user-visible work should be tracked under `CHANGELOG.md` `Unreleased`.
+
+SmartSRE Copilot will use Semantic Versioning and Conventional Commits after
+public releases resume.
 
 ## Versioning
 
@@ -11,20 +23,17 @@ SmartSRE Copilot uses Semantic Versioning and Conventional Commits.
 - Major releases may change runtime contracts, persistence shape, or deployment
   expectations.
 
-Current planned release line:
+Current development line:
 
 ```text
-1.3.x: Native Agent Workbench baseline
-1.4.x: Platform middleware modernization
-1.5.x: Knowledge, replay, and AgentOps stabilization
-1.6.x: Tool harness and approval foundation
-1.7.x: API contract and frontend workbench governance
-1.8.x: Decision Runtime contracts and deterministic provider
-1.9.x: LangGraph runtime release candidates
-2.0.x: LangGraph Decision Runtime
+0.1.0.dev0: pre-release development snapshot
+1.0.0: first official release after native Agent readiness is complete
 ```
 
 ## Release Checklist
+
+Release execution is blocked while the pause above is active. When release work
+resumes:
 
 1. Start from latest `main`.
 
@@ -65,15 +74,15 @@ Current planned release line:
 
 1. Create a signed or annotated tag when release signing is configured.
 
-1. Let `.github/workflows/release.yml` create the GitHub Release, build the
-   Python package, scan the Docker image, and publish GHCR image tags.
+1. Restore `.github/workflows/release.yml` only after the maintainer explicitly
+   approves release automation.
 
 ## Tag Format
 
 Use `vMAJOR.MINOR.PATCH`, for example:
 
 ```text
-v1.3.0
+v1.0.0
 ```
 
 ## Rollback Notes

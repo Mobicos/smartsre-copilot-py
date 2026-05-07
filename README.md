@@ -1,6 +1,7 @@
 # SmartSRE Copilot
 
-> AI-powered SRE assistant with knowledge-grounded chat, AIOps diagnosis, and native agent workbench.
+> AI-powered SRE assistant with knowledge-grounded chat, AIOps diagnosis, and
+> native agent workbench.
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -13,7 +14,7 @@
 
 ## Overview
 
-SmartSRE Copilot `1.3.0` is the Native Agent Workbench baseline for building an
+SmartSRE Copilot is a pre-release Native Agent Workbench for building an
 internal SRE assistant. The backend is a FastAPI service with
 LangChain/LangGraph agents, DashScope/Qwen models, PostgreSQL persistence,
 Redis-backed background tasks, and Milvus vector search. The frontend is a
@@ -31,19 +32,18 @@ Core capabilities:
 
 ## Project Status
 
-SmartSRE Copilot is an early open source project with a `1.3.0` Native Agent
-Workbench baseline. It is suitable for local development, internal evaluation,
-and controlled prototype deployments. Production deployments should review
-`SECURITY.md`, `docs/deployment.md`, and the operational notes in this README.
+SmartSRE Copilot is an early open source project in active pre-release
+development. Public releases are paused until the native Agent 1.0 scope is
+complete, feature-complete, and covered by the required validation gates. It is
+suitable for local development, internal evaluation, and controlled prototype
+deployments. Production deployments should review `SECURITY.md`,
+`docs/deployment.md`, and the operational notes in this README.
 
 Planned evolution is tracked in `PLAN.md`:
 
 ```text
-1.3.x: Native Agent Workbench baseline
-1.4.x: platform middleware modernization
-1.5.x: knowledge, replay, and AgentOps stabilization
-1.6.x-1.9.x: tool harness, API contract, and Decision Runtime release candidates
-2.0.x: LangGraph Decision Runtime
+0.1.0.dev0: pre-release development snapshot
+1.0.0: first official release after native Agent readiness is complete
 ```
 
 ## Architecture
@@ -408,14 +408,15 @@ Development rules:
 
 ## Open Source Governance
 
-- `CHANGELOG.md`: release notes and user-visible changes.
+- `CHANGELOG.md`: unreleased notes and future release notes.
 - `CONTRIBUTING.md`: human and AI contributor workflow.
 - `AGENTS.md`: AI coding agent execution rules.
 - `SECURITY.md`: private vulnerability reporting and security expectations.
 - `CODE_OF_CONDUCT.md`: community behavior expectations.
 - `SUPPORT.md`: support boundaries and issue guidance.
 - `MAINTAINERS.md`: maintainer responsibilities and release authority.
-- `docs/release-process.md`: release checklist, versioning, and rollback notes.
+- `docs/release-process.md`: release pause policy, future checklist, versioning,
+  and rollback notes.
 - `docs/repository-governance.md`: branch protection, labels, and maintainer
   operating rules.
 - `docs/architecture.md`: current architecture and planned evolution.
@@ -524,8 +525,8 @@ policy, PR rules, quality gates, release expectations, and dependency policy.
 
 AI coding agents should also read `AGENTS.md` before making changes.
 
-For release work, read `docs/release-process.md` before changing version
-metadata, tags, or release notes.
+Release work is paused. Read `docs/release-process.md` before changing version
+metadata, tags, release notes, or release automation.
 
 ## License
 

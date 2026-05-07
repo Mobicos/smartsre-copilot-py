@@ -135,7 +135,12 @@ failing, pending, or unexpectedly skipped required checks.
 
 ## Releases
 
-Release work must follow `docs/release-process.md`.
+Public releases are currently paused. Do not create release tags, GitHub
+Releases, GHCR release images, or release branches until the native Agent 1.0
+scope is complete and maintainers explicitly reopen the release process in
+`docs/release-process.md`.
+
+Future release work must follow `docs/release-process.md`.
 
 Release PRs must include:
 
@@ -148,7 +153,8 @@ Release PRs must include:
   change.
 - Validation evidence from backend and frontend quality gates.
 
-Use tags in the form `vMAJOR.MINOR.PATCH`, for example `v1.3.0`.
+After releases resume, use tags in the form `vMAJOR.MINOR.PATCH`, for example
+`v1.0.0`.
 
 ## Merge Policy
 

@@ -437,7 +437,7 @@
   "info": {
     "description": "AI-powered SRE assistant with knowledge-grounded chat, AIOps diagnosis, and native agent workbench",
     "title": "SmartSRE Copilot",
-    "version": "1.3.0"
+    "version": "0.1.0.dev0"
   },
   "openapi": "3.1.0",
   "paths": {
