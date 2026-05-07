@@ -346,8 +346,8 @@ async def decide_agent_approval(
             comment=request.comment,
             actor=principal.subject,
         )
-    except ValueError as exc:
-        return JSONResponse(status_code=400, content={"code": 400, "message": str(exc)})
+    except ValueError:
+        return JSONResponse(status_code=400, content={"code": 400, "message": "invalid_request"})
     if decision is None:
         return JSONResponse(status_code=404, content={"code": 404, "message": "not_found"})
     return json_response(
