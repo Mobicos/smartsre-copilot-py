@@ -1,8 +1,8 @@
 # Deployment Guide
 
-SmartSRE Copilot can run as a local development stack or as a small production
-deployment. The 1.3 baseline still uses PostgreSQL, Redis, Milvus, FastAPI, and
-Next.js.
+SmartSRE Copilot can run as a local development stack or as a controlled
+internal evaluation deployment. The current development baseline uses
+PostgreSQL, Redis, Milvus, FastAPI, and Next.js.
 
 ## Local Development
 
@@ -20,9 +20,9 @@ pnpm dev
 
 Do not commit `docker-compose.local.yml`.
 
-## Production Baseline
+## Controlled Evaluation Baseline
 
-For production-like deployments:
+For controlled internal evaluation deployments:
 
 - Run FastAPI behind a reverse proxy.
 - Run the Next.js frontend as a separate service.
@@ -33,9 +33,9 @@ For production-like deployments:
 - Keep MCP credentials least-privilege.
 - Run migrations before accepting traffic.
 
-## Upgrade Procedure
+## Update Procedure
 
-1. Read the release notes.
+1. Read the change notes in the PR or deployment ticket.
 1. Back up PostgreSQL.
 1. Pull the target image or source revision.
 1. Run database migrations.
@@ -47,5 +47,5 @@ For production-like deployments:
 
 1. Stop traffic at the reverse proxy when needed.
 1. Roll back frontend and backend together if API contracts changed.
-1. Run Alembic downgrade only when the release notes say it is safe.
+1. Run Alembic downgrade only when the change notes say it is safe.
 1. Preserve `agent_events` and audit logs for postmortem review.

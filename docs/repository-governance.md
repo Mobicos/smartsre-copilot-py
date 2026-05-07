@@ -32,24 +32,15 @@ Required checks should include:
 - `Dependency Review`
 - `CodeQL / Analyze`
 
-## Release Checklist
+## Publication Lock
 
-Public releases are paused until the native Agent 1.0 scope is complete and the
-maintainer explicitly reopens the process in `docs/release-process.md`.
+SmartSRE Copilot is currently in development stage. Do not create public version
+tags, GitHub publication artifacts, package publication automation, container
+image publication automation, or long-running publication branches.
 
-Before creating a release tag:
-
-- Update all version metadata in one change.
-- Update `CHANGELOG.md` with user-facing changes, operational notes, and
-  migration or rollback guidance.
-- Run `make verify`.
-- Run frontend gates when `frontend/` changed.
-- Confirm GitHub Actions is green on the release PR.
-- Merge by squash with a compliant Conventional Commit subject.
-- Create an annotated tag named `vMAJOR.MINOR.PATCH`.
-- Restore and approve `.github/workflows/release.yml` automation before using it
-  to build the Python package, scan the image, push GHCR tags, and create GitHub
-  Releases notes.
+User-visible changes, operational notes, migration notes, and rollback guidance
+belong in the PR body and the relevant project documentation while the project
+is in development stage.
 
 ## Issue Labels
 

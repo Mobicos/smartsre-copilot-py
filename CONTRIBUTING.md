@@ -133,28 +133,16 @@ Each PR must include:
 Draft PRs are allowed for early CI feedback. Do not merge draft PRs or PRs with
 failing, pending, or unexpectedly skipped required checks.
 
-## Releases
+## Publication Lock
 
-Public releases are currently paused. Do not create release tags, GitHub
-Releases, GHCR release images, or release branches until the native Agent 1.0
-scope is complete and maintainers explicitly reopen the release process in
-`docs/release-process.md`.
+SmartSRE Copilot is currently in development stage. Do not create public version
+tags, GitHub publication artifacts, package publication automation, container
+image publication automation, or long-running publication branches.
 
-Future release work must follow `docs/release-process.md`.
-
-Release PRs must include:
-
-- Version metadata updates in `pyproject.toml`, `app/config.py`, and
-  `app/__init__.py`.
-- `CHANGELOG.md` updates.
-- Migration and rollback notes when persistence changes.
-- Docker Compose or deployment notes when runtime services change.
-- `docs/openapi.json` updates when backend routes, schemas, or auth contracts
-  change.
-- Validation evidence from backend and frontend quality gates.
-
-After releases resume, use tags in the form `vMAJOR.MINOR.PATCH`, for example
-`v1.0.0`.
+Keep user-visible and operational changes documented in the PR body and in the
+relevant project documentation. Persistence changes still require migration and
+rollback notes. API contract changes still require `docs/openapi.json` updates
+and matching frontend BFF adapter changes.
 
 ## Merge Policy
 

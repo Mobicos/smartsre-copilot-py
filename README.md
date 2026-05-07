@@ -14,11 +14,11 @@
 
 ## Overview
 
-SmartSRE Copilot is a pre-release Native Agent Workbench for building an
-internal SRE assistant. The backend is a FastAPI service with
-LangChain/LangGraph agents, DashScope/Qwen models, PostgreSQL persistence,
-Redis-backed background tasks, and Milvus vector search. The frontend is a
-modern Next.js app that talks to the backend through server-side route handlers.
+SmartSRE Copilot is a development-stage Native Agent Workbench for building an
+internal SRE assistant. The backend is a FastAPI service with LangChain/
+LangGraph agents, DashScope/Qwen models, PostgreSQL persistence, Redis-backed
+background tasks, and Milvus vector search. The frontend is a modern Next.js app
+that talks to the backend through server-side route handlers.
 
 Core capabilities:
 
@@ -32,19 +32,12 @@ Core capabilities:
 
 ## Project Status
 
-SmartSRE Copilot is an early open source project in active pre-release
-development. Public releases are paused until the native Agent 1.0 scope is
-complete, feature-complete, and covered by the required validation gates. It is
+SmartSRE Copilot is an early open source project in active development. It is
 suitable for local development, internal evaluation, and controlled prototype
-deployments. Production deployments should review `SECURITY.md`,
-`docs/deployment.md`, and the operational notes in this README.
-
-Planned evolution is tracked in `PLAN.md`:
-
-```text
-0.1.0.dev0: pre-release development snapshot
-1.0.0: first official release after native Agent readiness is complete
-```
+deployments. Public version tags, GitHub publication artifacts, package
+publication, and container publication are intentionally disabled while core
+Agent capabilities, product flows, and validation coverage are still being
+completed.
 
 ## Architecture
 
@@ -408,15 +401,12 @@ Development rules:
 
 ## Open Source Governance
 
-- `CHANGELOG.md`: unreleased notes and future release notes.
 - `CONTRIBUTING.md`: human and AI contributor workflow.
 - `AGENTS.md`: AI coding agent execution rules.
 - `SECURITY.md`: private vulnerability reporting and security expectations.
 - `CODE_OF_CONDUCT.md`: community behavior expectations.
 - `SUPPORT.md`: support boundaries and issue guidance.
-- `MAINTAINERS.md`: maintainer responsibilities and release authority.
-- `docs/release-process.md`: release pause policy, future checklist, versioning,
-  and rollback notes.
+- `MAINTAINERS.md`: maintainer responsibilities and repository authority.
 - `docs/repository-governance.md`: branch protection, labels, and maintainer
   operating rules.
 - `docs/architecture.md`: current architecture and planned evolution.
@@ -521,12 +511,12 @@ Report vulnerabilities privately by following `SECURITY.md`.
 ## Contributing
 
 Read `CONTRIBUTING.md` for the human contributor workflow, commit style, branch
-policy, PR rules, quality gates, release expectations, and dependency policy.
+policy, PR rules, quality gates, publication lock, and dependency policy.
 
 AI coding agents should also read `AGENTS.md` before making changes.
 
-Release work is paused. Read `docs/release-process.md` before changing version
-metadata, tags, release notes, or release automation.
+Do not create public version tags, GitHub publication artifacts, or package and
+container publication automation while the project is in development stage.
 
 ## License
 
