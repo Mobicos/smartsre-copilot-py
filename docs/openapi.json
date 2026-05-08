@@ -134,6 +134,12 @@
             "title": "Goal",
             "type": "string"
           },
+          "priority": {
+            "default": "P2",
+            "pattern": "^(P0|P1|P2|P3)$",
+            "title": "Priority",
+            "type": "string"
+          },
           "scene_id": {
             "title": "Scene Id",
             "type": "string"
@@ -142,6 +148,25 @@
             "default": "default",
             "title": "Session Id",
             "type": "string"
+          },
+          "stop_condition": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Condition"
+          },
+          "success_criteria": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Success Criteria",
+            "type": "array"
           }
         },
         "required": [

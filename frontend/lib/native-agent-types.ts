@@ -52,8 +52,44 @@ export interface NativeAgentEvent {
   run_id?: string
   type?: string
   message?: string
-  payload?: unknown
+  payload?: NativeAgentEventPayload
   created_at?: string
+  [key: string]: unknown
+}
+
+export interface NativeEvidenceAssessment {
+  quality?: "strong" | "partial" | "weak" | "empty" | "conflicting" | "error" | string
+  summary?: string
+  citations?: Array<Record<string, unknown>>
+  confidence?: number
+}
+
+export interface NativeDecisionPayload {
+  action_type?: string
+  reasoning_summary?: string
+  selected_tool?: string | null
+  selected_action?: string | null
+  tool_arguments?: Record<string, unknown>
+  expected_evidence?: string[]
+  evidence?: NativeEvidenceAssessment
+  actual_evidence?: NativeEvidenceAssessment
+  confidence?: number
+  decision_status?: string
+  handoff_reason?: string | null
+}
+
+export interface NativeAgentEventPayload {
+  goal?: string
+  trace_id?: string | null
+  decision?: NativeDecisionPayload
+  hypotheses?: Array<Record<string, unknown>>
+  quality?: string
+  summary?: string
+  confidence?: number
+  handoff_reason?: string | null
+  verified_facts?: string[]
+  inferences?: string[]
+  recommendations?: string[]
   [key: string]: unknown
 }
 
@@ -84,6 +120,15 @@ export interface NativeAgentRunMetrics {
   event_counts?: Record<string, number>
 }
 
+export interface NativeToolTrajectory {
+  tool_name?: string
+  call?: NativeAgentEvent | null
+  result?: NativeAgentEvent | null
+  approval_state?: string | null
+  policy?: Record<string, unknown> | null
+  execution_status?: string | null
+}
+
 export interface NativeAgentReplay {
   run?: NativeAgentRun
   summary?: {
@@ -100,14 +145,7 @@ export interface NativeAgentReplay {
   events?: NativeAgentEvent[]
   tool_calls?: NativeAgentEvent[]
   tool_results?: NativeAgentEvent[]
-  tool_trajectory?: Array<{
-    tool_name?: string
-    call?: NativeAgentEvent | null
-    result?: NativeAgentEvent | null
-    approval_state?: string | null
-    policy?: Record<string, unknown> | null
-    execution_status?: string | null
-  }>
+  tool_trajectory?: NativeToolTrajectory[]
   decision_events?: NativeAgentEvent[]
   approval_decisions?: NativeAgentEvent[]
   approval_resumes?: NativeAgentEvent[]
@@ -139,9 +177,35 @@ export interface NativeAgentApproval {
 
 export interface NativeAgentDecisionState {
   run_id: string
-  decisions?: NativeAgentEvent[]
+  goal?: {
+    goal?: string
+    success_criteria?: string[]
+    stop_condition?: Record<string, unknown>
+    priority?: string
+    scene_id?: string | null
+    workspace_id?: string | null
+    runtime_safety?: Record<string, unknown> | null
+  }
+  observations?: Array<Record<string, unknown>>
+  hypotheses?: Array<Record<string, unknown>>
+  decisions?: NativeDecisionPayload[]
+  evidence_assessments?: NativeEvidenceAssessment[]
+  tool_trajectory?: NativeToolTrajectory[]
   approval_decisions?: NativeAgentEvent[]
   approval_resume?: NativeAgentEvent[]
   recovery_events?: NativeAgentEvent[]
+  handoff?: {
+    required?: boolean
+    reason?: string | null
+    event?: NativeAgentEvent | null
+  }
   latest_status?: string
+  summary?: {
+    decision_count?: number
+    observation_count?: number
+    evidence_assessment_count?: number
+    recovery_count?: number
+    tool_call_count?: number
+    handoff_required?: boolean
+  }
 }

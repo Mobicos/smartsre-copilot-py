@@ -105,6 +105,18 @@ class ToolExecutor:
 
         try:
             output = await self._invoke_tool_with_policy(tool, arguments, policy=policy)
+            output_validation_error = self._validate_output(tool, output)
+            if output_validation_error:
+                return ToolExecutionResult(
+                    tool_name=tool_name,
+                    status="invalid_output",
+                    arguments=arguments,
+                    output=output,
+                    error=output_validation_error,
+                    policy=policy,
+                    decision="executed",
+                    decision_reason="Tool output failed schema validation",
+                )
             return ToolExecutionResult(
                 tool_name=tool_name,
                 status="success",
@@ -186,6 +198,18 @@ class ToolExecutor:
 
         try:
             output = await self._invoke_tool_with_policy(tool, arguments, policy=policy)
+            output_validation_error = self._validate_output(tool, output)
+            if output_validation_error:
+                return ToolExecutionResult(
+                    tool_name=tool_name,
+                    status="invalid_output",
+                    arguments=arguments,
+                    output=output,
+                    error=output_validation_error,
+                    policy=policy,
+                    decision="executed_after_approval",
+                    decision_reason="Tool output failed schema validation",
+                )
             return ToolExecutionResult(
                 tool_name=tool_name,
                 status="success",
@@ -228,7 +252,7 @@ class ToolExecutor:
     def _default_policy(tool_name: str, *, tool: Any | None = None) -> dict[str, Any]:
         side_effect = str(getattr(tool, "side_effect", "none") or "none")
         approval_required = bool(getattr(tool, "approval_required", False))
-        if side_effect == "destructive":
+        if side_effect in {"change", "destructive"}:
             approval_required = True
         return {
             "tool_name": tool_name,
@@ -242,6 +266,7 @@ class ToolExecutor:
             "owner": str(getattr(tool, "owner", "SmartSRE") or "SmartSRE"),
             "data_boundary": str(getattr(tool, "data_boundary", "workspace") or "workspace"),
             "side_effect": side_effect,
+            "fallback_strategy": str(getattr(tool, "fallback_strategy", "handoff") or "handoff"),
         }
 
     @staticmethod
@@ -308,6 +333,19 @@ class ToolExecutor:
         except Exception as exc:
             return str(exc)
 
+        return None
+
+    @staticmethod
+    def _validate_output(tool: Any, output: Any) -> str | None:
+        output_schema = getattr(tool, "output_schema", None)
+        if output_schema is None:
+            return None
+        if not isinstance(output_schema, dict):
+            return None
+        if output_schema.get("type") == "object" and not isinstance(output, dict):
+            return "Output must be object"
+        if isinstance(output, dict):
+            return _validate_json_schema_arguments(output_schema, output)
         return None
 
     @staticmethod

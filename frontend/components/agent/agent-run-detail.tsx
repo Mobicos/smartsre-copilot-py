@@ -137,6 +137,16 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
       label: "Failed",
       className: "text-destructive bg-destructive/10 border-destructive/20",
     },
+    waiting_approval: {
+      icon: AlertTriangle,
+      label: "Approval",
+      className: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+    },
+    handoff_required: {
+      icon: AlertTriangle,
+      label: "Handoff",
+      className: "text-cyan-600 bg-cyan-500/10 border-cyan-500/20",
+    },
   }
 
   const status = statusConfig[run.status] || statusConfig.completed
@@ -221,17 +231,62 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
             <CardContent>
               <dl className="grid gap-3 text-xs sm:grid-cols-4">
                 <Metric label="Status" value={decisionState.latest_status} />
-                <Metric label="Decisions" value={decisionState.decisions?.length ?? 0} />
+                <Metric label="Priority" value={decisionState.goal?.priority} />
+                <Metric
+                  label="Observations"
+                  value={
+                    decisionState.summary?.observation_count ??
+                    decisionState.observations?.length ??
+                    0
+                  }
+                />
+                <Metric
+                  label="Decisions"
+                  value={
+                    decisionState.summary?.decision_count ??
+                    decisionState.decisions?.length ??
+                    0
+                  }
+                />
+                <Metric
+                  label="Evidence"
+                  value={
+                    decisionState.summary?.evidence_assessment_count ??
+                    decisionState.evidence_assessments?.length ??
+                    0
+                  }
+                />
                 <Metric
                   label="Approvals"
                   value={decisionState.approval_decisions?.length ?? 0}
                 />
                 <Metric label="Resume" value={decisionState.approval_resume?.length ?? 0} />
-                <Metric label="Recovery" value={decisionState.recovery_events?.length ?? 0} />
+                <Metric
+                  label="Recovery"
+                  value={
+                    decisionState.summary?.recovery_count ??
+                    decisionState.recovery_events?.length ??
+                    0
+                  }
+                />
+                <Metric
+                  label="Handoff"
+                  value={decisionState.handoff?.required ? decisionState.handoff.reason || "required" : "no"}
+                />
               </dl>
-              {decisionState.decisions?.at(-1)?.message && (
+              {decisionState.goal?.goal && (
                 <p className="mt-3 rounded-md bg-muted p-2 text-xs text-muted-foreground">
-                  {decisionState.decisions.at(-1)?.message}
+                  Goal: {decisionState.goal.goal}
+                </p>
+              )}
+              {decisionState.decisions?.at(-1)?.reasoning_summary && (
+                <p className="mt-2 rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                  Latest decision: {decisionState.decisions.at(-1)?.reasoning_summary}
+                </p>
+              )}
+              {decisionState.evidence_assessments?.at(-1)?.summary && (
+                <p className="mt-2 rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                  Evidence: {decisionState.evidence_assessments.at(-1)?.summary}
                 </p>
               )}
             </CardContent>

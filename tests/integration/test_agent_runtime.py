@@ -72,6 +72,17 @@ class PolicyAwareExecutor:
         )
 
 
+class PartialEvidenceExecutor:
+    async def execute(self, tool, args, *, principal):
+        return SimpleNamespace(
+            tool_name=tool.name,
+            status="partial",
+            output="partial evidence",
+            error=None,
+            arguments=args,
+        )
+
+
 class EmptyEvidenceExecutor:
     async def execute(self, tool, args, *, principal):
         return SimpleNamespace(
@@ -397,6 +408,7 @@ async def test_agent_runtime_applies_default_step_limit_and_records_skipped_tool
     run_store = MemoryRunStore()
     scene_store = MemorySceneStore()
     scene_store.scene["tools"] = [f"Tool{i}" for i in range(6)]
+    scene_store.scene["agent_config"] = {"decision_runtime_enabled": False}
     runtime = AgentRuntime(
         tool_catalog=StaticCatalog(
             [SimpleNamespace(name=f"Tool{i}", description=f"Tool {i}") for i in range(6)]
@@ -437,6 +449,7 @@ async def test_agent_runtime_allows_scene_config_to_override_step_limit(monkeypa
     scene_store = MemorySceneStore()
     scene_store.scene["tools"] = ["Tool0", "Tool1", "Tool2"]
     scene_store.scene["agent_config"] = {
+        "decision_runtime_enabled": False,
         "max_steps": 2,
         "tool_timeout_seconds": 1,
         "run_timeout_seconds": 5,
@@ -513,7 +526,7 @@ async def test_agent_runtime_ignores_invalid_scene_safety_config_values():
 
 
 @pytest.mark.asyncio
-async def test_agent_runtime_records_tool_timeout_and_completes_run():
+async def test_agent_runtime_records_tool_timeout_and_hands_off_run():
     run_store = MemoryRunStore()
     scene_store = MemorySceneStore()
     scene_store.scene["tools"] = ["SearchLog"]
@@ -541,8 +554,8 @@ async def test_agent_runtime_records_tool_timeout_and_completes_run():
 
     tool_result = next(event for event in run_store.events if event["type"] == "tool_result")
 
-    assert events[-1].type == "complete"
-    assert run_store.status == "completed"
+    assert events[-1].type == "handoff"
+    assert run_store.status == "handoff_required"
     assert tool_result["payload"]["execution_status"] == "timeout"
     assert tool_result["payload"]["error"] == "Tool execution timed out after 0.001 seconds"
     assert tool_result["payload"]["governance"] == {
@@ -557,6 +570,8 @@ async def test_agent_runtime_records_tool_timeout_and_completes_run():
             "approval_required": False,
         },
     }
+    assert any(event["type"] == "recovery" for event in run_store.events)
+    assert run_store.metrics["handoff_reason"] == "evidence_error"
 
 
 @pytest.mark.asyncio
@@ -600,7 +615,9 @@ async def test_agent_runtime_records_audit_friendly_tool_governance_payload():
 
     tool_result = next(event for event in run_store.events if event["type"] == "tool_result")
 
-    assert events[-1].type == "complete"
+    assert events[-1].type == "approval_required"
+    assert events[-1].status == "waiting_approval"
+    assert run_store.status == "waiting_approval"
     assert tool_result["payload"]["policy"] == policy
     assert tool_result["payload"]["governance"] == {
         "decision": "approval_required",
@@ -852,9 +869,143 @@ async def test_decision_runtime_records_observation_evidence_recovery_and_handof
         )
     ]
     event_types = [event["type"] for event in run_store.events]
+    assessments = [event for event in run_store.events if event["type"] == "evidence_assessment"]
 
-    assert events[-1].type in ("handoff", "complete")
-    assert run_store.status in ("handoff_required", "completed")
-    assert "run_started" in event_types
+    assert events[-1].type == "handoff"
+    assert run_store.status == "handoff_required"
+    assert "observation" in event_types
     assert "decision" in event_types
-    assert "final_report" in event_types or "handoff" in event_types
+    assert "evidence_assessment" in event_types
+    assert "recovery" in event_types
+    assert "handoff" in event_types
+    assert assessments[-1]["payload"]["quality"] == "empty"
+    assert run_store.metrics["handoff_reason"] == "insufficient_evidence"
+
+
+@pytest.mark.asyncio
+async def test_decision_runtime_stops_after_strong_evidence_without_calling_extra_tools():
+    run_store = MemoryRunStore()
+    scene_store = MemorySceneStore()
+    scene_store.scene["tools"] = ["SearchLog", "GetMetrics"]
+    scene_store.scene["agent_config"] = {
+        "decision_runtime_enabled": True,
+        "max_steps": 3,
+    }
+    runtime = AgentRuntime(
+        tool_catalog=StaticCatalog(
+            [
+                SimpleNamespace(name="SearchLog", description="Search logs"),
+                SimpleNamespace(name="GetMetrics", description="Get metrics"),
+            ]
+        ),
+        tool_executor=StaticExecutor(),
+        scene_store=scene_store,
+        run_store=run_store,
+        policy_store=MemoryPolicyStore(),
+    )
+
+    events = [
+        event
+        async for event in runtime.run(
+            scene_id="scene-1",
+            session_id="session-1",
+            goal="diagnose current alerts",
+            principal=Principal(role="admin", subject="pytest"),
+        )
+    ]
+    tool_calls = [event for event in run_store.events if event["type"] == "tool_call"]
+    decisions = [event for event in run_store.events if event["type"] == "decision"]
+
+    assert events[-1].type == "complete"
+    assert run_store.status == "completed"
+    assert [event["payload"]["tool_name"] for event in tool_calls] == ["SearchLog"]
+    assert [event["payload"]["decision"]["action_type"] for event in decisions] == [
+        "call_tool",
+        "final_report",
+    ]
+    assert "SearchLog evidence" in str(run_store.final_report)
+    assert "GetMetrics evidence" not in str(run_store.final_report)
+
+
+@pytest.mark.asyncio
+async def test_agent_runtime_records_goal_contract_in_run_started_event():
+    run_store = MemoryRunStore()
+    scene_store = MemorySceneStore()
+    scene_store.scene["tools"] = []
+    runtime = AgentRuntime(
+        tool_catalog=StaticCatalog([]),
+        tool_executor=StaticExecutor(),
+        scene_store=scene_store,
+        run_store=run_store,
+        policy_store=MemoryPolicyStore(),
+    )
+
+    events = [
+        event
+        async for event in runtime.run(
+            scene_id="scene-1",
+            session_id="session-1",
+            goal="diagnose current alerts",
+            principal=Principal(role="admin", subject="pytest"),
+            success_criteria=["Collect evidence before root cause claims"],
+            stop_condition={
+                "max_steps": 3,
+                "max_minutes": 1,
+                "confidence_threshold": 0.8,
+            },
+            priority="P1",
+        )
+    ]
+    run_started = run_store.events[0]
+
+    assert events[-1].type == "complete"
+    assert run_started["payload"]["success_criteria"] == [
+        "Collect evidence before root cause claims"
+    ]
+    assert run_started["payload"]["stop_condition"] == {
+        "max_steps": 3,
+        "max_minutes": 1,
+        "confidence_threshold": 0.8,
+    }
+    assert run_started["payload"]["priority"] == "P1"
+
+
+@pytest.mark.asyncio
+async def test_decision_runtime_hands_off_when_step_budget_is_exhausted_without_strong_evidence():
+    run_store = MemoryRunStore()
+    scene_store = MemorySceneStore()
+    scene_store.scene["tools"] = ["SearchLog", "GetMetrics"]
+    scene_store.scene["agent_config"] = {
+        "decision_runtime_enabled": True,
+        "max_steps": 1,
+    }
+    runtime = AgentRuntime(
+        tool_catalog=StaticCatalog(
+            [
+                SimpleNamespace(name="SearchLog", description="Search logs"),
+                SimpleNamespace(name="GetMetrics", description="Get metrics"),
+            ]
+        ),
+        tool_executor=PartialEvidenceExecutor(),
+        scene_store=scene_store,
+        run_store=run_store,
+        policy_store=MemoryPolicyStore(),
+    )
+
+    events = [
+        event
+        async for event in runtime.run(
+            scene_id="scene-1",
+            session_id="session-1",
+            goal="diagnose current alerts",
+            principal=Principal(role="admin", subject="pytest"),
+        )
+    ]
+    event_types = [event["type"] for event in run_store.events]
+
+    assert events[-1].type == "handoff"
+    assert run_store.status == "handoff_required"
+    assert "limit_reached" in event_types
+    assert "recovery" in event_types
+    assert "handoff" in event_types
+    assert run_store.metrics["handoff_reason"] == "budget_exhausted"

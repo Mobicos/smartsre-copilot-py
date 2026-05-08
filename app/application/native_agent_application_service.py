@@ -144,6 +144,9 @@ class NativeAgentApplicationService:
         session_id: str,
         goal: str,
         principal: Principal,
+        success_criteria: list[str] | None = None,
+        stop_condition: dict[str, Any] | None = None,
+        priority: str = "P2",
     ) -> dict[str, Any] | None:
         final_event: dict[str, Any] | None = None
         async for event in self._agent_runtime.run(
@@ -151,6 +154,9 @@ class NativeAgentApplicationService:
             session_id=session_id,
             goal=goal,
             principal=principal,
+            success_criteria=success_criteria,
+            stop_condition=stop_condition,
+            priority=priority,
         ):
             final_event = self._runtime_event_to_dict(event)
 
@@ -169,6 +175,9 @@ class NativeAgentApplicationService:
         session_id: str,
         goal: str,
         principal: Principal,
+        success_criteria: list[str] | None = None,
+        stop_condition: dict[str, Any] | None = None,
+        priority: str = "P2",
     ) -> AsyncGenerator[dict[str, Any], None]:
         """Stream agent run events as dictionaries."""
         async for event in self._agent_runtime.run(
@@ -176,6 +185,9 @@ class NativeAgentApplicationService:
             session_id=session_id,
             goal=goal,
             principal=principal,
+            success_criteria=success_criteria,
+            stop_condition=stop_condition,
+            priority=priority,
         ):
             yield self._runtime_event_to_dict(event)
 
@@ -252,13 +264,46 @@ class NativeAgentApplicationService:
         if run is None:
             return None
         events = self._agent_run_repository.list_events(run_id)
+        tool_calls = _events_by_type(events, "tool_call")
+        tool_results = _events_by_type(events, "tool_result")
+        decisions = _normalized_decisions(events)
+        observations = _event_payloads(events, "observation")
+        evidence_assessments = _event_payloads(events, "evidence_assessment")
+        recovery_events = _events_by_type(events, "recovery") or _decision_events_by_action(
+            events, {"recover", "handoff"}
+        )
+        handoff_event = next(
+            (event for event in reversed(events) if event.get("type") == "handoff"), None
+        )
+        handoff_payload = handoff_event.get("payload") if handoff_event else None
+        if not isinstance(handoff_payload, dict):
+            handoff_payload = {}
         return {
             "run_id": run_id,
-            "decisions": _events_by_type(events, "decision"),
+            "goal": _decision_goal_snapshot(run, events),
+            "observations": observations,
+            "hypotheses": _event_payloads(events, "hypothesis"),
+            "decisions": decisions,
+            "evidence_assessments": evidence_assessments,
+            "tool_trajectory": _build_tool_trajectory(tool_calls, tool_results),
             "approval_decisions": _events_by_type(events, "approval_decision"),
             "approval_resume": _events_by_type(events, "approval_resume"),
-            "recovery_events": _decision_events_by_action(events, {"recover", "handoff"}),
+            "recovery_events": recovery_events,
+            "handoff": {
+                "required": run.get("status") == "handoff_required"
+                or bool(handoff_payload.get("handoff_required")),
+                "reason": handoff_payload.get("handoff_reason") or run.get("error_message"),
+                "event": handoff_event,
+            },
             "latest_status": _latest_decision_status(events),
+            "summary": {
+                "decision_count": len(decisions),
+                "observation_count": len(observations),
+                "evidence_assessment_count": len(evidence_assessments),
+                "recovery_count": len(recovery_events),
+                "tool_call_count": len(tool_calls),
+                "handoff_required": run.get("status") == "handoff_required",
+            },
         }
 
     def list_agent_approvals(self, *, limit: int = 50) -> list[dict[str, Any]]:
@@ -638,12 +683,73 @@ def _decision_events_by_action(
     return matched
 
 
+def _normalized_decisions(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    decisions: list[dict[str, Any]] = []
+    for event in events:
+        if event.get("type") != "decision":
+            continue
+        payload = event.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        decision = payload.get("decision")
+        if not isinstance(decision, dict):
+            continue
+        decisions.append(
+            {
+                **decision,
+                "message": event.get("message"),
+                "created_at": event.get("created_at"),
+                "checkpoint_ns": payload.get("checkpoint_ns"),
+                "state_status": payload.get("state_status"),
+            }
+        )
+    return decisions
+
+
+def _event_payloads(events: list[dict[str, Any]], event_type: str) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    for event in events:
+        if event.get("type") != event_type:
+            continue
+        payload = event.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        payloads.append(
+            {
+                **payload,
+                "message": event.get("message"),
+                "created_at": event.get("created_at"),
+            }
+        )
+    return payloads
+
+
+def _decision_goal_snapshot(run: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
+    run_started = next((event for event in events if event.get("type") == "run_started"), None)
+    payload = run_started.get("payload") if run_started else None
+    if not isinstance(payload, dict):
+        payload = {}
+    return {
+        "goal": payload.get("goal") or run.get("goal"),
+        "success_criteria": payload.get("success_criteria") or [],
+        "stop_condition": payload.get("stop_condition") or {},
+        "priority": payload.get("priority") or "P2",
+        "scene_id": payload.get("scene_id") or run.get("scene_id"),
+        "workspace_id": payload.get("workspace_id") or run.get("workspace_id"),
+        "runtime_safety": payload.get("runtime_safety"),
+    }
+
+
 def _latest_decision_status(events: list[dict[str, Any]]) -> str:
     for event in reversed(events):
+        if event.get("type") == "handoff":
+            return "handoff_required"
         if event.get("type") == "approval_resume":
             payload = event.get("payload")
             if isinstance(payload, dict):
                 return str(payload.get("resume_status") or "approval_resume")
+        if event.get("type") == "approval_required":
+            return "waiting_approval"
         if event.get("type") == "decision":
             payload = event.get("payload")
             if isinstance(payload, dict):
