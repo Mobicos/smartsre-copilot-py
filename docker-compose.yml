@@ -1,7 +1,7 @@
 services:
   etcd:
     container_name: milvus-etcd
-    image: quay.io/coreos/etcd:v3.6.11
+    image: quay.io/coreos/etcd:v3.5.17
     profiles:
       - vector-milvus
     environment:
@@ -77,7 +77,7 @@ services:
       - standalone
 
   postgres:
-    image: pgvector/pgvector:pg18
+    image: pgvector/pgvector:pg16
     container_name: smartsre-postgres
     environment:
       POSTGRES_DB: smartsre
@@ -94,7 +94,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:8
+    image: redis:7
     container_name: smartsre-redis
     ports:
       - "6379:6379"
@@ -102,6 +102,24 @@ services:
       - ./volumes/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio-app:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: smartsre-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    volumes:
+      - ./volumes/minio-app:/data
+    command: minio server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -132,6 +150,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       TASK_QUEUE_BACKEND: redis
       TASK_DISPATCHER_MODE: detached
+      OBJECT_STORAGE_BACKEND: minio
+      MINIO_ENDPOINT: minio-app:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
     ports:
       - "9900:9900"
     depends_on:
@@ -140,6 +162,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio-app:
         condition: service_healthy
 
   worker:
@@ -155,12 +179,18 @@ services:
       REDIS_URL: redis://redis:6379/0
       TASK_QUEUE_BACKEND: redis
       TASK_DISPATCHER_MODE: detached
+      OBJECT_STORAGE_BACKEND: minio
+      MINIO_ENDPOINT: minio-app:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
     depends_on:
       migrate:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio-app:
         condition: service_healthy
 
   # ---------------------------------------------------------------------------
