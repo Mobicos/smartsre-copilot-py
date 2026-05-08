@@ -1,8 +1,8 @@
 """Native SRE Agent runtime.
 
-The development runtime keeps reasoning deterministic and auditable: it builds
-a small hypothesis set, executes scene-approved tools through the harness, and
-persists every step as trajectory events.
+The runtime keeps reasoning deterministic and auditable around the model-facing
+decision layer: it builds an explicit state, routes scene-approved tools through
+policy gates, assesses evidence, and persists every step as replayable events.
 """
 
 from __future__ import annotations
@@ -37,11 +37,6 @@ from app.agent_runtime.synthesizer import ReportSynthesizer
 from app.agent_runtime.tool_catalog import ToolCatalog
 from app.agent_runtime.tool_executor import ToolExecutionResult, ToolExecutor
 from app.config import config
-from app.platform.persistence import (
-    agent_run_repository,
-    scene_repository,
-    tool_policy_repository,
-)
 
 
 @dataclass(frozen=True)
@@ -111,6 +106,85 @@ class RuntimeDeadline:
             raise TimeoutError(f"Agent run timed out after {self.timeout_seconds:g} seconds")
 
 
+@dataclass(frozen=True)
+class RuntimeContext:
+    """Immutable runtime envelope shared by orchestration helpers."""
+
+    run_id: str
+    scene_id: str
+    workspace_id: str
+    session_id: str
+    goal: str
+    success_criteria: list[str]
+    stop_condition: dict[str, Any]
+    priority: Priority
+    safety_config: RuntimeSafetyConfig
+    deadline: RuntimeDeadline
+
+
+class EventRecorder:
+    """Persist trajectory events and return stream-friendly runtime events."""
+
+    def __init__(self, run_store: AgentRunStore) -> None:
+        self._run_store = run_store
+
+    def record(
+        self,
+        run_id: str,
+        *,
+        event_type: str,
+        stage: str,
+        message: str,
+        payload: dict[str, Any],
+    ) -> AgentRuntimeEvent:
+        self._run_store.append_event(
+            run_id,
+            event_type=event_type,
+            stage=stage,
+            message=message,
+            payload=payload,
+        )
+        return AgentRuntimeEvent(
+            type=event_type,
+            stage=stage,
+            run_id=run_id,
+            message=message,
+            payload=payload,
+        )
+
+
+class MetricsCollector:
+    """Derive and persist run-level metrics from stored events."""
+
+    def __init__(self, run_store: AgentRunStore) -> None:
+        self._run_store = run_store
+
+    def persist(self, run_id: str) -> None:
+        try:
+            run = self._run_store.get_run(run_id)
+            events = self._run_store.list_events(run_id)
+            if run is None:
+                return
+            self._run_store.update_run_metrics(
+                run_id,
+                runtime_version="native-agent-dev",
+                trace_id=run_id,
+                model_name=_runtime_model_name(),
+                decision_provider=_runtime_decision_provider(),
+                step_count=_metric_step_count(events),
+                tool_call_count=len(_events_by_type(events, "tool_call")),
+                latency_ms=_latency_ms(run.get("created_at"), run.get("updated_at")),
+                error_type=_metric_error_type(run, events),
+                approval_state=_metric_approval_state(events),
+                retrieval_count=len(_events_by_type(events, "knowledge_context")),
+                token_usage=None,
+                cost_estimate=None,
+                handoff_reason=_metric_handoff_reason(run, events),
+            )
+        except Exception as exc:
+            logger.warning(f"Failed to persist agent run metrics for {run_id}: {exc}")
+
+
 class AgentRuntime:
     """Run a scene-scoped native SRE agent workflow."""
 
@@ -129,9 +203,11 @@ class AgentRuntime:
         knowledge_context_provider: KnowledgeContextProvider | None = None,
         decision_runtime: AgentDecisionRuntime | None = None,
     ) -> None:
-        self._scene_store = scene_store or scene_repository
-        self._run_store = run_store or agent_run_repository
-        self._policy_store = policy_store or tool_policy_repository
+        self._scene_store = _required_dependency(scene_store, "scene_store")
+        self._run_store = _required_dependency(run_store, "run_store")
+        self._policy_store = _required_dependency(policy_store, "policy_store")
+        self._event_recorder = EventRecorder(self._run_store)
+        self._metrics_collector = MetricsCollector(self._run_store)
         self._tool_catalog = tool_catalog or ToolCatalog()
         tool_executor = tool_executor or ToolExecutor(policy_store=self._policy_store)
         self._planner = planner or AgentPlanner()
@@ -170,21 +246,33 @@ class AgentRuntime:
             session_id=session_id,
             goal=goal,
         )
+        runtime_context = RuntimeContext(
+            run_id=run_id,
+            scene_id=scene_id,
+            workspace_id=str(scene["workspace_id"]),
+            session_id=session_id,
+            goal=goal,
+            success_criteria=success_criteria or [],
+            stop_condition=stop_condition or {},
+            priority=_priority_or_default(priority),
+            safety_config=safety_config,
+            deadline=deadline,
+        )
 
         try:
             yield self._record_event(
-                run_id,
+                runtime_context.run_id,
                 event_type="run_started",
                 stage="start",
                 message="Agent run started",
                 payload={
-                    "scene_id": scene_id,
-                    "workspace_id": scene["workspace_id"],
-                    "goal": goal,
-                    "success_criteria": success_criteria or [],
-                    "stop_condition": stop_condition or {},
-                    "priority": _priority_or_default(priority),
-                    "runtime_safety": safety_config.to_dict(),
+                    "scene_id": runtime_context.scene_id,
+                    "workspace_id": runtime_context.workspace_id,
+                    "goal": runtime_context.goal,
+                    "success_criteria": runtime_context.success_criteria,
+                    "stop_condition": runtime_context.stop_condition,
+                    "priority": runtime_context.priority,
+                    "runtime_safety": runtime_context.safety_config.to_dict(),
                 },
             )
 
@@ -409,13 +497,23 @@ class AgentRuntime:
                             payload=recovery.model_dump(mode="json"),
                         )
                         report_contract = FinalReportContract(
-                            summary="证据不足，已停止自动结论并转交人工处理。",
+                            summary=(
+                                "Evidence is not strong enough for a safe autonomous "
+                                "conclusion, so the run is handing off to a human."
+                            ),
                             verified_facts=[],
                             inferences=[
-                                "当前工具未返回足够证据，系统不能确认根因。",
+                                (
+                                    "The current tool result did not provide enough "
+                                    "verified evidence to confirm a root cause."
+                                ),
                             ],
                             recommendations=[
-                                "请人工检查工具连接、查询范围、时间窗口和关联告警上下文。",
+                                (
+                                    "Have an operator inspect the cited tool output, "
+                                    "collect additional evidence, and resume the run "
+                                    "only after the boundary condition is understood."
+                                ),
                             ],
                             citations=assessment.citations,
                             confidence=assessment.confidence,
@@ -485,13 +583,22 @@ class AgentRuntime:
                     payload=recovery.model_dump(mode="json"),
                 )
                 report_contract = FinalReportContract(
-                    summary="执行预算已耗尽，且当前证据不足以安全生成确定结论。",
+                    summary=(
+                        "The execution budget is exhausted and the available evidence "
+                        "is not sufficient for a safe final conclusion."
+                    ),
                     verified_facts=state.evidence_report_lines(),
                     inferences=[
-                        "仍有工具未执行，自动决策边界已达到。",
+                        (
+                            "Some scene-approved tools were skipped because the "
+                            "runtime boundary was reached."
+                        ),
                     ],
                     recommendations=[
-                        "请人工继续执行被跳过的工具，或扩大本次运行预算后重试。",
+                        (
+                            "Increase the run budget or narrow the scene tool set, "
+                            "then resume with the remaining evidence requirements."
+                        ),
                     ],
                     confidence=0.3,
                     handoff_required=True,
@@ -682,45 +789,16 @@ class AgentRuntime:
         message: str,
         payload: dict[str, Any],
     ) -> AgentRuntimeEvent:
-        self._run_store.append_event(
+        return self._event_recorder.record(
             run_id,
             event_type=event_type,
             stage=stage,
             message=message,
             payload=payload,
         )
-        return AgentRuntimeEvent(
-            type=event_type,
-            stage=stage,
-            run_id=run_id,
-            message=message,
-            payload=payload,
-        )
 
     def _persist_run_metrics(self, run_id: str) -> None:
-        try:
-            run = self._run_store.get_run(run_id)
-            events = self._run_store.list_events(run_id)
-            if run is None:
-                return
-            self._run_store.update_run_metrics(
-                run_id,
-                runtime_version="native-agent-dev",
-                trace_id=run_id,
-                model_name=_runtime_model_name(),
-                decision_provider=_runtime_decision_provider(),
-                step_count=_metric_step_count(events),
-                tool_call_count=len(_events_by_type(events, "tool_call")),
-                latency_ms=_latency_ms(run.get("created_at"), run.get("updated_at")),
-                error_type=_metric_error_type(run, events),
-                approval_state=_metric_approval_state(events),
-                retrieval_count=len(_events_by_type(events, "knowledge_context")),
-                token_usage=None,
-                cost_estimate=None,
-                handoff_reason=_metric_handoff_reason(run, events),
-            )
-        except Exception as exc:
-            logger.warning(f"Failed to persist agent run metrics for {run_id}: {exc}")
+        self._metrics_collector.persist(run_id)
 
 
 def _positive_int(value: Any, *, default: int) -> int:
@@ -729,6 +807,15 @@ def _positive_int(value: Any, *, default: int) -> int:
     except (TypeError, ValueError):
         return default
     return parsed if parsed > 0 else default
+
+
+def _required_dependency(value: Any | None, name: str) -> Any:
+    if value is None:
+        raise ValueError(
+            f"AgentRuntime requires explicit {name}; construct it through "
+            "app.api.providers.get_agent_runtime() or pass a test adapter."
+        )
+    return value
 
 
 def _positive_float(value: Any, *, default: float) -> float:
@@ -842,9 +929,9 @@ def _handoff_report(goal: str, report: FinalReportContract) -> str:
         f"- confidence: {report.confidence:.2f}",
     ]
     if report.inferences:
-        lines.extend(["", "## 推断", *[f"- {item}" for item in report.inferences]])
+        lines.extend(["", "## Inferences", *[f"- {item}" for item in report.inferences]])
     if report.recommendations:
-        lines.extend(["", "## 建议", *[f"- {item}" for item in report.recommendations]])
+        lines.extend(["", "## Recommendations", *[f"- {item}" for item in report.recommendations]])
     return "\n".join(lines)
 
 

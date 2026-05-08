@@ -218,6 +218,9 @@ def get_agent_runtime() -> AgentRuntime:
     return AgentRuntime(
         tool_catalog=get_tool_catalog(),
         tool_executor=get_tool_executor(),
+        scene_store=scene_repository,
+        run_store=agent_run_repository,
+        policy_store=tool_policy_repository,
         decision_runtime=AgentDecisionRuntime(
             provider=decision_provider,
             checkpoint_saver=checkpoint_saver,

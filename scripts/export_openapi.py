@@ -28,6 +28,9 @@ class OpenAPIContractError(RuntimeError):
 
 def build_openapi_contract() -> dict[str, Any]:
     """Build the OpenAPI contract without starting the application lifespan."""
+    from app.platform.compat import stabilize_windows_platform_detection
+
+    stabilize_windows_platform_detection()
     from app.main import app
 
     spec = app.openapi()

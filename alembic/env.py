@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from sqlmodel import SQLModel
 
 from alembic import context
+from app.config import config as app_config
 from app.platform.persistence.schema import *  # noqa: F401,F403 — register all models
 
 config = context.config
@@ -61,6 +62,7 @@ def run_migrations_online() -> None:
     connectable = create_engine(
         _resolve_database_url(),
         poolclass=pool.NullPool,
+        connect_args={"connect_timeout": app_config.postgres_connect_timeout_seconds},
     )
 
     with connectable.connect() as connection:

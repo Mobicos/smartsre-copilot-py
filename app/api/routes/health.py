@@ -5,13 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from loguru import logger
 
 from app.api.providers import get_service_health, get_vector_store_manager
 from app.config import config
 from app.infrastructure import redis_manager
 from app.infrastructure.tasks import agent_resume_dispatcher, task_dispatcher
+from app.observability import render_prometheus_metrics
 from app.platform.persistence.database import health_check as db_health_check
 from app.platform.persistence.repositories.indexing import indexing_task_repository
 
@@ -172,3 +173,11 @@ async def ready_health_check():
 async def health_check():
     status_code, payload = _build_ready_health_payload()
     return JSONResponse(status_code=status_code, content=payload)
+
+
+@router.get("/metrics", include_in_schema=False)
+async def prometheus_metrics():
+    return PlainTextResponse(
+        render_prometheus_metrics(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )

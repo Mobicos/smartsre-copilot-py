@@ -33,6 +33,23 @@ def test_health_returns_200(client):
     assert isinstance(data["status"], str)
 
 
+def test_metrics_endpoint_exposes_prometheus_text(client):
+    client.get("/health/live")
+
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    body = response.text
+    assert "smartsre_http_requests_total" in body
+    assert "smartsre_http_request_duration_seconds_count" in body
+    assert "smartsre_agent_runs_total" in body
+    assert "smartsre_agent_tool_calls_total" in body
+    assert "smartsre_agent_approvals_total" in body
+    assert "smartsre_agent_handoffs_total" in body
+    assert "smartsre_indexing_tasks_total" in body
+
+
 # ---------------------------------------------------------------------------
 # Agent workspace endpoints
 # ---------------------------------------------------------------------------

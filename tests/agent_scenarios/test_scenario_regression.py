@@ -88,6 +88,9 @@ async def _run_agent(*, tools, executor, scene_id, goal):
     runtime = AgentRuntime(
         tool_catalog=StaticCatalog(tools),
         tool_executor=executor,
+        scene_store=scene_repository,
+        run_store=agent_run_repository,
+        policy_store=tool_policy_repository,
     )
     events = []
     async for event in runtime.run(
@@ -434,6 +437,9 @@ async def test_failure_governance_denied_disabled_tool():
     runtime = AgentRuntime(
         tool_catalog=StaticCatalog(tools),
         tool_executor=_DisabledToolExecutor(),
+        scene_store=scene_repository,
+        run_store=agent_run_repository,
+        policy_store=tool_policy_repository,
     )
     events = []
     async for event in runtime.run(
@@ -488,6 +494,9 @@ async def test_failure_run_timeout():
     runtime = AgentRuntime(
         tool_catalog=_SlowCatalog(),
         tool_executor=SuccessExecutor(),
+        scene_store=scene_repository,
+        run_store=agent_run_repository,
+        policy_store=tool_policy_repository,
     )
     events = []
     async for event in runtime.run(
@@ -537,6 +546,9 @@ async def test_failure_forbidden_tool():
     runtime = AgentRuntime(
         tool_catalog=StaticCatalog(tools),
         tool_executor=_ForbiddenToolExecutor(),
+        scene_store=scene_repository,
+        run_store=agent_run_repository,
+        policy_store=tool_policy_repository,
     )
     events = []
     async for event in runtime.run(

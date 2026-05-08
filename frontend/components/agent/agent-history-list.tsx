@@ -1,7 +1,7 @@
 "use client"
 
 import type { ElementType } from "react"
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import Link from "next/link"
 import {
   AlertTriangle,
@@ -13,20 +13,8 @@ import {
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { useAgentWorkbenchStore } from "@/lib/agent-workbench-store"
 import { cn } from "@/lib/utils"
-
-interface AgentRun {
-  run_id: string
-  status: string
-  goal: string
-  final_report?: string | null
-  error_message?: string | null
-  runtime_version?: string | null
-  trace_id?: string | null
-  approval_state?: string | null
-  created_at?: string
-  updated_at?: string
-}
 
 const STATUS_CONFIG: Record<string, { icon: ElementType; label: string; className: string }> = {
   completed: {
@@ -57,25 +45,13 @@ const STATUS_CONFIG: Record<string, { icon: ElementType; label: string; classNam
 }
 
 export function AgentHistoryList() {
-  const [runs, setRuns] = useState<AgentRun[]>([])
-  const [loading, setLoading] = useState(true)
+  const runs = useAgentWorkbenchStore((state) => state.runs)
+  const loading = useAgentWorkbenchStore((state) => state.runsLoading)
+  const loadRuns = useAgentWorkbenchStore((state) => state.loadRuns)
 
   useEffect(() => {
-    void loadRuns()
-  }, [])
-
-  async function loadRuns() {
-    setLoading(true)
-    try {
-      const res = await fetch("/api/agent/runs?limit=50", { cache: "no-store" })
-      const data = (await res.json()) as { data?: AgentRun[] } | AgentRun[]
-      setRuns(Array.isArray(data) ? data : data.data || [])
-    } catch (err) {
-      toast.error("Failed to load history")
-    } finally {
-      setLoading(false)
-    }
-  }
+    void loadRuns().catch(() => toast.error("Failed to load history"))
+  }, [loadRuns])
 
   if (loading) {
     return (
@@ -90,7 +66,11 @@ export function AgentHistoryList() {
       <div className="mx-auto max-w-4xl px-4 py-6 md:px-6">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold">History</h1>
-          <Button variant="outline" size="sm" onClick={() => void loadRuns()}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void loadRuns().catch(() => toast.error("Failed to load history"))}
+          >
             Refresh
           </Button>
         </div>
@@ -107,7 +87,8 @@ export function AgentHistoryList() {
         ) : (
           <div className="space-y-2">
             {runs.map((run) => {
-              const statusConfig = STATUS_CONFIG[run.status] || STATUS_CONFIG.completed
+              const runStatus = run.status || "completed"
+              const statusConfig = STATUS_CONFIG[runStatus] || STATUS_CONFIG.completed
               const StatusIcon = statusConfig.icon
 
               return (
@@ -117,7 +98,7 @@ export function AgentHistoryList() {
                       <StatusIcon
                         className={cn(
                           "mt-0.5 size-4 shrink-0",
-                          run.status === "running" && "animate-spin",
+                          runStatus === "running" && "animate-spin",
                           statusConfig.className.split(" ")[0],
                         )}
                       />

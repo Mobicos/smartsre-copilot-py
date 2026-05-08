@@ -224,9 +224,9 @@ def test_agent_runtime_core_components_shape_agent_loop():
     action = policy_gate.create_action("SearchLog", goal=state.goal)
 
     assert planner.select_tool_names({"tools": ["SearchLog"]}) == ["SearchLog"]
-    assert (
-        state.hypothesis.summary
-        == "围绕目标“diagnose latency”优先验证告警、日志、指标和近期变更证据。"
+    assert state.hypothesis.summary == (
+        "Investigate goal 'diagnose latency' by checking scene knowledge, "
+        "approved tools, and collected evidence before making claims."
     )
     assert knowledge_context.to_event_payload() == {
         "knowledge_bases": [
@@ -237,7 +237,7 @@ def test_agent_runtime_core_components_shape_agent_loop():
                 "version": "development",
             }
         ],
-        "summary": "已加载 1 个知识库: Runbook",
+        "summary": "Loaded 1 scene knowledge base: Runbook",
     }
     assert action.approval_state == "required"
     assert action.policy_snapshot.risk_level == "high"
@@ -308,8 +308,9 @@ def test_agent_runtime_state_objects_describe_reasoning_and_evidence():
     )
     evidence = EvidenceItem.from_tool_result(result)
 
-    assert (
-        hypothesis.summary == "围绕目标“diagnose latency”优先验证告警、日志、指标和近期变更证据。"
+    assert hypothesis.summary == (
+        "Investigate goal 'diagnose latency' by checking scene knowledge, "
+        "approved tools, and collected evidence before making claims."
     )
     assert action.tool_name == "SearchLog"
     assert action.arguments == {"query": "diagnose latency", "keyword": "diagnose latency"}
@@ -701,7 +702,13 @@ async def test_agent_runtime_records_cancellation_and_reraises():
 async def test_agent_runtime_reports_unavailable_external_tools_without_fabricating_names():
     workspace_id = workspace_repository.create_workspace(name="SRE")
     scene_id = scene_repository.create_scene(workspace_id, name="Default")
-    runtime = AgentRuntime(tool_catalog=StaticCatalog([]), tool_executor=StaticExecutor())
+    runtime = AgentRuntime(
+        tool_catalog=StaticCatalog([]),
+        tool_executor=StaticExecutor(),
+        scene_store=scene_repository,
+        run_store=agent_run_repository,
+        policy_store=tool_policy_repository,
+    )
 
     events = [
         event
@@ -734,7 +741,13 @@ async def test_agent_runtime_records_scene_knowledge_context_in_trajectory_and_r
         name="Default",
         knowledge_base_ids=[knowledge_base_id],
     )
-    runtime = AgentRuntime(tool_catalog=StaticCatalog([]), tool_executor=StaticExecutor())
+    runtime = AgentRuntime(
+        tool_catalog=StaticCatalog([]),
+        tool_executor=StaticExecutor(),
+        scene_store=scene_repository,
+        run_store=agent_run_repository,
+        policy_store=tool_policy_repository,
+    )
 
     events = [
         event
@@ -758,7 +771,7 @@ async def test_agent_runtime_records_scene_knowledge_context_in_trajectory_and_r
                 "version": "development",
             }
         ],
-        "summary": "已加载 1 个知识库: CLB Runbook",
+        "summary": "Loaded 1 scene knowledge base: CLB Runbook",
     }
     assert "CLB Runbook" in events[-1].final_report
 
@@ -772,7 +785,13 @@ async def test_agent_runtime_records_tool_trajectory_and_final_report():
         tool_names=["SearchLog"],
     )
     tool = SimpleNamespace(name="SearchLog", description="Search logs")
-    runtime = AgentRuntime(tool_catalog=StaticCatalog([tool]), tool_executor=StaticExecutor())
+    runtime = AgentRuntime(
+        tool_catalog=StaticCatalog([tool]),
+        tool_executor=StaticExecutor(),
+        scene_store=scene_repository,
+        run_store=agent_run_repository,
+        policy_store=tool_policy_repository,
+    )
 
     events = [
         event
@@ -811,7 +830,12 @@ async def test_agent_runtime_records_tool_governance_snapshot_in_trajectory():
         approval_required=True,
     )
     tool = SimpleNamespace(name="SearchLog", description="Search logs")
-    runtime = AgentRuntime(tool_catalog=StaticCatalog([tool]))
+    runtime = AgentRuntime(
+        tool_catalog=StaticCatalog([tool]),
+        scene_store=scene_repository,
+        run_store=agent_run_repository,
+        policy_store=tool_policy_repository,
+    )
 
     events = [
         event

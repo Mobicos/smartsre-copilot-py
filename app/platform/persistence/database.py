@@ -56,6 +56,7 @@ def get_engine() -> Engine:
             pool_size=_POOL_SIZE,
             max_overflow=_POOL_MAX_OVERFLOW,
             pool_pre_ping=True,
+            connect_args={"connect_timeout": config.postgres_connect_timeout_seconds},
         )
         _install_pool_listeners(_engine.pool)
     return _engine
@@ -105,3 +106,12 @@ def get_pool_status() -> dict[str, int]:
         "checked_in": pool.checkedin(),
         "overflow": pool.overflow(),
     }
+
+
+def reset_for_testing() -> None:
+    """Dispose cached database state so tests can swap DSNs without monkeypatching."""
+    global _engine, _SessionLocal
+    if _engine is not None:
+        _engine.dispose()
+    _engine = None
+    _SessionLocal = None

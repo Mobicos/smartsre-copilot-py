@@ -100,6 +100,5 @@ class ReportSynthesizer:
             "was collected.\n\n"
             "## Recovery And Degradation\n"
             "- External MCP tools are unavailable or the scene has no executable tools.\n"
-            "- å¤–éƒ¨ MCP å·¥å…·ä¸å¯ç”¨ or the scene has no executable tools.\n"
             "- Configure log, metric, alert, or knowledge tools before retrying."
         )

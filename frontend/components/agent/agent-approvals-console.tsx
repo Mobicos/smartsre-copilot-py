@@ -14,31 +14,18 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { NativeAgentApproval } from "@/lib/native-agent-types"
+import { useAgentWorkbenchStore } from "@/lib/agent-workbench-store"
 import { cn } from "@/lib/utils"
 
 export function AgentApprovalsConsole() {
-  const [approvals, setApprovals] = useState<NativeAgentApproval[]>([])
-  const [loading, setLoading] = useState(true)
+  const approvals = useAgentWorkbenchStore((state) => state.approvals)
+  const loading = useAgentWorkbenchStore((state) => state.approvalLoading)
+  const loadApprovals = useAgentWorkbenchStore((state) => state.loadApprovals)
+  const invalidateAgentData = useAgentWorkbenchStore((state) => state.invalidateAgentData)
   const [submittingKey, setSubmittingKey] = useState<string | null>(null)
 
-  const loadApprovals = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetch("/api/agent/approvals?limit=100", { cache: "no-store" })
-      const data = (await res.json()) as NativeAgentApproval[] | { error?: string }
-      if (!res.ok) {
-        throw new Error("error" in data && data.error ? data.error : `HTTP ${res.status}`)
-      }
-      setApprovals(Array.isArray(data) ? data : [])
-    } catch (err) {
-      toast.error("Failed to load approvals")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
   useEffect(() => {
-    void loadApprovals()
+    void loadApprovals().catch(() => toast.error("Failed to load approvals"))
   }, [loadApprovals])
 
   const decide = useCallback(
@@ -60,29 +47,8 @@ export function AgentApprovalsConsole() {
           const json = (await res.json()) as { error?: string; detail?: string }
           throw new Error(json.error || json.detail || `HTTP ${res.status}`)
         }
-        const data = (await res.json()) as {
-          resume_status?: string
-          reason?: string
-        }
-        setApprovals((items) =>
-          items.map((item) =>
-            item.run_id === approval.run_id && item.tool_name === approval.tool_name
-              ? {
-                  ...item,
-                  status: decision,
-                  decided_at: new Date().toISOString(),
-                  resume_status:
-                    typeof data === "object" && data !== null && "resume_status" in data
-                      ? String(data.resume_status)
-                      : item.resume_status,
-                  resume_reason:
-                    typeof data === "object" && data !== null && "reason" in data
-                      ? String(data.reason)
-                      : item.resume_reason,
-                }
-              : item,
-          ),
-        )
+        await res.json().catch(() => undefined)
+        await invalidateAgentData()
         toast.success(`Approval ${decision}`)
       } catch (err) {
         toast.error((err as Error).message || "Approval update failed")
@@ -90,7 +56,7 @@ export function AgentApprovalsConsole() {
         setSubmittingKey(null)
       }
     },
-    [],
+    [invalidateAgentData],
   )
 
   const resume = useCallback(async (approval: NativeAgentApproval) => {
@@ -114,28 +80,14 @@ export function AgentApprovalsConsole() {
       if (!res.ok) {
         throw new Error(json.error || json.detail || json.reason || `HTTP ${res.status}`)
       }
-      setApprovals((items) =>
-        items.map((item) =>
-          item.run_id === approval.run_id && item.tool_name === approval.tool_name
-            ? {
-                ...item,
-                resume_status: json.status || item.resume_status,
-                resume_checkpoint_status:
-                  json.checkpoint_status || item.resume_checkpoint_status,
-                resume_execution_status:
-                  json.execution_status || item.resume_execution_status,
-                resumed_at: new Date().toISOString(),
-              }
-            : item,
-        ),
-      )
+      await invalidateAgentData()
       toast.success(`Resume ${json.status || "submitted"}`)
     } catch (err) {
       toast.error((err as Error).message || "Resume failed")
     } finally {
       setSubmittingKey(null)
     }
-  }, [])
+  }, [invalidateAgentData])
 
   if (loading) {
     return (
@@ -150,7 +102,13 @@ export function AgentApprovalsConsole() {
       <div className="mx-auto max-w-4xl px-4 py-6 md:px-6">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Approvals</h1>
-          <Button variant="outline" size="sm" onClick={() => void loadApprovals()}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              void loadApprovals().catch(() => toast.error("Failed to load approvals"))
+            }
+          >
             <RefreshCw className="size-4" /> Refresh
           </Button>
         </div>
