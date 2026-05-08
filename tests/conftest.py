@@ -18,6 +18,7 @@ from psycopg import OperationalError
 from sqlalchemy import text
 
 from alembic import command
+from app.api.providers import reset_container_for_testing
 from app.config import config
 from app.platform.persistence.database import get_engine
 from app.platform.persistence.database import reset_for_testing
@@ -167,6 +168,7 @@ def isolated_postgres_database(_create_test_database: None, _pg_host: str):
     load_api_key_roles.cache_clear()
 
     reset_for_testing()
+    reset_container_for_testing()
 
     yield
 
@@ -181,6 +183,7 @@ def isolated_postgres_database(_create_test_database: None, _pg_host: str):
     config.app_api_key = original_api_key
     config.api_keys_json = original_api_keys_json
     reset_for_testing()
+    reset_container_for_testing()
     load_api_key_roles.cache_clear()
 
 

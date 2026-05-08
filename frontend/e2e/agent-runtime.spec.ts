@@ -70,7 +70,7 @@ test.describe("Agent runtime production paths", () => {
     await expect(page.getByText("Replay Snapshot")).toBeVisible()
     await expect(page.getByText("Decision State")).toBeVisible()
     await expect(page.getByText("Tool Trajectory")).toBeVisible()
-    await expect(page.getByText("Report")).toBeVisible()
+    await expect(page.getByText("Report", { exact: true })).toBeVisible()
   })
 
   test("requires approval, approves the tool call, resumes, and updates replay state", async ({
@@ -89,7 +89,9 @@ test.describe("Agent runtime production paths", () => {
     expect(run.status).toBe("waiting_approval")
 
     await page.goto("/agent/approvals")
-    await expect(page.getByText("Approvals")).toBeVisible()
+    await expect(
+      page.getByRole("main").getByRole("heading", { name: "Approvals" }),
+    ).toBeVisible()
     await expect(page.getByText(toolName).first()).toBeVisible()
     await page.getByRole("button", { name: "Approve" }).first().click()
     await expect(page.getByRole("button", { name: "Resume" }).first()).toBeVisible()
@@ -115,8 +117,8 @@ test.describe("Agent runtime production paths", () => {
 
     await page.goto(`/agent/${run.run_id}`)
     await expect(page.getByText("Decision State")).toBeVisible()
-    await expect(page.getByText("Approvals")).toBeVisible()
-    await expect(page.getByText("Resume")).toBeVisible()
+    await expect(page.locator("dt").filter({ hasText: /^Approvals$/ }).first()).toBeVisible()
+    await expect(page.locator("dt").filter({ hasText: /^Resume$/ }).first()).toBeVisible()
   })
 })
 

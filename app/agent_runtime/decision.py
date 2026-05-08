@@ -9,7 +9,8 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Callable, Sequence
-from typing import Any, Literal, Protocol
+from contextlib import contextmanager, nullcontext
+from typing import Any, Literal, Protocol, TypedDict, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
@@ -31,6 +32,22 @@ DecisionRunStatus = Literal[
     "cancelled",
 ]
 Priority = Literal["P0", "P1", "P2", "P3"]
+
+
+class DecisionGraphPayload(TypedDict, total=False):
+    """LangGraph transport payload validated at every runtime node boundary."""
+
+    run_id: str | None
+    status: DecisionRunStatus
+    goal: dict[str, Any]
+    budget: dict[str, Any]
+    available_tools: list[str]
+    executed_tools: list[str]
+    observations: list[dict[str, Any]]
+    hypothesis_queue: list[dict[str, Any]]
+    evidence: list[dict[str, Any]]
+    consecutive_empty_evidence: int
+    decisions: list[dict[str, Any]]
 
 
 class SuccessCriteria(BaseModel):
@@ -394,15 +411,16 @@ class AgentDecisionRuntime:
     def run_graph_once(self, state: AgentDecisionState) -> AgentDecisionState:
         graph = self.build_graph()
         thread_id = state.run_id or str(uuid.uuid4())
-        result = graph.invoke(
-            state.model_dump(mode="json"),
-            config={
-                "configurable": {
-                    "thread_id": thread_id,
-                    "checkpoint_ns": self.checkpoint_ns,
-                }
-            },
-        )
+        with _optional_span("agent.decision_graph", {"agent.run_id": thread_id}):
+            result = graph.invoke(
+                _state_to_graph_payload(state),
+                config={
+                    "configurable": {
+                        "thread_id": thread_id,
+                        "checkpoint_ns": self.checkpoint_ns,
+                    }
+                },
+            )
         return AgentDecisionState.model_validate(result)
 
     def build_graph(self) -> Any:
@@ -414,7 +432,7 @@ class AgentDecisionRuntime:
         except Exception as exc:  # pragma: no cover - depends on optional import wiring
             raise RuntimeError("LangGraph is not available") from exc
 
-        graph = StateGraph(dict)  # type: ignore[type-var]
+        graph = StateGraph(DecisionGraphPayload)
         graph.add_node("initialize", self._graph_initialize)  # type: ignore[call-overload]
         graph.add_node("observe", self._graph_observe)  # type: ignore[call-overload]
         graph.add_node("decide", self._graph_decide)  # type: ignore[call-overload]
@@ -447,12 +465,12 @@ class AgentDecisionRuntime:
             self._compiled_graph = graph.compile()
         return self._compiled_graph
 
-    def _graph_initialize(self, payload: dict[str, Any]) -> dict[str, Any]:
-        state = AgentDecisionState.model_validate(payload)
-        return state.model_dump(mode="json")
+    def _graph_initialize(self, payload: DecisionGraphPayload) -> DecisionGraphPayload:
+        state = _state_from_graph_payload(payload)
+        return _state_to_graph_payload(state)
 
-    def _graph_observe(self, payload: dict[str, Any]) -> dict[str, Any]:
-        state = AgentDecisionState.model_validate(payload)
+    def _graph_observe(self, payload: DecisionGraphPayload) -> DecisionGraphPayload:
+        state = _state_from_graph_payload(payload)
         observations = list(state.observations)
         if not observations:
             observations.append(
@@ -471,16 +489,16 @@ class AgentDecisionRuntime:
                     citations=[{"tools": state.available_tools}],
                 )
             )
-        return state.model_copy(update={"observations": observations}).model_dump(mode="json")
+        return _state_to_graph_payload(state.model_copy(update={"observations": observations}))
 
-    def _graph_decide(self, payload: dict[str, Any]) -> dict[str, Any]:
-        state = AgentDecisionState.model_validate(payload)
-        return self.decide_once(state).model_dump(mode="json")
+    def _graph_decide(self, payload: DecisionGraphPayload) -> DecisionGraphPayload:
+        state = _state_from_graph_payload(payload)
+        return _state_to_graph_payload(self.decide_once(state))
 
-    def _graph_validate_decision(self, payload: dict[str, Any]) -> dict[str, Any]:
-        state = AgentDecisionState.model_validate(payload)
+    def _graph_validate_decision(self, payload: DecisionGraphPayload) -> DecisionGraphPayload:
+        state = _state_from_graph_payload(payload)
         if not state.decisions:
-            return state.model_dump(mode="json")
+            return _state_to_graph_payload(state)
 
         latest = state.decisions[-1]
         if latest.selected_tool and latest.selected_tool not in state.available_tools:
@@ -498,9 +516,9 @@ class AgentDecisionRuntime:
                 ),
                 confidence=0.0,
             )
-            return state.model_copy(
-                update={"decisions": [*state.decisions[:-1], decision]}
-            ).model_dump(mode="json")
+            return _state_to_graph_payload(
+                state.model_copy(update={"decisions": [*state.decisions[:-1], decision]})
+            )
 
         if latest.action_type == "call_tool" and not latest.selected_tool:
             decision = AgentDecision(
@@ -517,18 +535,18 @@ class AgentDecisionRuntime:
                 ),
                 confidence=0.0,
             )
-            return state.model_copy(
-                update={"decisions": [*state.decisions[:-1], decision]}
-            ).model_dump(mode="json")
-        return state.model_dump(mode="json")
+            return _state_to_graph_payload(
+                state.model_copy(update={"decisions": [*state.decisions[:-1], decision]})
+            )
+        return _state_to_graph_payload(state)
 
-    def _graph_act(self, payload: dict[str, Any]) -> dict[str, Any]:
-        state = AgentDecisionState.model_validate(payload)
+    def _graph_act(self, payload: DecisionGraphPayload) -> DecisionGraphPayload:
+        state = _state_from_graph_payload(payload)
         if not state.decisions:
-            return state.model_dump(mode="json")
+            return _state_to_graph_payload(state)
         latest = state.decisions[-1]
         if latest.action_type != "call_tool" or not latest.selected_tool:
-            return state.model_dump(mode="json")
+            return _state_to_graph_payload(state)
 
         executed_tools = [*state.executed_tools, latest.selected_tool]
         budget = state.budget.model_copy(
@@ -537,17 +555,17 @@ class AgentDecisionRuntime:
                 "remaining_tool_calls": max(state.budget.remaining_tool_calls - 1, 0),
             }
         )
-        return state.model_copy(
-            update={"executed_tools": executed_tools, "budget": budget}
-        ).model_dump(mode="json")
+        return _state_to_graph_payload(
+            state.model_copy(update={"executed_tools": executed_tools, "budget": budget})
+        )
 
-    def _graph_evaluate_evidence(self, payload: dict[str, Any]) -> dict[str, Any]:
-        state = AgentDecisionState.model_validate(payload)
+    def _graph_evaluate_evidence(self, payload: DecisionGraphPayload) -> DecisionGraphPayload:
+        state = _state_from_graph_payload(payload)
         if not state.decisions:
-            return state.model_dump(mode="json")
+            return _state_to_graph_payload(state)
         latest = state.decisions[-1]
         if latest.action_type != "call_tool":
-            return state.model_dump(mode="json")
+            return _state_to_graph_payload(state)
         expected = latest.expected_evidence or ["Tool evidence is pending execution."]
         evidence = EvidenceAssessment(
             quality="weak",
@@ -561,23 +579,46 @@ class AgentDecisionRuntime:
                 }
             ],
         )
-        return state.model_copy(update={"evidence": [*state.evidence, evidence]}).model_dump(
-            mode="json"
+        return _state_to_graph_payload(
+            state.model_copy(update={"evidence": [*state.evidence, evidence]})
         )
 
-    def _graph_recover(self, payload: dict[str, Any]) -> dict[str, Any]:
-        state = AgentDecisionState.model_validate(payload)
+    def _graph_recover(self, payload: DecisionGraphPayload) -> DecisionGraphPayload:
+        state = _state_from_graph_payload(payload)
         if not state.decisions:
-            return state.model_dump(mode="json")
+            return _state_to_graph_payload(state)
         latest = state.decisions[-1]
         status: DecisionRunStatus = (
             "handoff_required" if latest.recovery.next_action == "handoff" else "running"
         )
-        return state.model_copy(update={"status": status}).model_dump(mode="json")
+        return _state_to_graph_payload(state.model_copy(update={"status": status}))
 
-    def _graph_final_report(self, payload: dict[str, Any]) -> dict[str, Any]:
-        state = AgentDecisionState.model_validate(payload)
-        return state.model_copy(update={"status": "completed"}).model_dump(mode="json")
+    def _graph_final_report(self, payload: DecisionGraphPayload) -> DecisionGraphPayload:
+        state = _state_from_graph_payload(payload)
+        return _state_to_graph_payload(state.model_copy(update={"status": "completed"}))
+
+
+def _state_to_graph_payload(state: AgentDecisionState) -> DecisionGraphPayload:
+    return cast(DecisionGraphPayload, state.model_dump(mode="json"))
+
+
+def _state_from_graph_payload(payload: DecisionGraphPayload | dict[str, Any]) -> AgentDecisionState:
+    return AgentDecisionState.model_validate(payload)
+
+
+@contextmanager
+def _optional_span(name: str, attributes: dict[str, Any]):
+    try:
+        from opentelemetry import trace
+    except Exception:
+        with nullcontext():
+            yield
+        return
+
+    with trace.get_tracer("smartsre.agent_runtime.decision").start_as_current_span(name) as span:
+        for key, value in attributes.items():
+            span.set_attribute(key, value)
+        yield
 
 
 def build_initial_decision_state(

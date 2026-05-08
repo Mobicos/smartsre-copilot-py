@@ -8,16 +8,23 @@ import type {
   NativeTool,
 } from "@/lib/native-agent-types"
 
+type AgentResource = "approvals" | "runs" | "scenes" | "tools"
+
 interface AgentWorkbenchState {
   approvals: NativeAgentApproval[]
+  approvalError: string
   approvalLoading: boolean
   runs: NativeAgentRun[]
+  runsError: string
   runsLoading: boolean
   scenes: NativeScene[]
+  scenesError: string
   scenesLoading: boolean
   selectedSceneId: string
   tools: NativeTool[]
+  toolsError: string
   toolsLoading: boolean
+  abortAgentRequests: () => void
   loadApprovals: () => Promise<void>
   loadRuns: () => Promise<void>
   loadScenes: () => Promise<void>
@@ -26,75 +33,140 @@ interface AgentWorkbenchState {
   invalidateAgentData: () => Promise<void>
 }
 
+const inflight = new Map<AgentResource, Promise<void>>()
+const controllers = new Map<AgentResource, AbortController>()
+
 export const useAgentWorkbenchStore = create<AgentWorkbenchState>((set, get) => ({
   approvals: [],
+  approvalError: "",
   approvalLoading: false,
   runs: [],
+  runsError: "",
   runsLoading: false,
   scenes: [],
+  scenesError: "",
   scenesLoading: false,
   selectedSceneId: "",
   tools: [],
+  toolsError: "",
   toolsLoading: false,
+
+  abortAgentRequests: () => {
+    for (const controller of controllers.values()) {
+      controller.abort()
+    }
+    controllers.clear()
+    inflight.clear()
+    set({
+      approvalLoading: false,
+      runsLoading: false,
+      scenesLoading: false,
+      toolsLoading: false,
+    })
+  },
 
   setSelectedSceneId: (sceneId) => set({ selectedSceneId: sceneId }),
 
-  loadApprovals: async () => {
-    set({ approvalLoading: true })
-    try {
-      const res = await fetch("/api/agent/approvals?limit=100", { cache: "no-store" })
-      const data = (await res.json()) as NativeAgentApproval[] | { error?: string }
-      if (!res.ok) {
-        throw new Error("error" in data && data.error ? data.error : `HTTP ${res.status}`)
+  loadApprovals: () =>
+    dedupe("approvals", async (signal) => {
+      set({ approvalError: "", approvalLoading: true })
+      try {
+        const res = await fetch("/api/agent/approvals?limit=100", {
+          cache: "no-store",
+          signal,
+        })
+        const data = (await res.json()) as NativeAgentApproval[] | { error?: string }
+        if (!res.ok) {
+          throw new Error("error" in data && data.error ? data.error : `HTTP ${res.status}`)
+        }
+        set({ approvals: Array.isArray(data) ? data : [] })
+      } catch (error) {
+        handleFetchError(error, (message) => set({ approvalError: message }))
+      } finally {
+        set({ approvalLoading: false })
       }
-      set({ approvals: Array.isArray(data) ? data : [] })
-    } finally {
-      set({ approvalLoading: false })
-    }
-  },
+    }),
 
-  loadRuns: async () => {
-    set({ runsLoading: true })
-    try {
-      const res = await fetch("/api/agent/runs?limit=50", { cache: "no-store" })
-      const data = (await res.json()) as { data?: NativeAgentRun[] } | NativeAgentRun[]
-      set({ runs: Array.isArray(data) ? data : data.data || [] })
-    } finally {
-      set({ runsLoading: false })
-    }
-  },
-
-  loadScenes: async () => {
-    set({ scenesLoading: true })
-    try {
-      const res = await fetch("/api/agent/scenes", { cache: "no-store" })
-      const data = (await res.json()) as NativeScene[] | { error?: string }
-      if (!res.ok) {
-        throw new Error("error" in data && data.error ? data.error : `HTTP ${res.status}`)
+  loadRuns: () =>
+    dedupe("runs", async (signal) => {
+      set({ runsError: "", runsLoading: true })
+      try {
+        const res = await fetch("/api/agent/runs?limit=50", { cache: "no-store", signal })
+        const data = (await res.json()) as { data?: NativeAgentRun[]; error?: string } | NativeAgentRun[]
+        if (!res.ok) {
+          throw new Error(!Array.isArray(data) && data.error ? data.error : `HTTP ${res.status}`)
+        }
+        set({ runs: Array.isArray(data) ? data : data.data || [] })
+      } catch (error) {
+        handleFetchError(error, (message) => set({ runsError: message }))
+      } finally {
+        set({ runsLoading: false })
       }
-      const scenes = Array.isArray(data) ? data : []
-      const selectedSceneId = get().selectedSceneId || scenes[0]?.id || ""
-      set({ scenes, selectedSceneId })
-    } finally {
-      set({ scenesLoading: false })
-    }
-  },
+    }),
 
-  loadTools: async () => {
-    set({ toolsLoading: true })
-    try {
-      const res = await fetch("/api/agent/tools", { cache: "no-store" })
-      const data = (await res.json()) as NativeTool[] | { error?: string }
-      if (!res.ok) {
-        throw new Error("error" in data && data.error ? data.error : `HTTP ${res.status}`)
+  loadScenes: () =>
+    dedupe("scenes", async (signal) => {
+      set({ scenesError: "", scenesLoading: true })
+      try {
+        const res = await fetch("/api/agent/scenes", { cache: "no-store", signal })
+        const data = (await res.json()) as NativeScene[] | { error?: string }
+        if (!res.ok) {
+          throw new Error("error" in data && data.error ? data.error : `HTTP ${res.status}`)
+        }
+        const scenes = Array.isArray(data) ? data : []
+        const selectedSceneId = get().selectedSceneId || scenes[0]?.id || ""
+        set({ scenes, selectedSceneId })
+      } catch (error) {
+        handleFetchError(error, (message) => set({ scenesError: message }))
+      } finally {
+        set({ scenesLoading: false })
       }
-      set({ tools: Array.isArray(data) ? data : [] })
-    } finally {
-      set({ toolsLoading: false })
-    }
-  },
+    }),
+
+  loadTools: () =>
+    dedupe("tools", async (signal) => {
+      set({ toolsError: "", toolsLoading: true })
+      try {
+        const res = await fetch("/api/agent/tools", { cache: "no-store", signal })
+        const data = (await res.json()) as NativeTool[] | { error?: string }
+        if (!res.ok) {
+          throw new Error("error" in data && data.error ? data.error : `HTTP ${res.status}`)
+        }
+        set({ tools: Array.isArray(data) ? data : [] })
+      } catch (error) {
+        handleFetchError(error, (message) => set({ toolsError: message }))
+      } finally {
+        set({ toolsLoading: false })
+      }
+    }),
 
   invalidateAgentData: async () => {
     await Promise.all([get().loadTools(), get().loadRuns(), get().loadApprovals()])
   },
 }))
+
+async function dedupe(
+  resource: AgentResource,
+  load: (signal: AbortSignal) => Promise<void>,
+): Promise<void> {
+  const existing = inflight.get(resource)
+  if (existing) {
+    return existing
+  }
+
+  const controller = new AbortController()
+  controllers.set(resource, controller)
+  const promise = load(controller.signal).finally(() => {
+    inflight.delete(resource)
+    controllers.delete(resource)
+  })
+  inflight.set(resource, promise)
+  return promise
+}
+
+function handleFetchError(error: unknown, setError: (message: string) => void) {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return
+  }
+  setError(error instanceof Error ? error.message : "Request failed")
+}

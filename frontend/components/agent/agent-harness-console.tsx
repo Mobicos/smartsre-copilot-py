@@ -48,6 +48,7 @@ const initialRunState: RunState = {
 
 export function AgentHarnessConsole() {
   const scenes = useAgentWorkbenchStore((state) => state.scenes)
+  const scenesError = useAgentWorkbenchStore((state) => state.scenesError)
   const selectedSceneId = useAgentWorkbenchStore((state) => state.selectedSceneId)
   const setSelectedSceneId = useAgentWorkbenchStore((state) => state.setSelectedSceneId)
   const loadStoreScenes = useAgentWorkbenchStore((state) => state.loadScenes)
@@ -282,6 +283,13 @@ export function AgentHarnessConsole() {
         </div>
 
         {/* Config Panel (collapsed by default) */}
+        {scenesError && (
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <span>{scenesError}</span>
+          </div>
+        )}
+
         {showConfig && (
           <div className="mb-4 rounded-md border border-border p-3 text-sm">
             <div className="grid gap-3 sm:grid-cols-2">

@@ -9,6 +9,7 @@ from typing import Any
 
 from sqlmodel import Session, col, select
 
+from app.agent_runtime.ports import AgentRunStore, SceneStore, ToolPolicyStore
 from app.platform.persistence.database import get_engine
 from app.platform.persistence.schema import (
     AgentEvent,
@@ -196,7 +197,7 @@ class KnowledgeBaseRepository:
         }
 
 
-class SceneRepository:
+class SceneRepository(SceneStore):
     """Operational scene repository."""
 
     def create_scene_with_session(
@@ -313,7 +314,7 @@ class SceneRepository:
         return scene
 
 
-class ToolPolicyRepository:
+class ToolPolicyRepository(ToolPolicyStore):
     """Tool execution policy repository."""
 
     def upsert_policy_with_session(
@@ -405,7 +406,7 @@ class ToolPolicyRepository:
         }
 
 
-class AgentRunRepository:
+class AgentRunRepository(AgentRunStore):
     """Native agent run and trajectory repository."""
 
     def create_run_with_session(

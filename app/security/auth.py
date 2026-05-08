@@ -77,6 +77,15 @@ def validate_security_configuration() -> None:
             "CORS_ALLOWED_ORIGINS must not include '*' when ENVIRONMENT is production"
         )
 
+    if (
+        config.is_production
+        and config.agent_decision_provider.strip().lower() == "qwen"
+        and not config.dashscope_api_key.strip()
+    ):
+        raise RuntimeError(
+            "DASHSCOPE_API_KEY is required when AGENT_DECISION_PROVIDER=qwen in production"
+        )
+
 
 async def get_current_principal(
     request: Request,

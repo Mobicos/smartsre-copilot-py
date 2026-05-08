@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils"
 
 export function AgentToolsConsole() {
   const tools = useAgentWorkbenchStore((state) => state.tools)
+  const error = useAgentWorkbenchStore((state) => state.toolsError)
   const loading = useAgentWorkbenchStore((state) => state.toolsLoading)
   const loadTools = useAgentWorkbenchStore((state) => state.loadTools)
 
@@ -54,7 +55,14 @@ export function AgentToolsConsole() {
         </Button>
       </div>
 
-      {tools.length === 0 ? (
+      {error ? (
+        <Card className="border-destructive/30">
+          <CardContent className="flex items-center gap-3 py-6 text-sm text-destructive">
+            <AlertTriangle className="size-5" />
+            {error}
+          </CardContent>
+        </Card>
+      ) : tools.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <Wrench className="mb-4 size-8" />

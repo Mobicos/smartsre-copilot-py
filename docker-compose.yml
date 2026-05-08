@@ -87,7 +87,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-smartsre}
       POSTGRES_USER: ${POSTGRES_USER:-smartsre}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smartsre}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev-only-postgres-password}
     ports:
       - "5432:5432"
     volumes:
@@ -117,8 +117,8 @@ services:
     container_name: smartsre-minio
     restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-dev-only-minio-user}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-dev-only-minio-password}
     ports:
       - "9002:9000"
       - "9003:9001"
@@ -141,7 +141,7 @@ services:
       - .env
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-production}
-      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://smartsre:smartsre@postgres:5432/smartsre}
+      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://smartsre:dev-only-postgres-password@postgres:5432/smartsre}
       POSTGRES_CONNECT_TIMEOUT_SECONDS: ${POSTGRES_CONNECT_TIMEOUT_SECONDS:-5}
     depends_on:
       postgres:
@@ -159,7 +159,7 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       DEBUG: "false"
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
-      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://smartsre:smartsre@postgres:5432/smartsre}
+      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://smartsre:dev-only-postgres-password@postgres:5432/smartsre}
       POSTGRES_CONNECT_TIMEOUT_SECONDS: ${POSTGRES_CONNECT_TIMEOUT_SECONDS:-5}
       REDIS_URL: redis://redis:6379/0
       TASK_QUEUE_BACKEND: redis
@@ -167,8 +167,8 @@ services:
       AGENT_DECISION_PROVIDER: ${AGENT_DECISION_PROVIDER:-qwen}
       OBJECT_STORAGE_BACKEND: minio
       MINIO_ENDPOINT: minio-app:9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-dev-only-minio-user}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-dev-only-minio-password}
     ports:
       - "9900:9900"
     healthcheck:
@@ -199,7 +199,7 @@ services:
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       DEBUG: "false"
-      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://smartsre:smartsre@postgres:5432/smartsre}
+      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://smartsre:dev-only-postgres-password@postgres:5432/smartsre}
       POSTGRES_CONNECT_TIMEOUT_SECONDS: ${POSTGRES_CONNECT_TIMEOUT_SECONDS:-5}
       REDIS_URL: redis://redis:6379/0
       TASK_QUEUE_BACKEND: redis
@@ -207,8 +207,8 @@ services:
       AGENT_DECISION_PROVIDER: ${AGENT_DECISION_PROVIDER:-qwen}
       OBJECT_STORAGE_BACKEND: minio
       MINIO_ENDPOINT: minio-app:9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-dev-only-minio-user}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-dev-only-minio-password}
     healthcheck:
       test:
         [

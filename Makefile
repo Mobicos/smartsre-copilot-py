@@ -21,6 +21,7 @@ NC = \033[0m
 .PHONY: help init start stop restart check upload clean up down status wait \
         install install-dev dev run test test-quick format lint fix type-check \
         security pre-commit-install pre-commit check-all coverage docs shell \
+        verify smoke frontend-verify \
         ipython watch add add-dev remove list-docs test-upload sync logs \
         db-upgrade db-revision \
         start-cls stop-cls start-monitor stop-monitor start-api stop-api status-mcp
@@ -139,7 +140,7 @@ up:
 		colima start 2>/dev/null || (echo "$(RED)❌ 无法启动 Docker，请手动启动$(NC)" && exit 1); \
 		sleep 3; \
 	fi
-	@if docker ps --format '{{.Names}}' | grep -q "^$(MILVUS_CONTAINER)$$" && docker ps --format '{{.Names}}' | grep -q "^smartsre-app$$"; then \
+	@if docker ps --format '{{.Names}}' | grep -q "^smartsre-postgres$$" && docker ps --format '{{.Names}}' | grep -q "^smartsre-backend$$"; then \
 		echo "$(GREEN)✅ SmartSRE 容器栈已经在运行中$(NC)"; \
 		docker compose -f $(COMPOSE_FILE) ps; \
 	else \
@@ -147,7 +148,7 @@ up:
 		docker compose -f $(COMPOSE_FILE) up -d --build; \
 		echo "$(YELLOW)⏳ 等待容器启动...$(NC)"; \
 		sleep 8; \
-		if docker ps --format '{{.Names}}' | grep -q "^$(MILVUS_CONTAINER)$$" && docker ps --format '{{.Names}}' | grep -q "^smartsre-app$$"; then \
+		if docker ps --format '{{.Names}}' | grep -q "^smartsre-postgres$$" && docker ps --format '{{.Names}}' | grep -q "^smartsre-backend$$"; then \
 			echo "$(GREEN)✅ Docker 容器启动成功！$(NC)"; \
 			echo ""; \
 			echo "$(GREEN)📋 运行中的容器:$(NC)"; \
@@ -596,6 +597,15 @@ verify:  ## 运行 CI 等价的非破坏性后端质量门
 	docker compose -f $(COMPOSE_FILE) config --quiet
 	uv run python -m pytest tests -q
 	@echo "$(GREEN)✅ 后端质量门通过$(NC)"
+
+frontend-verify:  ## 运行前端质量门
+	cd frontend && pnpm install --frozen-lockfile
+	cd frontend && pnpm lint
+	cd frontend && pnpm typecheck
+	cd frontend && pnpm build
+
+smoke:  ## 运行 Docker Compose 本地 smoke 验证
+	powershell -ExecutionPolicy Bypass -File scripts/compose_smoke.ps1
 
 check-all:  ## 运行所有检查
 	@echo "$(YELLOW)🚀 运行所有检查...$(NC)"

@@ -248,7 +248,9 @@ jobs:
         run: uv run alembic upgrade head
 
       - name: Start backend
-        run: uv run uvicorn app.main:app --host 0.0.0.0 --port 9900 &
+        run: |
+          nohup uv run uvicorn app.main:app --host 0.0.0.0 --port 9900 > backend.log 2>&1 &
+          echo $! > backend.pid
         env:
           POSTGRES_DSN: postgresql://smartsre:smartsre@localhost:5432/postgres
           AGENT_DECISION_PROVIDER: deterministic
@@ -257,10 +259,15 @@ jobs:
 
       - name: Wait for backend
         run: |
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:9900/api/health && break
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:9900/health/live; then
+              exit 0
+            fi
             sleep 2
           done
+          echo "Backend did not become live in time."
+          cat backend.log
+          exit 1
 
       - name: Run E2E tests
         working-directory: frontend
@@ -272,6 +279,14 @@ jobs:
         with:
           name: playwright-report
           path: frontend/playwright-report/
+          retention-days: 7
+
+      - name: Upload backend log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-log
+          path: backend.log
           retention-days: 7
 
   dependency-review:

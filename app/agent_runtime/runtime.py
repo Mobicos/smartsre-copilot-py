@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncGenerator
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from time import monotonic
 from typing import Any, cast
@@ -185,6 +186,192 @@ class MetricsCollector:
             logger.warning(f"Failed to persist agent run metrics for {run_id}: {exc}")
 
 
+class StepRunner:
+    """Execute one governed tool step for the runtime orchestrator."""
+
+    def __init__(self, runtime: AgentRuntime) -> None:
+        self._runtime = runtime
+
+    async def execute_tool(
+        self,
+        tool: Any,
+        action: Any,
+        *,
+        principal: Any,
+        safety_config: RuntimeSafetyConfig,
+        deadline: RuntimeDeadline,
+    ) -> ToolExecutionResult:
+        return cast(
+            ToolExecutionResult,
+            await self._runtime._execute_tool_with_timeout(
+                tool,
+                action,
+                principal=principal,
+                safety_config=safety_config,
+                deadline=deadline,
+            ),
+        )
+
+
+class ApprovalBoundary:
+    """Centralize approval pause semantics for the Agent runtime."""
+
+    waiting_message = "Tool execution is waiting for human approval."
+
+    def __init__(
+        self,
+        *,
+        run_store: AgentRunStore,
+        event_recorder: EventRecorder,
+        metrics_collector: MetricsCollector,
+    ) -> None:
+        self._run_store = run_store
+        self._event_recorder = event_recorder
+        self._metrics_collector = metrics_collector
+
+    def pause(
+        self,
+        context: RuntimeContext,
+        *,
+        tool_name: str,
+        payload: dict[str, Any],
+    ) -> list[AgentRuntimeEvent]:
+        self._run_store.update_run(
+            context.run_id,
+            status="waiting_approval",
+            final_report=self.waiting_message,
+        )
+        event = self._event_recorder.record(
+            context.run_id,
+            event_type="approval_required",
+            stage="approval",
+            message=f"Tool approval required: {tool_name}",
+            payload=payload,
+        )
+        self._metrics_collector.persist(context.run_id)
+        return [
+            event,
+            AgentRuntimeEvent(
+                type="approval_required",
+                stage="approval",
+                run_id=context.run_id,
+                status="waiting_approval",
+                message=f"Tool approval required: {tool_name}",
+            ),
+        ]
+
+
+class RuntimeFailureHandler:
+    """Translate runtime failures into persisted run state and stream events."""
+
+    def __init__(
+        self,
+        *,
+        run_store: AgentRunStore,
+        event_recorder: EventRecorder,
+        metrics_collector: MetricsCollector,
+    ) -> None:
+        self._run_store = run_store
+        self._event_recorder = event_recorder
+        self._metrics_collector = metrics_collector
+
+    def mark_cancelled(
+        self,
+        context: RuntimeContext,
+    ) -> None:
+        self._run_store.update_run(
+            context.run_id,
+            status="cancelled",
+            error_message="Agent run cancelled",
+        )
+        self._event_recorder.record(
+            context.run_id,
+            event_type="cancelled",
+            stage="cancelled",
+            message="Agent run cancelled",
+            payload={"runtime_safety": context.safety_config.to_dict()},
+        )
+        self._metrics_collector.persist(context.run_id)
+
+    def timeout_event(self, context: RuntimeContext, exc: TimeoutError) -> list[AgentRuntimeEvent]:
+        error_message = str(exc) or (
+            f"Agent run timed out after {context.safety_config.run_timeout_seconds:g} seconds"
+        )
+        self._run_store.update_run(
+            context.run_id,
+            status="failed",
+            error_message=f"TimeoutError: {error_message}",
+        )
+        event = self._event_recorder.record(
+            context.run_id,
+            event_type="timeout",
+            stage="error",
+            message=f"Run timed out: {error_message}",
+            payload={
+                "error_type": "TimeoutError",
+                "error_message": error_message,
+                "timeout_scope": "run",
+                "runtime_safety": context.safety_config.to_dict(),
+            },
+        )
+        self._metrics_collector.persist(context.run_id)
+        return [
+            event,
+            AgentRuntimeEvent(
+                type="timeout",
+                stage="error",
+                run_id=context.run_id,
+                status="failed",
+                message=f"TimeoutError: {error_message}",
+            ),
+        ]
+
+    def error_event(self, context: RuntimeContext, exc: Exception) -> list[AgentRuntimeEvent]:
+        error_type = type(exc).__name__
+        error_message = str(exc)
+        self._run_store.update_run(
+            context.run_id,
+            status="failed",
+            error_message=f"{error_type}: {error_message}",
+        )
+        event = self._event_recorder.record(
+            context.run_id,
+            event_type="error",
+            stage="error",
+            message=f"Run failed: {error_message}",
+            payload={
+                "error_type": error_type,
+                "error_message": error_message,
+                "runtime_safety": context.safety_config.to_dict(),
+            },
+        )
+        self._metrics_collector.persist(context.run_id)
+        return [
+            event,
+            AgentRuntimeEvent(
+                type="error",
+                stage="error",
+                run_id=context.run_id,
+                status="failed",
+                message=f"{error_type}: {error_message}",
+            ),
+        ]
+
+
+class AgentOrchestrator:
+    """Coordinate a complete Agent run while AgentRuntime remains the public facade."""
+
+    def __init__(self, runtime: AgentRuntime) -> None:
+        self._runtime = runtime
+
+    async def execute(
+        self,
+        **kwargs: Any,
+    ) -> AsyncGenerator[AgentRuntimeEvent, None]:
+        async for event in self._runtime._run_orchestration(**kwargs):
+            yield event
+
+
 class AgentRuntime:
     """Run a scene-scoped native SRE agent workflow."""
 
@@ -216,8 +403,43 @@ class AgentRuntime:
         self._synthesizer = synthesizer or ReportSynthesizer()
         self._knowledge_context_provider = knowledge_context_provider or KnowledgeContextProvider()
         self._decision_runtime = decision_runtime or AgentDecisionRuntime()
+        self._step_runner = StepRunner(self)
+        self._approval_boundary = ApprovalBoundary(
+            run_store=self._run_store,
+            event_recorder=self._event_recorder,
+            metrics_collector=self._metrics_collector,
+        )
+        self._failure_handler = RuntimeFailureHandler(
+            run_store=self._run_store,
+            event_recorder=self._event_recorder,
+            metrics_collector=self._metrics_collector,
+        )
+        self._orchestrator = AgentOrchestrator(self)
 
     async def run(
+        self,
+        *,
+        scene_id: str,
+        session_id: str,
+        goal: str,
+        principal: Any,
+        success_criteria: list[str] | None = None,
+        stop_condition: dict[str, Any] | None = None,
+        priority: str = "P2",
+    ) -> AsyncGenerator[AgentRuntimeEvent, None]:
+        """Execute an auditable diagnosis run."""
+        async for event in self._orchestrator.execute(
+            scene_id=scene_id,
+            session_id=session_id,
+            goal=goal,
+            principal=principal,
+            success_criteria=success_criteria,
+            stop_condition=stop_condition,
+            priority=priority,
+        ):
+            yield event
+
+    async def _run_orchestration(
         self,
         *,
         scene_id: str,
@@ -435,7 +657,7 @@ class AgentRuntime:
                     message=f"Calling tool: {tool_name}",
                     payload=action.to_event_payload(),
                 )
-                result = await self._execute_tool_with_timeout(
+                result = await self._step_runner.execute_tool(
                     tool,
                     action,
                     principal=principal,
@@ -461,26 +683,12 @@ class AgentRuntime:
                         payload=assessment.model_dump(mode="json"),
                     )
                     if evidence_item.status == "approval_required":
-                        self._run_store.update_run(
-                            run_id,
-                            status="waiting_approval",
-                            final_report="Tool execution is waiting for human approval.",
-                        )
-                        yield self._record_event(
-                            run_id,
-                            event_type="approval_required",
-                            stage="approval",
-                            message=f"Tool approval required: {tool_name}",
+                        for event in self._approval_boundary.pause(
+                            runtime_context,
+                            tool_name=tool_name,
                             payload=action.result_event_payload(result),
-                        )
-                        self._persist_run_metrics(run_id)
-                        yield AgentRuntimeEvent(
-                            type="approval_required",
-                            stage="approval",
-                            run_id=run_id,
-                            status="waiting_approval",
-                            message=f"Tool approval required: {tool_name}",
-                        )
+                        ):
+                            yield event
                         return
                     if assessment.quality in {"empty", "error", "conflicting"}:
                         reason = _handoff_reason_from_evidence(assessment)
@@ -656,21 +864,7 @@ class AgentRuntime:
             )
 
         except asyncio.CancelledError:
-            self._run_store.update_run(
-                run_id,
-                status="cancelled",
-                error_message="Agent run cancelled",
-            )
-            self._record_event(
-                run_id,
-                event_type="cancelled",
-                stage="cancelled",
-                message="Agent run cancelled",
-                payload={
-                    "runtime_safety": safety_config.to_dict(),
-                },
-            )
-            self._persist_run_metrics(run_id)
+            self._failure_handler.mark_cancelled(runtime_context)
             raise
         except TimeoutError as exc:
             error_message = str(exc) or (
@@ -681,31 +875,8 @@ class AgentRuntime:
                 run_id=run_id,
                 error_message=error_message,
             )
-            self._run_store.update_run(
-                run_id,
-                status="failed",
-                error_message=f"TimeoutError: {error_message}",
-            )
-            yield self._record_event(
-                run_id,
-                event_type="timeout",
-                stage="error",
-                message=f"Run timed out: {error_message}",
-                payload={
-                    "error_type": "TimeoutError",
-                    "error_message": error_message,
-                    "timeout_scope": "run",
-                    "runtime_safety": safety_config.to_dict(),
-                },
-            )
-            self._persist_run_metrics(run_id)
-            yield AgentRuntimeEvent(
-                type="timeout",
-                stage="error",
-                run_id=run_id,
-                status="failed",
-                message=f"TimeoutError: {error_message}",
-            )
+            for event in self._failure_handler.timeout_event(runtime_context, exc):
+                yield event
         except Exception as exc:
             error_type = type(exc).__name__
             error_message = str(exc)
@@ -721,30 +892,8 @@ class AgentRuntime:
                 exc_info=True,
             )
 
-            self._run_store.update_run(
-                run_id,
-                status="failed",
-                error_message=f"{error_type}: {error_message}",
-            )
-            yield self._record_event(
-                run_id,
-                event_type="error",
-                stage="error",
-                message=f"Run failed: {error_message}",
-                payload={
-                    "error_type": error_type,
-                    "error_message": error_message,
-                    "runtime_safety": safety_config.to_dict(),
-                },
-            )
-            self._persist_run_metrics(run_id)
-            yield AgentRuntimeEvent(
-                type="error",
-                stage="error",
-                run_id=run_id,
-                status="failed",
-                message=f"{error_type}: {error_message}",
-            )
+            for event in self._failure_handler.error_event(runtime_context, exc):
+                yield event
 
     async def _execute_tool_with_timeout(
         self,
@@ -761,14 +910,22 @@ class AgentRuntime:
 
         timeout_seconds = min(safety_config.tool_timeout_seconds, remaining_seconds)
         try:
-            return await asyncio.wait_for(
-                self._action_executor.execute(
-                    tool,
-                    action,
-                    principal=principal,
-                ),
-                timeout=timeout_seconds,
-            )
+            with _optional_span(
+                "agent.tool_call",
+                {
+                    "agent.tool_name": str(action.tool_name),
+                    "agent.run_timeout_seconds": deadline.timeout_seconds,
+                    "agent.tool_timeout_seconds": timeout_seconds,
+                },
+            ):
+                return await asyncio.wait_for(
+                    self._action_executor.execute(
+                        tool,
+                        action,
+                        principal=principal,
+                    ),
+                    timeout=timeout_seconds,
+                )
         except TimeoutError:
             return ToolExecutionResult(
                 tool_name=action.tool_name,
@@ -933,6 +1090,21 @@ def _handoff_report(goal: str, report: FinalReportContract) -> str:
     if report.recommendations:
         lines.extend(["", "## Recommendations", *[f"- {item}" for item in report.recommendations]])
     return "\n".join(lines)
+
+
+@contextmanager
+def _optional_span(name: str, attributes: dict[str, Any]):
+    try:
+        from opentelemetry import trace
+    except Exception:
+        with nullcontext():
+            yield
+        return
+
+    with trace.get_tracer("smartsre.agent_runtime").start_as_current_span(name) as span:
+        for key, value in attributes.items():
+            span.set_attribute(key, value)
+        yield
 
 
 def _events_by_type(events: list[dict[str, Any]], event_type: str) -> list[dict[str, Any]]:

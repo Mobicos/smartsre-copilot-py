@@ -22,11 +22,15 @@ _DEFAULT_SECRETS = {
     "smartsre",
     "your_dashscope_api_key",
     "replace_with_a_secure_key",
+    "dev-only-minio-user",
+    "dev-only-minio-password",
+    "dev-only-postgres-password",
 }
 
 _DEFAULT_DSN_FRAGMENTS = (
     "postgresql://smartsre:smartsre@",
     "postgresql+psycopg://smartsre:smartsre@",
+    "dev-only-postgres-password@",
 )
 
 

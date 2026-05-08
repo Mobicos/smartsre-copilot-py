@@ -46,6 +46,7 @@ const STATUS_CONFIG: Record<string, { icon: ElementType; label: string; classNam
 
 export function AgentHistoryList() {
   const runs = useAgentWorkbenchStore((state) => state.runs)
+  const error = useAgentWorkbenchStore((state) => state.runsError)
   const loading = useAgentWorkbenchStore((state) => state.runsLoading)
   const loadRuns = useAgentWorkbenchStore((state) => state.loadRuns)
 
@@ -75,7 +76,14 @@ export function AgentHistoryList() {
           </Button>
         </div>
 
-        {runs.length === 0 ? (
+        {error ? (
+          <Card className="border-destructive/30">
+            <CardContent className="flex items-center gap-3 py-6 text-sm text-destructive">
+              <AlertTriangle className="size-5" />
+              {error}
+            </CardContent>
+          </Card>
+        ) : runs.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <p className="text-sm text-muted-foreground">No runs yet</p>

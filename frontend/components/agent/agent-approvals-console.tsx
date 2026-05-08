@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 
 export function AgentApprovalsConsole() {
   const approvals = useAgentWorkbenchStore((state) => state.approvals)
+  const error = useAgentWorkbenchStore((state) => state.approvalError)
   const loading = useAgentWorkbenchStore((state) => state.approvalLoading)
   const loadApprovals = useAgentWorkbenchStore((state) => state.loadApprovals)
   const invalidateAgentData = useAgentWorkbenchStore((state) => state.invalidateAgentData)
@@ -113,7 +114,14 @@ export function AgentApprovalsConsole() {
           </Button>
         </div>
 
-        {approvals.length === 0 ? (
+        {error ? (
+          <Card className="border-destructive/30">
+            <CardContent className="flex items-center gap-3 py-6 text-sm text-destructive">
+              <ShieldAlert className="size-5" />
+              {error}
+            </CardContent>
+          </Card>
+        ) : approvals.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
               <ShieldAlert className="size-10 text-muted-foreground" />

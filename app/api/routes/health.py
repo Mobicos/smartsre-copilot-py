@@ -12,7 +12,7 @@ from app.api.providers import get_service_health, get_vector_store_manager
 from app.config import config
 from app.infrastructure import redis_manager
 from app.infrastructure.tasks import agent_resume_dispatcher, task_dispatcher
-from app.observability import render_prometheus_metrics
+from app.observability import METRICS_CONTENT_TYPE, render_prometheus_metrics
 from app.platform.persistence.database import health_check as db_health_check
 from app.platform.persistence.repositories.indexing import indexing_task_repository
 
@@ -179,5 +179,5 @@ async def health_check():
 async def prometheus_metrics():
     return PlainTextResponse(
         render_prometheus_metrics(),
-        media_type="text/plain; version=0.0.4; charset=utf-8",
+        media_type=METRICS_CONTENT_TYPE,
     )
