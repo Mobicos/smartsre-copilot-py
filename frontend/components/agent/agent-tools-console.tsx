@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useEffect } from "react"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -15,30 +15,16 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import type { NativeTool } from "@/lib/native-agent-types"
+import { useAgentWorkbenchStore } from "@/lib/agent-workbench-store"
 import { cn } from "@/lib/utils"
 
 export function AgentToolsConsole() {
-  const [tools, setTools] = useState<NativeTool[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const loadTools = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetch("/api/agent/tools", { cache: "no-store" })
-      const data = (await res.json()) as NativeTool[] | { error?: string }
-      if (!res.ok) {
-        throw new Error("error" in data && data.error ? data.error : `HTTP ${res.status}`)
-      }
-      setTools(Array.isArray(data) ? data : [])
-    } catch {
-      toast.error("Failed to load tools")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const tools = useAgentWorkbenchStore((state) => state.tools)
+  const loading = useAgentWorkbenchStore((state) => state.toolsLoading)
+  const loadTools = useAgentWorkbenchStore((state) => state.loadTools)
 
   useEffect(() => {
-    void loadTools()
+    void loadTools().catch(() => toast.error("Failed to load tools"))
   }, [loadTools])
 
   if (loading) {
@@ -58,7 +44,11 @@ export function AgentToolsConsole() {
             {tools.length} tool{tools.length !== 1 ? "s" : ""} registered
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void loadTools()}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void loadTools().catch(() => toast.error("Failed to load tools"))}
+        >
           <RefreshCw className="mr-2 size-4" />
           Refresh
         </Button>

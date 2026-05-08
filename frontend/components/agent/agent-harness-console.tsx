@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Markdown } from "@/components/markdown"
 import { AgentEventTimeline } from "./agent-event-timeline"
+import { useAgentWorkbenchStore } from "@/lib/agent-workbench-store"
 import { useEventStream } from "@/lib/use-event-stream"
 import { tryParseJSON } from "@/lib/sse"
 import type {
@@ -46,8 +47,11 @@ const initialRunState: RunState = {
 }
 
 export function AgentHarnessConsole() {
-  const [scenes, setScenes] = useState<NativeScene[]>([])
-  const [selectedSceneId, setSelectedSceneId] = useState("")
+  const scenes = useAgentWorkbenchStore((state) => state.scenes)
+  const selectedSceneId = useAgentWorkbenchStore((state) => state.selectedSceneId)
+  const setSelectedSceneId = useAgentWorkbenchStore((state) => state.setSelectedSceneId)
+  const loadStoreScenes = useAgentWorkbenchStore((state) => state.loadScenes)
+  const invalidateAgentData = useAgentWorkbenchStore((state) => state.invalidateAgentData)
   const [goal, setGoal] = useState(DEFAULT_GOAL)
   const [runState, setRunState] = useState<RunState>(initialRunState)
   const [loading, setLoading] = useState(true)
@@ -75,14 +79,14 @@ export function AgentHarnessConsole() {
         nextScenes = [createdScene]
       }
 
-      setScenes(nextScenes)
       setSelectedSceneId(nextScenes[0]?.id || "")
+      await loadStoreScenes()
     } catch (err) {
       toast.error("Failed to load scenes")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [loadStoreScenes, setSelectedSceneId])
 
   useEffect(() => {
     void loadScenes()
@@ -137,6 +141,7 @@ export function AgentHarnessConsole() {
                 agentEvent.type === "approval_required"
               ) {
                 newState.phase = "done"
+                void invalidateAgentData()
                 if (typeof agentEvent.final_report === "string") {
                   newState.report = agentEvent.final_report
                 } else if (agentEvent.type === "approval_required") {
@@ -150,6 +155,7 @@ export function AgentHarnessConsole() {
               } else if (agentEvent.type === "error") {
                 newState.phase = "error"
                 newState.error = agentEvent.message || "Diagnosis failed"
+                void invalidateAgentData()
               }
 
               return newState

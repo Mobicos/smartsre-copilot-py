@@ -1,7 +1,4 @@
-"""配置管理模块。
-
-使用 Pydantic Settings 实现类型安全的配置管理。
-"""
+"""Application configuration."""
 
 import json
 from pathlib import Path
@@ -19,15 +16,22 @@ LOGS_DIR = BASE_DIR / "logs"
 _DEFAULT_SECRETS = {
     "changethis",
     "changeme",
+    "minioadmin",
     "secret",
     "password",
+    "smartsre",
     "your_dashscope_api_key",
     "replace_with_a_secure_key",
 }
 
+_DEFAULT_DSN_FRAGMENTS = (
+    "postgresql://smartsre:smartsre@",
+    "postgresql+psycopg://smartsre:smartsre@",
+)
+
 
 class Settings(BaseSettings):
-    """应用配置"""
+    """Typed application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE),
@@ -37,7 +41,7 @@ class Settings(BaseSettings):
         env_ignore_empty=True,
     )
 
-    # 应用配置
+    # Application settings
     app_name: str = "SmartSRE Copilot"
     app_version: str = "0.1.0.dev0"
     environment: str = "dev"
@@ -47,6 +51,7 @@ class Settings(BaseSettings):
     port: int = 9900
     cors_allowed_origins: str = "*"
     postgres_dsn: str = ""
+    postgres_connect_timeout_seconds: int = 5
     app_api_key: str = ""
     api_keys_json: str = ""
     task_dispatcher_mode: str = "embedded"
@@ -65,12 +70,12 @@ class Settings(BaseSettings):
     minio_bucket: str = "smartsre-knowledge"
     minio_secure: bool = False
 
-    # DashScope 配置
-    dashscope_api_key: str = ""  # 默认空字符串，实际使用需从环境变量加载
+    # DashScope settings
+    dashscope_api_key: str = ""
     dashscope_model: str = "qwen-max"
-    dashscope_embedding_model: str = "text-embedding-v4"  # v4 支持多种维度（默认 1024）
+    dashscope_embedding_model: str = "text-embedding-v4"
 
-    # Milvus 配置
+    # Milvus settings
     llm_request_timeout_seconds: float = 60.0
     llm_max_retries: int = 3
     llm_retry_delay_seconds: float = 1.0
@@ -80,11 +85,11 @@ class Settings(BaseSettings):
     milvus_port: int = 19530
     pgvector_collection_name: str = "biz"
     pgvector_embedding_dimensions: int = 1024
-    milvus_timeout: int = 10000  # 毫秒
+    milvus_timeout: int = 10000
 
-    # RAG 配置
+    # RAG settings
     rag_top_k: int = 3
-    rag_model: str = "qwen-max"  # 使用快速响应模型，不带扩展思考
+    rag_model: str = "qwen-max"
     chat_recursion_limit: int = 12
     aiops_recursion_limit: int = 24
     aiops_max_steps: int = 8
@@ -95,11 +100,11 @@ class Settings(BaseSettings):
     agent_approval_timeout_seconds: int = 3600
     agent_resume_queue_name: str = "smartsre:agent:resume:queue"
 
-    # 文档分块配置
+    # Document chunking settings
     chunk_max_size: int = 800
     chunk_overlap: int = 100
 
-    # MCP 服务配置
+    # MCP server settings
     mcp_cls_transport: str = "streamable-http"
     mcp_cls_url: str = "http://localhost:8003/mcp"
     mcp_monitor_transport: str = "streamable-http"
@@ -113,11 +118,17 @@ class Settings(BaseSettings):
             "app_api_key": self.app_api_key,
             "postgres_dsn": self.postgres_dsn,
             "dashscope_api_key": self.dashscope_api_key,
+            "minio_access_key": self.minio_access_key,
+            "minio_secret_key": self.minio_secret_key,
         }
         issues: list[str] = []
         for field_name, value in secret_fields.items():
             if value and value.strip().lower() in _DEFAULT_SECRETS:
                 issues.append(f"{field_name} is set to a default/placeholder value")
+        if self.postgres_dsn and any(
+            fragment in self.postgres_dsn.strip().lower() for fragment in _DEFAULT_DSN_FRAGMENTS
+        ):
+            issues.append("postgres_dsn contains the default smartsre database password")
 
         if not issues:
             return self
@@ -136,19 +147,19 @@ class Settings(BaseSettings):
             return ""
         if raw.startswith("postgresql+"):
             return raw
-        # postgresql://… → postgresql+psycopg://…
+        # Convert postgresql:// to postgresql+psycopg:// for SQLAlchemy.
         return raw.replace("postgresql://", "postgresql+psycopg://", 1)
 
     @property
     def is_production(self) -> bool:
-        """当前是否为生产环境。"""
+        """Return whether the current environment is production."""
         return self.environment.strip().lower() in {"prod", "production"}
 
     @property
     def cors_origins(self) -> list[str]:
-        """解析 CORS 白名单。
+        """Parse the configured CORS allowlist.
 
-        支持:
+        Supports:
         - `*`
         - `https://a.com,https://b.com`
         - `["https://a.com", "https://b.com"]`
@@ -172,7 +183,7 @@ class Settings(BaseSettings):
 
     @property
     def mcp_servers(self) -> dict[str, dict[str, Any]]:
-        """获取完整的 MCP 服务器配置"""
+        """Return configured MCP servers."""
         return {
             "cls": {
                 "transport": self.mcp_cls_transport,

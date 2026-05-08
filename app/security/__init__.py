@@ -1,4 +1,4 @@
-"""安全组件导出。"""
+"""Security helpers."""
 
 from app.security.auth import (
     Principal,

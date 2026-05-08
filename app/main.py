@@ -2,6 +2,7 @@
 
 import os
 from contextlib import asynccontextmanager
+from time import perf_counter
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
@@ -17,6 +18,7 @@ from app.api.routes import health
 from app.config import config
 from app.core.exceptions import AppException
 from app.infrastructure.tasks import agent_resume_dispatcher, task_dispatcher
+from app.observability import observe_http_request
 from app.platform.persistence import audit_log_repository
 from app.security import validate_security_configuration
 from app.utils.logger import setup_logger
@@ -211,12 +213,22 @@ async def request_context_middleware(request: Request, call_next):
     """Attach a request ID to loguru context and audit output."""
     request_id = request.headers.get("X-Request-ID") or str(uuid4())
     request.state.request_id = request_id
+    started_at = perf_counter()
 
     with logger.contextualize(request_id=request_id):
         logger.info(f"{request.method} {request.url.path} - started")
         try:
             response = await call_next(request)
         except Exception as exc:
+            duration_seconds = perf_counter() - started_at
+            route = request.scope.get("route")
+            route_path = str(getattr(route, "path", request.url.path))
+            observe_http_request(
+                method=request.method,
+                path=route_path,
+                status_code=500,
+                duration_seconds=duration_seconds,
+            )
             _write_audit_log(
                 request,
                 request_id=request_id,
@@ -227,6 +239,15 @@ async def request_context_middleware(request: Request, call_next):
             raise
 
         response.headers["X-Request-ID"] = request_id
+        duration_seconds = perf_counter() - started_at
+        route = request.scope.get("route")
+        route_path = str(getattr(route, "path", request.url.path))
+        observe_http_request(
+            method=request.method,
+            path=route_path,
+            status_code=response.status_code,
+            duration_seconds=duration_seconds,
+        )
         _write_audit_log(
             request,
             request_id=request_id,

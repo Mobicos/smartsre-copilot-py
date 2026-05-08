@@ -204,6 +204,9 @@ jobs:
       POSTGRES_DSN: postgresql://smartsre:smartsre@localhost:5432/postgres
       SMARTSRE_BACKEND_URL: http://localhost:9900
       SMARTSRE_TEST_POSTGRES_HOST: localhost
+      AGENT_DECISION_PROVIDER: deterministic
+      TASK_DISPATCHER_MODE: embedded
+      MCP_TOOLS_LOAD_TIMEOUT_SECONDS: "1"
 
     steps:
       - name: Checkout
@@ -241,10 +244,16 @@ jobs:
         working-directory: frontend
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Apply database migrations
+        run: uv run alembic upgrade head
+
       - name: Start backend
         run: uv run uvicorn app.main:app --host 0.0.0.0 --port 9900 &
         env:
           POSTGRES_DSN: postgresql://smartsre:smartsre@localhost:5432/postgres
+          AGENT_DECISION_PROVIDER: deterministic
+          TASK_DISPATCHER_MODE: embedded
+          MCP_TOOLS_LOAD_TIMEOUT_SECONDS: "1"
 
       - name: Wait for backend
         run: |

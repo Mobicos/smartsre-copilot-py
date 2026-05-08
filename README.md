@@ -37,8 +37,10 @@ version.
 
 SmartSRE Copilot is an open source SRE Agentic Workbench with a LangGraph
 Decision Runtime, evidence-driven reporting, approval workflow, and tool
-governance pipeline. It is currently in active development and suitable for
-local development and internal evaluation only.
+governance pipeline. The 2.0 production-capability work is implemented except
+for version publication, tags, and release artifacts. It is still in active
+development and should be verified with quality gates, browser E2E, compose
+smoke, and real production secrets before serving production traffic.
 
 ## Architecture
 
@@ -305,7 +307,41 @@ Do not expose backend secrets through `NEXT_PUBLIC_*`.
 - Backend API: [http://localhost:9900](http://localhost:9900)
 - Backend docs: [http://localhost:9900/docs](http://localhost:9900/docs)
 - Health check: [http://localhost:9900/health](http://localhost:9900/health)
+- Prometheus metrics: [http://localhost:9900/metrics](http://localhost:9900/metrics)
 - Attu, if using default compose: [http://localhost:8000](http://localhost:8000)
+
+## Compose Profiles And Smoke
+
+The default compose stack starts the app path: PostgreSQL, Redis, MinIO,
+migrations, FastAPI backend, worker, and Next.js frontend. Optional profiles add
+deployment and observability services:
+
+- `gateway`: adds Caddy for the production-style reverse proxy path.
+- `observability`: adds Prometheus, Loki, and OpenTelemetry collector services.
+- `vector-milvus`: starts the Milvus/Attu vector-store stack when pgvector is not
+  enough for local validation.
+
+Validate the full production-style compose graph:
+
+```powershell
+docker compose -f docker-compose.yml --profile gateway --profile observability config --quiet
+```
+
+Run the local non-destructive smoke check:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\compose_smoke.ps1
+```
+
+The smoke script uses `ENVIRONMENT=dev` and
+`AGENT_DECISION_PROVIDER=deterministic` by default so it does not require a real
+Qwen key. It verifies service health, migration completion, backend `/health`,
+backend `/metrics`, the frontend, and the Caddy gateway.
+
+If Docker fails with a proxy error such as `127.0.0.1:7890 refused`, start the
+local proxy configured in Docker Desktop, or clear Docker Desktop proxy settings
+and retry a direct image pull such as `docker pull pgvector/pgvector:pg16`.
+After image pulls work, rerun the smoke script.
 
 ## Configuration
 
@@ -339,8 +375,15 @@ Production guidance:
 - Set `ENVIRONMENT=prod` or `ENVIRONMENT=production`.
 - Configure explicit `CORS_ALLOWED_ORIGINS`; do not use `*`.
 - Configure `APP_API_KEY` or `API_KEYS_JSON`.
+- Set `AGENT_DECISION_PROVIDER=qwen` and provide a real `DASHSCOPE_API_KEY`.
+- Replace all PostgreSQL, MinIO, Redis, and API-key placeholders with unique
+  production secrets.
+- Keep Prometheus scraping the backend `/metrics` endpoint and keep
+  OpenTelemetry tracing configured separately when tracing is required.
 - Keep `.env` out of Git.
 - Prefer managed PostgreSQL, Redis, and Milvus/Zilliz for production.
+- Define backup and restore procedures for PostgreSQL, object storage, and any
+  vector-store data before onboarding real incident data.
 
 ## MCP Integration
 
@@ -372,6 +415,7 @@ MCP_TOOLS_LOAD_TIMEOUT_SECONDS=30
 Backend routes:
 
 - `GET /health`: service health
+- `GET /metrics`: Prometheus text-format metrics
 - `POST /api/chat`: non-streaming chat
 - `POST /api/chat_stream`: streaming chat via SSE
 - `GET /api/chat/sessions`: persisted chat sessions
@@ -393,6 +437,15 @@ Backend routes:
 - `POST /api/agent/runs`: run a scene-scoped Native Agent diagnosis
 - `GET /api/agent/runs/{run_id}`: fetch a Native Agent run summary
 - `GET /api/agent/runs/{run_id}/events`: replay a Native Agent trajectory
+- `GET /api/agent/runs/{run_id}/replay`: inspect replay summary, metrics, tool
+  trajectory, approvals, and final report
+- `GET /api/agent/runs/{run_id}/decision-state`: inspect observations,
+  decisions, evidence, handoff, recovery, and approval resume state
+- `GET /api/agent/approvals`: list pending and decided approval requests
+- `POST /api/agent/runs/{run_id}/approvals/{tool_name}`: approve or reject a
+  pending tool call
+- `POST /api/agent/runs/{run_id}/approvals/{tool_name}/resume`: resume an
+  approved gated tool call
 - `POST /api/agent/runs/{run_id}/feedback`: capture thumbs-up/down feedback
 
 The frontend calls server-side handlers under `frontend/app/api/*`; browser
@@ -589,6 +642,24 @@ SSE streaming issues:
   teams.
 
 Report vulnerabilities privately by following `SECURITY.md`.
+
+## Pre-Production Checklist
+
+- Backend gates pass: compile, Ruff lint and format check, mypy, Bandit,
+  OpenAPI check, and the full pytest suite.
+- Frontend gates pass: `pnpm install --frozen-lockfile`, lint, typecheck, build,
+  and Playwright Agent E2E.
+- Compose validation and `scripts\compose_smoke.ps1` pass with gateway and
+  observability profiles available.
+- Production `.env` is based on `config/.env.prod.example`, with Qwen provider,
+  real DashScope key, explicit CORS, API key enforcement, and unique database,
+  Redis, and MinIO secrets.
+- Prometheus can scrape `/metrics`, and OpenTelemetry tracing remains configured
+  independently when enabled.
+- Backup and restore are tested for PostgreSQL, object storage, and any external
+  vector-store data.
+- High-risk or destructive tools require approval, and the approval/resume path
+  is tested in the workbench before onboarding real incidents.
 
 ## Development Focus
 

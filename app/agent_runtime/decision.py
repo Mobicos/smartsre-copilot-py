@@ -385,6 +385,7 @@ class AgentDecisionRuntime:
     ) -> None:
         self._provider = provider or DeterministicDecisionProvider()
         self._checkpoint_saver = checkpoint_saver
+        self._compiled_graph: Any | None = None
 
     def decide_once(self, state: AgentDecisionState) -> AgentDecisionState:
         decision = self._provider.decide(state)
@@ -405,20 +406,23 @@ class AgentDecisionRuntime:
         return AgentDecisionState.model_validate(result)
 
     def build_graph(self) -> Any:
+        if self._compiled_graph is not None:
+            return self._compiled_graph
+
         try:
             from langgraph.graph import END, StateGraph
         except Exception as exc:  # pragma: no cover - depends on optional import wiring
             raise RuntimeError("LangGraph is not available") from exc
 
         graph = StateGraph(dict)  # type: ignore[type-var]
-        graph.add_node("initialize", _identity_graph_node)  # type: ignore[call-overload]
-        graph.add_node("observe", _identity_graph_node)  # type: ignore[call-overload]
+        graph.add_node("initialize", self._graph_initialize)  # type: ignore[call-overload]
+        graph.add_node("observe", self._graph_observe)  # type: ignore[call-overload]
         graph.add_node("decide", self._graph_decide)  # type: ignore[call-overload]
-        graph.add_node("validate_decision", _identity_graph_node)  # type: ignore[call-overload]
-        graph.add_node("act", _identity_graph_node)  # type: ignore[call-overload]
-        graph.add_node("evaluate_evidence", _identity_graph_node)  # type: ignore[call-overload]
-        graph.add_node("recover", _identity_graph_node)  # type: ignore[call-overload]
-        graph.add_node("final_report", _identity_graph_node)  # type: ignore[call-overload]
+        graph.add_node("validate_decision", self._graph_validate_decision)  # type: ignore[call-overload]
+        graph.add_node("act", self._graph_act)  # type: ignore[call-overload]
+        graph.add_node("evaluate_evidence", self._graph_evaluate_evidence)  # type: ignore[call-overload]
+        graph.add_node("recover", self._graph_recover)  # type: ignore[call-overload]
+        graph.add_node("final_report", self._graph_final_report)  # type: ignore[call-overload]
         graph.set_entry_point("initialize")
         graph.add_edge("initialize", "observe")
         graph.add_edge("observe", "decide")
@@ -438,12 +442,142 @@ class AgentDecisionRuntime:
         graph.add_edge("recover", END)
         graph.add_edge("final_report", END)
         if self._checkpoint_saver is not None:
-            return graph.compile(checkpointer=self._checkpoint_saver)
-        return graph.compile()
+            self._compiled_graph = graph.compile(checkpointer=self._checkpoint_saver)
+        else:
+            self._compiled_graph = graph.compile()
+        return self._compiled_graph
+
+    def _graph_initialize(self, payload: dict[str, Any]) -> dict[str, Any]:
+        state = AgentDecisionState.model_validate(payload)
+        return state.model_dump(mode="json")
+
+    def _graph_observe(self, payload: dict[str, Any]) -> dict[str, Any]:
+        state = AgentDecisionState.model_validate(payload)
+        observations = list(state.observations)
+        if not observations:
+            observations.append(
+                AgentObservation(
+                    source="user_goal",
+                    summary=state.goal.goal,
+                    confidence=1.0,
+                )
+            )
+        if state.available_tools:
+            observations.append(
+                AgentObservation(
+                    source="tool_catalog",
+                    summary=f"{len(state.available_tools)} scene-approved tools are available.",
+                    confidence=1.0,
+                    citations=[{"tools": state.available_tools}],
+                )
+            )
+        return state.model_copy(update={"observations": observations}).model_dump(mode="json")
 
     def _graph_decide(self, payload: dict[str, Any]) -> dict[str, Any]:
         state = AgentDecisionState.model_validate(payload)
         return self.decide_once(state).model_dump(mode="json")
+
+    def _graph_validate_decision(self, payload: dict[str, Any]) -> dict[str, Any]:
+        state = AgentDecisionState.model_validate(payload)
+        if not state.decisions:
+            return state.model_dump(mode="json")
+
+        latest = state.decisions[-1]
+        if latest.selected_tool and latest.selected_tool not in state.available_tools:
+            decision = AgentDecision(
+                action_type="recover",
+                reasoning_summary="Decision selected a tool outside the scene-approved tool set.",
+                evidence=EvidenceAssessment(
+                    quality="error",
+                    summary=f"Unknown tool: {latest.selected_tool}",
+                ),
+                recovery=RecoveryDecision(
+                    required=True,
+                    reason="unknown_tool",
+                    next_action="retry",
+                ),
+                confidence=0.0,
+            )
+            return state.model_copy(
+                update={"decisions": [*state.decisions[:-1], decision]}
+            ).model_dump(mode="json")
+
+        if latest.action_type == "call_tool" and not latest.selected_tool:
+            decision = AgentDecision(
+                action_type="recover",
+                reasoning_summary="Decision requested a tool call without selecting a tool.",
+                evidence=EvidenceAssessment(
+                    quality="error",
+                    summary="Missing selected_tool for call_tool decision.",
+                ),
+                recovery=RecoveryDecision(
+                    required=True,
+                    reason="invalid_tool_decision",
+                    next_action="retry",
+                ),
+                confidence=0.0,
+            )
+            return state.model_copy(
+                update={"decisions": [*state.decisions[:-1], decision]}
+            ).model_dump(mode="json")
+        return state.model_dump(mode="json")
+
+    def _graph_act(self, payload: dict[str, Any]) -> dict[str, Any]:
+        state = AgentDecisionState.model_validate(payload)
+        if not state.decisions:
+            return state.model_dump(mode="json")
+        latest = state.decisions[-1]
+        if latest.action_type != "call_tool" or not latest.selected_tool:
+            return state.model_dump(mode="json")
+
+        executed_tools = [*state.executed_tools, latest.selected_tool]
+        budget = state.budget.model_copy(
+            update={
+                "remaining_steps": max(state.budget.remaining_steps - 1, 0),
+                "remaining_tool_calls": max(state.budget.remaining_tool_calls - 1, 0),
+            }
+        )
+        return state.model_copy(
+            update={"executed_tools": executed_tools, "budget": budget}
+        ).model_dump(mode="json")
+
+    def _graph_evaluate_evidence(self, payload: dict[str, Any]) -> dict[str, Any]:
+        state = AgentDecisionState.model_validate(payload)
+        if not state.decisions:
+            return state.model_dump(mode="json")
+        latest = state.decisions[-1]
+        if latest.action_type != "call_tool":
+            return state.model_dump(mode="json")
+        expected = latest.expected_evidence or ["Tool evidence is pending execution."]
+        evidence = EvidenceAssessment(
+            quality="weak",
+            summary="; ".join(expected),
+            confidence=min(latest.confidence, 0.5),
+            citations=[
+                {
+                    "source": "decision_runtime",
+                    "tool_name": latest.selected_tool,
+                    "stage": "expected_evidence",
+                }
+            ],
+        )
+        return state.model_copy(update={"evidence": [*state.evidence, evidence]}).model_dump(
+            mode="json"
+        )
+
+    def _graph_recover(self, payload: dict[str, Any]) -> dict[str, Any]:
+        state = AgentDecisionState.model_validate(payload)
+        if not state.decisions:
+            return state.model_dump(mode="json")
+        latest = state.decisions[-1]
+        status: DecisionRunStatus = (
+            "handoff_required" if latest.recovery.next_action == "handoff" else "running"
+        )
+        return state.model_copy(update={"status": status}).model_dump(mode="json")
+
+    def _graph_final_report(self, payload: dict[str, Any]) -> dict[str, Any]:
+        state = AgentDecisionState.model_validate(payload)
+        return state.model_copy(update={"status": "completed"}).model_dump(mode="json")
 
 
 def build_initial_decision_state(

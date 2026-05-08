@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 
+@runtime_checkable
 class SceneStore(Protocol):
     """Read scene configuration for a run."""
 
@@ -12,6 +13,7 @@ class SceneStore(Protocol):
         """Return a scene by id."""
 
 
+@runtime_checkable
 class AgentRunStore(Protocol):
     """Persist run lifecycle and trajectory events."""
 
@@ -56,6 +58,7 @@ class AgentRunStore(Protocol):
         """Append a trajectory event."""
 
 
+@runtime_checkable
 class ToolPolicyStore(Protocol):
     """Read tool governance policy."""
 

@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from app.agent_runtime import (
     AgentDecision,
+    AgentDecisionRuntime,
     AgentGoalContract,
     AgentHypothesis,
     AgentObservation,
@@ -103,6 +104,47 @@ def test_qwen_provider_recovers_on_unknown_tool_and_low_confidence():
     assert unknown_tool_decision.recovery.reason == "unknown_tool"
     assert low_confidence_decision.action_type == "recover"
     assert low_confidence_decision.recovery.reason == "low_confidence"
+
+
+def test_qwen_provider_recovers_on_invalid_json_and_empty_response():
+    invalid_json_provider = QwenDecisionProvider(lambda _state: "not json")
+    empty_response_provider = QwenDecisionProvider(lambda _state: "")
+    state = build_initial_decision_state(
+        run_id="run-1",
+        goal="Diagnose latency",
+        workspace_id="workspace-1",
+        scene_id="scene-1",
+        available_tools=["SearchLog"],
+    )
+
+    invalid_json_decision = invalid_json_provider.decide(state)
+    empty_response_decision = empty_response_provider.decide(state)
+
+    assert invalid_json_decision.action_type == "recover"
+    assert invalid_json_decision.recovery.reason == "invalid_model_output"
+    assert empty_response_decision.action_type == "recover"
+    assert empty_response_decision.recovery.reason == "invalid_model_output"
+
+
+def test_decision_runtime_graph_nodes_update_state_and_cache_compiled_graph():
+    runtime = AgentDecisionRuntime()
+    state = build_initial_decision_state(
+        run_id="run-1",
+        goal="Diagnose latency",
+        workspace_id="workspace-1",
+        scene_id="scene-1",
+        available_tools=["SearchLog"],
+        budget=RuntimeBudget(max_steps=2, remaining_steps=2, remaining_tool_calls=1),
+    )
+
+    result = runtime.run_graph_once(state)
+
+    assert runtime.build_graph() is runtime.build_graph()
+    assert result.decisions[-1].action_type == "call_tool"
+    assert result.executed_tools == ["SearchLog"]
+    assert result.budget.remaining_steps == 1
+    assert result.budget.remaining_tool_calls == 0
+    assert result.evidence[-1].quality == "weak"
 
 
 def test_final_report_contract_separates_facts_inferences_and_handoff():
