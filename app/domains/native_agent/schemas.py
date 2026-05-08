@@ -33,6 +33,9 @@ class AgentRunCreateRequest(BaseModel):
     scene_id: str
     session_id: str = "default"
     goal: str = Field(min_length=1)
+    success_criteria: list[str] = Field(default_factory=list)
+    stop_condition: dict[str, Any] | None = None
+    priority: str = Field(default="P2", pattern="^(P0|P1|P2|P3)$")
 
 
 class AgentFeedbackCreateRequest(BaseModel):

@@ -11,7 +11,7 @@ import uuid
 from collections.abc import Callable, Sequence
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 ActionType = Literal[
     "observe",
@@ -30,6 +30,48 @@ DecisionRunStatus = Literal[
     "handoff_required",
     "cancelled",
 ]
+Priority = Literal["P0", "P1", "P2", "P3"]
+
+
+class SuccessCriteria(BaseModel):
+    """A measurable condition that lets the runtime stop safely."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    description: str = Field(min_length=1)
+    required: bool = True
+
+
+class StopCondition(BaseModel):
+    """Boundaries that prevent unbounded autonomous execution."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_steps: int = Field(default=5, ge=1)
+    max_minutes: float = Field(default=2.0, gt=0)
+    confidence_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+
+
+class AgentObservation(BaseModel):
+    """A compact observation visible to decision providers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: str = Field(min_length=1)
+    summary: str = Field(min_length=1)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    citations: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class AgentHypothesis(BaseModel):
+    """A ranked diagnostic hypothesis carried through the decision loop."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    hypothesis_id: str = Field(min_length=1)
+    summary: str = Field(min_length=1)
+    priority: int = Field(default=1, ge=1)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
 class RuntimeBudget(BaseModel):
@@ -55,10 +97,13 @@ class AgentGoalContract(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     goal: str = Field(min_length=1)
-    success_criteria: list[str] = Field(default_factory=list)
+    success_criteria: list[SuccessCriteria] = Field(default_factory=list)
+    stop_condition: StopCondition = Field(default_factory=StopCondition)
+    priority: Priority = "P2"
     workspace_id: str | None = None
     scene_id: str | None = None
     allowed_tools: list[str] = Field(default_factory=list)
+    trace_id: str | None = None
     prohibited_outputs: list[str] = Field(
         default_factory=lambda: ["private_chain_of_thought", "secrets"],
     )
@@ -93,13 +138,17 @@ class AgentDecision(BaseModel):
     action_type: ActionType
     reasoning_summary: str = Field(min_length=1)
     selected_tool: str | None = None
+    selected_action: str | None = None
     tool_arguments: dict[str, Any] = Field(default_factory=dict)
     expected_evidence: list[str] = Field(default_factory=list)
     evidence: EvidenceAssessment = Field(
         default_factory=lambda: EvidenceAssessment(quality="empty")
     )
+    actual_evidence: EvidenceAssessment | None = None
     recovery: RecoveryDecision = Field(default_factory=RecoveryDecision)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    decision_status: DecisionRunStatus | ActionType | str | None = None
+    handoff_reason: str | None = None
 
     @field_validator("reasoning_summary")
     @classmethod
@@ -109,6 +158,18 @@ class AgentDecision(BaseModel):
         if any(term in lowered for term in blocked_terms):
             raise ValueError("reasoning_summary must not include private reasoning")
         return value
+
+    @model_validator(mode="after")
+    def _normalize_decision_payload(self) -> AgentDecision:
+        if self.actual_evidence is None:
+            self.actual_evidence = self.evidence
+        if self.selected_action is None:
+            self.selected_action = self.action_type
+        if self.decision_status is None:
+            self.decision_status = self.action_type
+        if self.handoff_reason is None and self.recovery.required:
+            self.handoff_reason = self.recovery.reason
+        return self
 
     def to_event_payload(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
@@ -125,6 +186,8 @@ class AgentDecisionState(BaseModel):
     budget: RuntimeBudget = Field(default_factory=RuntimeBudget)
     available_tools: list[str] = Field(default_factory=list)
     executed_tools: list[str] = Field(default_factory=list)
+    observations: list[AgentObservation] = Field(default_factory=list)
+    hypothesis_queue: list[AgentHypothesis] = Field(default_factory=list)
     evidence: list[EvidenceAssessment] = Field(default_factory=list)
     consecutive_empty_evidence: int = 0
     decisions: list[AgentDecision] = Field(default_factory=list)
@@ -392,19 +455,59 @@ def build_initial_decision_state(
     available_tools: Sequence[str],
     executed_tools: Sequence[str] | None = None,
     budget: RuntimeBudget | None = None,
+    success_criteria: Sequence[str | SuccessCriteria] | None = None,
+    stop_condition: StopCondition | None = None,
+    priority: Priority = "P2",
 ) -> AgentDecisionState:
+    criteria = [
+        item if isinstance(item, SuccessCriteria) else SuccessCriteria(description=str(item))
+        for item in success_criteria or []
+    ]
     return AgentDecisionState(
         run_id=run_id,
         goal=AgentGoalContract(
             goal=goal,
+            success_criteria=criteria,
+            stop_condition=stop_condition or StopCondition(),
+            priority=priority,
             workspace_id=workspace_id,
             scene_id=scene_id,
             allowed_tools=list(available_tools),
+            trace_id=run_id,
         ),
         budget=budget or RuntimeBudget(max_tool_calls=max(len(available_tools), 1)),
         available_tools=list(available_tools),
         executed_tools=list(executed_tools or []),
+        observations=[
+            AgentObservation(source="user_goal", summary=goal, confidence=1.0),
+        ],
+        hypothesis_queue=[
+            AgentHypothesis(
+                hypothesis_id="hypothesis-1",
+                summary="Validate logs, metrics, alerts, and recent changes for the goal.",
+                priority=1,
+                confidence=0.5,
+            )
+        ],
     )
+
+
+class FinalReportContract(BaseModel):
+    """Evidence-safe final report payload for UI, replay, and handoff."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(min_length=1)
+    verified_facts: list[str] = Field(default_factory=list)
+    inferences: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    citations: list[dict[str, Any]] = Field(default_factory=list)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    handoff_required: bool = False
+    handoff_reason: str | None = None
+
+    def to_event_payload(self) -> dict[str, Any]:
+        return self.model_dump(mode="json")
 
 
 def _best_evidence(evidence: Sequence[EvidenceAssessment]) -> EvidenceAssessment:

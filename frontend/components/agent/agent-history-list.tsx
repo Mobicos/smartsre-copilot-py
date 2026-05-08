@@ -44,6 +44,16 @@ const STATUS_CONFIG: Record<string, { icon: ElementType; label: string; classNam
     label: "Failed",
     className: "text-destructive bg-destructive/10 border-destructive/20",
   },
+  waiting_approval: {
+    icon: AlertTriangle,
+    label: "Approval",
+    className: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+  },
+  handoff_required: {
+    icon: AlertTriangle,
+    label: "Handoff",
+    className: "text-cyan-600 bg-cyan-500/10 border-cyan-500/20",
+  },
 }
 
 export function AgentHistoryList() {

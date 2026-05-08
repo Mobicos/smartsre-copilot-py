@@ -16,6 +16,7 @@ class ToolSchema:
     name: str
     description: str
     input_schema: dict[str, Any] | None = None
+    output_schema: dict[str, Any] | None = None
     scope: str = "diagnosis"
     risk_level: str = "low"
     capability: str | None = None
@@ -25,6 +26,7 @@ class ToolSchema:
     owner: str = "SmartSRE"
     data_boundary: str = "workspace"
     side_effect: str = "none"
+    fallback_strategy: str = "handoff"
     raw_tool: Any = field(default=None, repr=False, compare=False)
 
     @property
@@ -62,12 +64,13 @@ def _tool_to_schema(tool: Any, *, scope: str) -> ToolSchema:
     input_schema = _input_schema(tool)
     side_effect = str(getattr(tool, "side_effect", "none") or "none")
     approval_required = bool(getattr(tool, "approval_required", False))
-    if side_effect == "destructive":
+    if side_effect in {"change", "destructive"}:
         approval_required = True
     return ToolSchema(
         name=str(getattr(tool, "name", repr(tool))),
         description=str(getattr(tool, "description", "")),
         input_schema=input_schema,
+        output_schema=_output_schema(tool),
         scope=str(getattr(tool, "scope", scope) or scope),
         risk_level=str(getattr(tool, "risk_level", "low") or "low"),
         capability=getattr(tool, "capability", None),
@@ -77,12 +80,23 @@ def _tool_to_schema(tool: Any, *, scope: str) -> ToolSchema:
         owner=str(getattr(tool, "owner", "SmartSRE") or "SmartSRE"),
         data_boundary=str(getattr(tool, "data_boundary", "workspace") or "workspace"),
         side_effect=side_effect,
+        fallback_strategy=str(getattr(tool, "fallback_strategy", "handoff") or "handoff"),
         raw_tool=tool,
     )
 
 
 def _input_schema(tool: Any) -> dict[str, Any] | None:
     args_schema = getattr(tool, "args_schema", None)
+    return _schema_to_dict(args_schema)
+
+
+def _output_schema(tool: Any) -> dict[str, Any] | None:
+    output_schema = getattr(tool, "output_schema", None)
+    return _schema_to_dict(output_schema)
+
+
+def _schema_to_dict(schema_source: Any) -> dict[str, Any] | None:
+    args_schema = schema_source
     if args_schema is None:
         return None
     if isinstance(args_schema, dict):

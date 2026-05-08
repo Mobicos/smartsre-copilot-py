@@ -183,6 +183,9 @@ async def create_agent_run(
         session_id=request.session_id,
         goal=request.goal,
         principal=principal,
+        success_criteria=request.success_criteria,
+        stop_condition=request.stop_condition,
+        priority=request.priority,
     )
 
     if run is None:
@@ -213,6 +216,9 @@ async def stream_agent_run(
             session_id=request.session_id,
             goal=request.goal,
             principal=principal,
+            success_criteria=request.success_criteria,
+            stop_condition=request.stop_condition,
+            priority=request.priority,
         ):
             yield {
                 "event": event.get("type", "status"),

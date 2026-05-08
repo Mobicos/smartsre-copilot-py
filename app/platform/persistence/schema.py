@@ -270,12 +270,18 @@ class AgentRun(SQLModel, table=True):
     runtime_version: str | None = None
     trace_id: str | None = None
     model_name: str | None = None
+    decision_provider: str | None = None
     step_count: int | None = None
     tool_call_count: int | None = None
     latency_ms: int | None = None
     error_type: str | None = None
     approval_state: str | None = None
     retrieval_count: int | None = None
+    cost_estimate: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=sa.Column(sa.JSON, nullable=True),
+    )
+    handoff_reason: str | None = None
     token_usage: dict[str, Any] | None = Field(
         default=None,
         sa_column=sa.Column(sa.JSON, nullable=True),

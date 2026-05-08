@@ -498,6 +498,7 @@ class AgentRunRepository:
         runtime_version: str | None = None,
         trace_id: str | None = None,
         model_name: str | None = None,
+        decision_provider: str | None = None,
         step_count: int | None = None,
         tool_call_count: int | None = None,
         latency_ms: int | None = None,
@@ -505,6 +506,8 @@ class AgentRunRepository:
         approval_state: str | None = None,
         retrieval_count: int | None = None,
         token_usage: dict[str, Any] | None = None,
+        cost_estimate: dict[str, Any] | None = None,
+        handoff_reason: str | None = None,
     ) -> None:
         run = db.get(AgentRun, run_id)
         if run is None:
@@ -512,6 +515,7 @@ class AgentRunRepository:
         run.runtime_version = runtime_version
         run.trace_id = trace_id
         run.model_name = model_name
+        run.decision_provider = decision_provider
         run.step_count = step_count
         run.tool_call_count = tool_call_count
         run.latency_ms = latency_ms
@@ -519,6 +523,8 @@ class AgentRunRepository:
         run.approval_state = approval_state
         run.retrieval_count = retrieval_count
         run.token_usage = token_usage
+        run.cost_estimate = cost_estimate
+        run.handoff_reason = handoff_reason
         db.add(run)
 
     def update_run_metrics(self, run_id: str, **metrics: Any) -> None:
@@ -622,12 +628,15 @@ class AgentRunRepository:
             "runtime_version": row.runtime_version,
             "trace_id": row.trace_id,
             "model_name": row.model_name,
+            "decision_provider": row.decision_provider,
             "step_count": row.step_count,
             "tool_call_count": row.tool_call_count,
             "latency_ms": row.latency_ms,
             "error_type": row.error_type,
             "approval_state": row.approval_state,
             "retrieval_count": row.retrieval_count,
+            "cost_estimate": row.cost_estimate,
+            "handoff_reason": row.handoff_reason,
             "token_usage": row.token_usage,
             "created_at": row.created_at,
             "updated_at": row.updated_at,

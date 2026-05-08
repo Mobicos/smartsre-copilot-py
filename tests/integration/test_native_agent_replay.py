@@ -269,6 +269,129 @@ def test_run_replay_exposes_trajectory_summary_and_metrics():
     assert len(decision_state["recovery_events"]) == 1
 
 
+def test_agent_decision_state_exposes_structured_runtime_snapshot():
+    created_at = datetime(2026, 5, 7, 8, 0, tzinfo=UTC)
+    run = {
+        "run_id": "run-2",
+        "goal": "diagnose checkout 5xx",
+        "status": "handoff_required",
+        "created_at": created_at,
+        "updated_at": created_at + timedelta(seconds=3),
+        "final_report": "Needs handoff.",
+        "error_message": "insufficient_evidence",
+    }
+    events = [
+        {
+            "type": "run_started",
+            "message": "Run started",
+            "created_at": created_at,
+            "payload": {
+                "goal": "diagnose checkout 5xx",
+                "runtime_safety": {"max_steps": 2},
+            },
+        },
+        {
+            "type": "observation",
+            "message": "diagnose checkout 5xx",
+            "created_at": created_at + timedelta(milliseconds=100),
+            "payload": {
+                "source": "user_goal",
+                "summary": "diagnose checkout 5xx",
+                "confidence": 1.0,
+            },
+        },
+        {
+            "type": "decision",
+            "message": "Call SearchLog to gather evidence.",
+            "created_at": created_at + timedelta(milliseconds=200),
+            "payload": {
+                "checkpoint_ns": "agent-runtime-v2",
+                "state_status": "running",
+                "decision": {
+                    "action_type": "call_tool",
+                    "reasoning_summary": "Call SearchLog to gather evidence.",
+                    "selected_tool": "SearchLog",
+                    "expected_evidence": ["HTTP 5xx errors"],
+                    "confidence": 0.7,
+                },
+            },
+        },
+        {
+            "type": "tool_call",
+            "message": "Calling tool: SearchLog",
+            "created_at": created_at + timedelta(milliseconds=300),
+            "payload": {
+                "tool_name": "SearchLog",
+                "arguments": {"query": "checkout 5xx"},
+                "execution_status": "pending",
+            },
+        },
+        {
+            "type": "tool_result",
+            "message": "Tool SearchLog finished with status success",
+            "created_at": created_at + timedelta(milliseconds=400),
+            "payload": {
+                "tool_name": "SearchLog",
+                "status": "success",
+                "output": "",
+                "execution_status": "success",
+            },
+        },
+        {
+            "type": "evidence_assessment",
+            "message": "SearchLog returned no usable evidence.",
+            "created_at": created_at + timedelta(milliseconds=500),
+            "payload": {
+                "quality": "empty",
+                "summary": "SearchLog returned no usable evidence.",
+                "confidence": 0.0,
+                "citations": [{"source": "tool", "tool_name": "SearchLog"}],
+            },
+        },
+        {
+            "type": "recovery",
+            "message": "Recovery required: insufficient_evidence",
+            "created_at": created_at + timedelta(milliseconds=600),
+            "payload": {
+                "required": True,
+                "reason": "insufficient_evidence",
+                "next_action": "handoff",
+            },
+        },
+        {
+            "type": "handoff",
+            "message": "Agent run requires human handoff",
+            "created_at": created_at + timedelta(milliseconds=700),
+            "payload": {
+                "handoff_required": True,
+                "handoff_reason": "insufficient_evidence",
+                "confidence": 0.0,
+            },
+        },
+    ]
+    service = build_service(run, events)
+
+    decision_state = service.get_agent_decision_state("run-2")
+
+    assert decision_state is not None
+    assert decision_state["goal"]["goal"] == "diagnose checkout 5xx"
+    assert decision_state["latest_status"] == "handoff_required"
+    assert decision_state["observations"][0]["source"] == "user_goal"
+    assert decision_state["decisions"][0]["action_type"] == "call_tool"
+    assert decision_state["decisions"][0]["selected_tool"] == "SearchLog"
+    assert decision_state["evidence_assessments"][0]["quality"] == "empty"
+    assert decision_state["tool_trajectory"][0]["tool_name"] == "SearchLog"
+    assert decision_state["handoff"]["reason"] == "insufficient_evidence"
+    assert decision_state["summary"] == {
+        "decision_count": 1,
+        "observation_count": 1,
+        "evidence_assessment_count": 1,
+        "recovery_count": 1,
+        "tool_call_count": 1,
+        "handoff_required": True,
+    }
+
+
 def test_derive_run_metrics_tracks_handoffs_and_event_counts():
     run = {
         "run_id": "run-2",

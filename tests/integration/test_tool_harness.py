@@ -148,6 +148,73 @@ async def test_tool_schema_destructive_side_effect_requires_approval_by_default(
 
 
 @pytest.mark.asyncio
+async def test_tool_schema_change_side_effect_requires_approval_by_default():
+    executor = ToolExecutor(policy_store=MemoryPolicyStore())
+    tool = ToolSchema(
+        name="ScaleDeployment",
+        description="Scale a deployment",
+        input_schema={
+            "type": "object",
+            "required": ["replicas"],
+            "properties": {"replicas": {"type": "integer"}},
+        },
+        side_effect="change",
+        raw_tool=AsyncTool(),
+    )
+
+    result = await executor.execute(
+        tool,
+        {"replicas": 3},
+        principal=Principal(role="admin", subject="pytest"),
+    )
+
+    assert result.status == "approval_required"
+    assert result.policy is not None
+    assert result.policy["side_effect"] == "change"
+    assert result.policy["approval_required"] is True
+
+
+@pytest.mark.asyncio
+async def test_tool_executor_rejects_invalid_output_schema_result():
+    class InvalidOutputTool:
+        name = "SearchLog"
+        description = "Search logs"
+
+        async def ainvoke(self, args):
+            return {"summary": 404}
+
+    tool = ToolSchema(
+        name="SearchLog",
+        description="Search logs",
+        input_schema={
+            "type": "object",
+            "required": ["query"],
+            "properties": {"query": {"type": "string"}},
+        },
+        output_schema={
+            "type": "object",
+            "required": ["summary"],
+            "properties": {"summary": {"type": "string"}},
+        },
+        fallback_strategy="handoff",
+        raw_tool=InvalidOutputTool(),
+    )
+    executor = ToolExecutor(policy_store=MemoryPolicyStore())
+
+    result = await executor.execute(
+        tool,
+        {"query": "error"},
+        principal=Principal(role="admin", subject="pytest"),
+    )
+
+    assert result.status == "invalid_output"
+    assert result.error == "Argument summary must be string"
+    assert result.policy is not None
+    assert result.policy["fallback_strategy"] == "handoff"
+    assert result.governance_payload()["reason"] == "Tool output failed schema validation"
+
+
+@pytest.mark.asyncio
 async def test_tool_executor_retries_standard_schema_tool_before_success():
     class FlakyTool:
         def __init__(self):

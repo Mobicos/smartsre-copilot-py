@@ -107,6 +107,16 @@ export function AgentHarnessConsole() {
         scene_id: sceneId,
         session_id: `session-${Date.now()}`,
         goal: trimmedGoal,
+        success_criteria: [
+          "Collect authoritative tool or knowledge evidence before claiming a root cause.",
+          "Produce a bounded handoff when evidence is insufficient.",
+        ],
+        stop_condition: {
+          max_steps: 5,
+          max_minutes: 2,
+          confidence_threshold: 0.75,
+        },
+        priority: "P1",
       },
       {
         onEvent: (_event, data) => {
@@ -121,10 +131,16 @@ export function AgentHarnessConsole() {
                 runId: agentEvent.run_id || prev.runId,
               }
 
-              if (agentEvent.type === "complete") {
+              if (
+                agentEvent.type === "complete" ||
+                agentEvent.type === "handoff" ||
+                agentEvent.type === "approval_required"
+              ) {
                 newState.phase = "done"
                 if (typeof agentEvent.final_report === "string") {
                   newState.report = agentEvent.final_report
+                } else if (agentEvent.type === "approval_required") {
+                  newState.report = "Tool execution is waiting for human approval."
                 }
               } else if (agentEvent.type === "final_report") {
                 const payload = agentEvent.payload as Record<string, unknown> | undefined

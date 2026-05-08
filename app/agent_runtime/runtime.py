@@ -11,14 +11,20 @@ import asyncio
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from time import monotonic
-from typing import Any
+from typing import Any, cast
 
 from loguru import logger
 
 from app.agent_runtime.context import KnowledgeContextProvider
 from app.agent_runtime.decision import (
+    AgentDecision,
     AgentDecisionRuntime,
+    EvidenceAssessment,
+    FinalReportContract,
+    Priority,
+    RecoveryDecision,
     RuntimeBudget,
+    StopCondition,
     build_initial_decision_state,
 )
 from app.agent_runtime.events import AgentRuntimeEvent
@@ -142,6 +148,9 @@ class AgentRuntime:
         session_id: str,
         goal: str,
         principal: Any,
+        success_criteria: list[str] | None = None,
+        stop_condition: dict[str, Any] | None = None,
+        priority: str = "P2",
     ) -> AsyncGenerator[AgentRuntimeEvent, None]:
         """Execute an auditable diagnosis run.
 
@@ -172,6 +181,9 @@ class AgentRuntime:
                     "scene_id": scene_id,
                     "workspace_id": scene["workspace_id"],
                     "goal": goal,
+                    "success_criteria": success_criteria or [],
+                    "stop_condition": stop_condition or {},
+                    "priority": _priority_or_default(priority),
                     "runtime_safety": safety_config.to_dict(),
                 },
             )
@@ -197,13 +209,17 @@ class AgentRuntime:
                 )
 
             selected_tool_names = self._planner.select_tool_names(scene)
-            if _decision_runtime_enabled(scene):
+            decision_runtime_enabled = _decision_runtime_enabled(scene)
+            if decision_runtime_enabled:
                 decision_state = build_initial_decision_state(
                     run_id=run_id,
                     goal=goal,
                     workspace_id=str(scene["workspace_id"]),
                     scene_id=scene_id,
                     available_tools=selected_tool_names,
+                    success_criteria=success_criteria,
+                    stop_condition=_stop_condition_from_payload(stop_condition),
+                    priority=_priority_or_default(priority),
                     budget=RuntimeBudget(
                         max_steps=safety_config.max_steps,
                         remaining_steps=safety_config.max_steps,
@@ -221,6 +237,14 @@ class AgentRuntime:
                         exc=exc,
                     )
                     decision_state = self._decision_runtime.decide_once(decision_state)
+                for observation in decision_state.observations:
+                    yield self._record_event(
+                        run_id,
+                        event_type="observation",
+                        stage="observe",
+                        message=observation.summary,
+                        payload=observation.model_dump(mode="json"),
+                    )
                 latest_decision = decision_state.decisions[-1]
                 yield self._record_event(
                     run_id,
@@ -308,6 +332,7 @@ class AgentRuntime:
                 )
                 return
 
+            strong_evidence_found = False
             for tool_name in selected_tool_names:
                 deadline.ensure_available()
                 tool = tool_by_name.get(tool_name)
@@ -336,10 +361,166 @@ class AgentRuntime:
                     message=f"Tool {result.tool_name} finished with status {result.status}",
                     payload=action.result_event_payload(result),
                 )
-                state.add_evidence(EvidenceItem.from_tool_result(result))
+                evidence_item = EvidenceItem.from_tool_result(result)
+                state.add_evidence(evidence_item)
+                if decision_runtime_enabled:
+                    assessment = _assess_evidence_item(evidence_item)
+                    yield self._record_event(
+                        run_id,
+                        event_type="evidence_assessment",
+                        stage="evidence",
+                        message=assessment.summary,
+                        payload=assessment.model_dump(mode="json"),
+                    )
+                    if evidence_item.status == "approval_required":
+                        self._run_store.update_run(
+                            run_id,
+                            status="waiting_approval",
+                            final_report="Tool execution is waiting for human approval.",
+                        )
+                        yield self._record_event(
+                            run_id,
+                            event_type="approval_required",
+                            stage="approval",
+                            message=f"Tool approval required: {tool_name}",
+                            payload=action.result_event_payload(result),
+                        )
+                        self._persist_run_metrics(run_id)
+                        yield AgentRuntimeEvent(
+                            type="approval_required",
+                            stage="approval",
+                            run_id=run_id,
+                            status="waiting_approval",
+                            message=f"Tool approval required: {tool_name}",
+                        )
+                        return
+                    if assessment.quality in {"empty", "error", "conflicting"}:
+                        reason = _handoff_reason_from_evidence(assessment)
+                        recovery = RecoveryDecision(
+                            required=True,
+                            reason=reason,
+                            next_action="handoff",
+                        )
+                        yield self._record_event(
+                            run_id,
+                            event_type="recovery",
+                            stage="recover",
+                            message=f"Recovery required: {reason}",
+                            payload=recovery.model_dump(mode="json"),
+                        )
+                        report_contract = FinalReportContract(
+                            summary="证据不足，已停止自动结论并转交人工处理。",
+                            verified_facts=[],
+                            inferences=[
+                                "当前工具未返回足够证据，系统不能确认根因。",
+                            ],
+                            recommendations=[
+                                "请人工检查工具连接、查询范围、时间窗口和关联告警上下文。",
+                            ],
+                            citations=assessment.citations,
+                            confidence=assessment.confidence,
+                            handoff_required=True,
+                            handoff_reason=reason,
+                        )
+                        final_report = _handoff_report(goal, report_contract)
+                        self._run_store.update_run(
+                            run_id,
+                            status="handoff_required",
+                            final_report=final_report,
+                            error_message=reason,
+                        )
+                        yield self._record_event(
+                            run_id,
+                            event_type="handoff",
+                            stage="handoff",
+                            message="Agent run requires human handoff",
+                            payload=report_contract.to_event_payload(),
+                        )
+                        self._persist_run_metrics(run_id)
+                        yield AgentRuntimeEvent(
+                            type="handoff",
+                            stage="handoff",
+                            run_id=run_id,
+                            status="handoff_required",
+                            final_report=final_report,
+                        )
+                        return
+                    if assessment.quality == "strong":
+                        strong_evidence_found = True
+                        final_decision = AgentDecision(
+                            action_type="final_report",
+                            reasoning_summary=(
+                                "Strong evidence is available and can support a final report."
+                            ),
+                            evidence=assessment,
+                            actual_evidence=assessment,
+                            confidence=max(assessment.confidence, 0.8),
+                        )
+                        yield self._record_event(
+                            run_id,
+                            event_type="decision",
+                            stage="decision",
+                            message=final_decision.reasoning_summary,
+                            payload={
+                                "checkpoint_ns": self._decision_runtime.checkpoint_ns,
+                                "decision": final_decision.to_event_payload(),
+                                "state_status": "completed",
+                            },
+                        )
+                        break
                 deadline.ensure_available()
 
             deadline.ensure_available()
+            if decision_runtime_enabled and skipped_tool_names and not strong_evidence_found:
+                recovery = RecoveryDecision(
+                    required=True,
+                    reason="budget_exhausted",
+                    next_action="handoff",
+                )
+                yield self._record_event(
+                    run_id,
+                    event_type="recovery",
+                    stage="recover",
+                    message="Recovery required: budget_exhausted",
+                    payload=recovery.model_dump(mode="json"),
+                )
+                report_contract = FinalReportContract(
+                    summary="执行预算已耗尽，且当前证据不足以安全生成确定结论。",
+                    verified_facts=state.evidence_report_lines(),
+                    inferences=[
+                        "仍有工具未执行，自动决策边界已达到。",
+                    ],
+                    recommendations=[
+                        "请人工继续执行被跳过的工具，或扩大本次运行预算后重试。",
+                    ],
+                    confidence=0.3,
+                    handoff_required=True,
+                    handoff_reason="budget_exhausted",
+                )
+                final_report = _handoff_report(goal, report_contract)
+                self._run_store.update_run(
+                    run_id,
+                    status="handoff_required",
+                    final_report=final_report,
+                    error_message="budget_exhausted",
+                )
+                yield self._record_event(
+                    run_id,
+                    event_type="handoff",
+                    stage="handoff",
+                    message="Agent run requires human handoff",
+                    payload=report_contract.to_event_payload(),
+                )
+                self._persist_run_metrics(run_id)
+                yield AgentRuntimeEvent(
+                    type="handoff",
+                    stage="handoff",
+                    run_id=run_id,
+                    status="handoff_required",
+                    final_report=final_report,
+                )
+                return
+
             final_report = (
                 self._synthesizer.build_bounded_report(
                     state,
@@ -527,6 +708,7 @@ class AgentRuntime:
                 runtime_version="native-agent-dev",
                 trace_id=run_id,
                 model_name=_runtime_model_name(),
+                decision_provider=_runtime_decision_provider(),
                 step_count=_metric_step_count(events),
                 tool_call_count=len(_events_by_type(events, "tool_call")),
                 latency_ms=_latency_ms(run.get("created_at"), run.get("updated_at")),
@@ -534,6 +716,8 @@ class AgentRuntime:
                 approval_state=_metric_approval_state(events),
                 retrieval_count=len(_events_by_type(events, "knowledge_context")),
                 token_usage=None,
+                cost_estimate=None,
+                handoff_reason=_metric_handoff_reason(run, events),
             )
         except Exception as exc:
             logger.warning(f"Failed to persist agent run metrics for {run_id}: {exc}")
@@ -553,6 +737,21 @@ def _positive_float(value: Any, *, default: float) -> float:
     except (TypeError, ValueError):
         return default
     return parsed if parsed > 0 else default
+
+
+def _stop_condition_from_payload(payload: dict[str, Any] | None) -> StopCondition | None:
+    if not payload:
+        return None
+    try:
+        return StopCondition.model_validate(payload)
+    except Exception:
+        return None
+
+
+def _priority_or_default(value: str) -> Priority:
+    if value in {"P0", "P1", "P2", "P3"}:
+        return cast(Priority, value)
+    return "P2"
 
 
 def _limit_tool_steps(
@@ -576,6 +775,77 @@ def _runtime_model_name() -> str:
     if provider == "qwen":
         return config.dashscope_model
     return "deterministic-native-agent"
+
+
+def _runtime_decision_provider() -> str:
+    provider = config.agent_decision_provider.strip().lower()
+    return provider or "deterministic"
+
+
+def _assess_evidence_item(evidence: EvidenceItem) -> EvidenceAssessment:
+    citation = {
+        "source": "tool",
+        "tool_name": evidence.tool_name,
+        "status": evidence.status,
+    }
+    if evidence.status in {"timeout", "disabled", "forbidden"} or evidence.error:
+        return EvidenceAssessment(
+            quality="error",
+            summary=f"{evidence.tool_name} returned {evidence.status}: {evidence.error or 'no detail'}",
+            citations=[citation],
+            confidence=0.0,
+        )
+    if evidence.status == "approval_required":
+        return EvidenceAssessment(
+            quality="partial",
+            summary=f"{evidence.tool_name} requires approval before evidence can be collected.",
+            citations=[citation],
+            confidence=0.2,
+        )
+    if evidence.status == "partial":
+        return EvidenceAssessment(
+            quality="partial",
+            summary=f"{evidence.tool_name} returned partial evidence.",
+            citations=[citation],
+            confidence=0.4,
+        )
+    if evidence.output in {None, ""}:
+        return EvidenceAssessment(
+            quality="empty",
+            summary=f"{evidence.tool_name} returned no usable evidence.",
+            citations=[citation],
+            confidence=0.0,
+        )
+    return EvidenceAssessment(
+        quality="strong",
+        summary=f"{evidence.tool_name} returned usable evidence.",
+        citations=[citation],
+        confidence=0.8,
+    )
+
+
+def _handoff_reason_from_evidence(assessment: EvidenceAssessment) -> str:
+    if assessment.quality == "empty":
+        return "insufficient_evidence"
+    if assessment.quality == "conflicting":
+        return "conflicting_evidence"
+    return "evidence_error"
+
+
+def _handoff_report(goal: str, report: FinalReportContract) -> str:
+    lines = [
+        f"# Agent Handoff Report: {goal}",
+        "",
+        report.summary,
+        "",
+        f"- handoff_reason: {report.handoff_reason or 'unknown'}",
+        f"- confidence: {report.confidence:.2f}",
+    ]
+    if report.inferences:
+        lines.extend(["", "## 推断", *[f"- {item}" for item in report.inferences]])
+    if report.recommendations:
+        lines.extend(["", "## 建议", *[f"- {item}" for item in report.recommendations]])
+    return "\n".join(lines)
 
 
 def _events_by_type(events: list[dict[str, Any]], event_type: str) -> list[dict[str, Any]]:
@@ -609,6 +879,21 @@ def _metric_error_type(run: dict[str, Any], events: list[dict[str, Any]]) -> str
     error_message = run.get("error_message")
     if isinstance(error_message, str) and ":" in error_message:
         return error_message.split(":", 1)[0]
+    return None
+
+
+def _metric_handoff_reason(run: dict[str, Any], events: list[dict[str, Any]]) -> str | None:
+    for event in reversed(events):
+        if event.get("type") not in {"handoff", "recovery"}:
+            continue
+        payload = event.get("payload")
+        if isinstance(payload, dict) and payload.get("handoff_reason"):
+            return str(payload["handoff_reason"])
+        if isinstance(payload, dict) and payload.get("reason"):
+            return str(payload["reason"])
+    if run.get("status") == "handoff_required":
+        error_message = run.get("error_message")
+        return str(error_message) if error_message else "handoff_required"
     return None
 
 
