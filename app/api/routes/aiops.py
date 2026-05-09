@@ -12,7 +12,7 @@ from app.api.responses import json_response
 from app.application.aiops_application_service import AIOpsApplicationService
 from app.domains.aiops import AIOpsRequest
 from app.platform.persistence import aiops_run_repository
-from app.security import Principal, require_capability
+from app.security import Principal, require_capability, require_stream_rate_limit
 
 router = APIRouter()
 
@@ -20,7 +20,7 @@ router = APIRouter()
 @router.post("/aiops")
 async def diagnose_stream(
     request: AIOpsRequest,
-    principal: Principal = Depends(require_capability("aiops:run")),
+    principal: Principal = Depends(require_stream_rate_limit("aiops:run")),
     aiops_application_service: AIOpsApplicationService = Depends(get_aiops_application_service),
 ):
     """

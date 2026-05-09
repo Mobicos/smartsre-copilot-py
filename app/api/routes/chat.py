@@ -11,7 +11,7 @@ from app.application.chat_application_service import ChatApplicationService
 from app.core.exceptions import InfrastructureException
 from app.domains.chat import ApiResponse, ChatRequest, ClearRequest, SessionInfoResponse
 from app.platform.persistence import chat_tool_event_repository, conversation_repository
-from app.security import Principal, require_capability
+from app.security import Principal, require_capability, require_stream_rate_limit
 
 router = APIRouter()
 
@@ -69,7 +69,7 @@ async def chat(
 @router.post("/chat/stream")
 async def chat_stream(
     request: ChatRequest,
-    _principal: Principal = Depends(require_capability("chat:use")),
+    _principal: Principal = Depends(require_stream_rate_limit("chat:use")),
     chat_application_service: ChatApplicationService = Depends(get_chat_application_service),
 ):
     """流式对话接口（基于 RAG Agent，SSE）

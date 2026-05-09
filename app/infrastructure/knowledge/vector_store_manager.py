@@ -168,7 +168,7 @@ class MilvusVectorStoreAdapter:
         try:
             self._initialize_vector_store()
             collection = milvus_manager.get_collection()
-            expr = f'metadata["_source"] == "{file_path}"'
+            expr = f'metadata["_source"] == {_milvus_string_literal(file_path)}'
             result = collection.delete(expr)
             deleted_count = result.delete_count if hasattr(result, "delete_count") else 0
             logger.info(f"Deleted {deleted_count} Milvus chunks for source {file_path}")
@@ -189,7 +189,9 @@ class MilvusVectorStoreAdapter:
         try:
             store = self.get_vector_store()
             if collection_name:
-                filter_expr = f'metadata["collection_name"] == "{collection_name}"'
+                filter_expr = (
+                    f'metadata["collection_name"] == {_milvus_string_literal(collection_name)}'
+                )
                 return store.similarity_search(query, k=k, expr=filter_expr)
             return store.similarity_search(query, k=k)
         except Exception as exc:
@@ -223,62 +225,21 @@ class PgVectorStoreAdapter:
         if self._initialized:
             return
         engine = get_engine()
-        with engine.begin() as connection:
-            connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-            connection.execute(
-                text(
+        with engine.connect() as connection:
+            row = (
+                connection.execute(
+                    text(
+                        """
+                    SELECT to_regclass('public.knowledge_documents') AS documents_table,
+                           to_regclass('public.knowledge_chunks') AS chunks_table
                     """
-                    CREATE TABLE IF NOT EXISTS knowledge_documents (
-                        document_id TEXT PRIMARY KEY,
-                        collection_name TEXT NOT NULL,
-                        source TEXT NOT NULL,
-                        content TEXT NOT NULL,
-                        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-                        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
                     )
-                    """
                 )
+                .mappings()
+                .one()
             )
-            connection.execute(
-                text(
-                    f"""
-                    CREATE TABLE IF NOT EXISTS knowledge_chunks (
-                        chunk_id TEXT PRIMARY KEY,
-                        document_id TEXT NOT NULL REFERENCES knowledge_documents(document_id) ON DELETE CASCADE,
-                        collection_name TEXT NOT NULL,
-                        source TEXT NOT NULL,
-                        content TEXT NOT NULL,
-                        metadata JSONB NOT NULL DEFAULT '{{}}'::jsonb,
-                        embedding vector({config.pgvector_embedding_dimensions}) NOT NULL,
-                        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                    )
-                    """
-                )
-            )
-            connection.execute(
-                text(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_knowledge_documents_collection_source
-                    ON knowledge_documents(collection_name, source)
-                    """
-                )
-            )
-            connection.execute(
-                text(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_collection_source
-                    ON knowledge_chunks(collection_name, source)
-                    """
-                )
-            )
-            connection.execute(
-                text(
-                    """
-                    CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_embedding_hnsw
-                    ON knowledge_chunks USING hnsw (embedding vector_cosine_ops)
-                    """
-                )
-            )
+            if row["documents_table"] is None or row["chunks_table"] is None:
+                raise RuntimeError("pgvector knowledge tables are missing; run Alembic migrations")
         self._initialized = True
         logger.info(f"pgvector VectorStore initialized: collection={self.collection_name}")
 
@@ -432,6 +393,14 @@ class PgVectorStoreAdapter:
 
 def _vector_literal(values: list[float]) -> str:
     return "[" + ",".join(str(float(value)) for value in values) + "]"
+
+
+def _milvus_string_literal(value: str) -> str:
+    """Return a Milvus expression string literal with control characters escaped."""
+    escaped = (
+        value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+    )
+    return f'"{escaped}"'
 
 
 def _json_metadata(metadata: dict[str, Any]) -> str:

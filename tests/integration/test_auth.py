@@ -9,6 +9,7 @@ from app.security.auth import (
     _has_capability,
     get_current_principal,
     load_api_key_roles,
+    load_api_key_subjects,
     validate_security_configuration,
 )
 
@@ -16,8 +17,10 @@ from app.security.auth import (
 @pytest.fixture(autouse=True)
 def clear_auth_cache():
     load_api_key_roles.cache_clear()
+    load_api_key_subjects.cache_clear()
     yield
     load_api_key_roles.cache_clear()
+    load_api_key_subjects.cache_clear()
 
 
 def _request() -> Request:

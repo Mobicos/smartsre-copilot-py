@@ -16,6 +16,7 @@ from app.platform.persistence.repositories.native_agent import (
     ToolPolicyRepository,
     WorkspaceRepository,
 )
+from app.platform.persistence.unit_of_work import UnitOfWork
 from app.security import Principal
 
 
@@ -42,11 +43,17 @@ class NativeAgentApplicationService:
         self._agent_feedback_repository = agent_feedback_repository
 
     def create_workspace(self, *, name: str, description: str | None) -> dict[str, Any] | None:
-        workspace_id = self._workspace_repository.create_workspace(
-            name=name,
-            description=description,
-        )
-        return self._workspace_repository.get_workspace(workspace_id)
+        with UnitOfWork() as uow:
+            workspace_id = self._workspace_repository.create_workspace_with_session(
+                uow.session,
+                name=name,
+                description=description,
+            )
+            uow.session.flush()
+            return self._workspace_repository.get_workspace_with_session(
+                uow.session,
+                workspace_id,
+            )
 
     def list_workspaces(self) -> list[dict[str, Any]]:
         return self._workspace_repository.list_workspaces()
@@ -61,15 +68,18 @@ class NativeAgentApplicationService:
         tool_names: list[str] | None,
         agent_config: dict[str, Any] | None,
     ) -> dict[str, Any] | None:
-        scene_id = self._scene_repository.create_scene(
-            workspace_id,
-            name=name,
-            description=description,
-            knowledge_base_ids=knowledge_base_ids,
-            tool_names=tool_names,
-            agent_config=agent_config,
-        )
-        return self._scene_repository.get_scene(scene_id)
+        with UnitOfWork() as uow:
+            scene_id = self._scene_repository.create_scene_with_session(
+                uow.session,
+                workspace_id,
+                name=name,
+                description=description,
+                knowledge_base_ids=knowledge_base_ids,
+                tool_names=tool_names,
+                agent_config=agent_config,
+            )
+            uow.session.flush()
+            return self._scene_repository.get_scene_with_session(uow.session, scene_id)
 
     def list_scenes(self, *, workspace_id: str | None = None) -> list[dict[str, Any]]:
         return self._scene_repository.list_scenes(workspace_id=workspace_id)

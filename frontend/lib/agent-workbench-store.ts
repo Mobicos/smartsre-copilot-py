@@ -7,6 +7,7 @@ import type {
   NativeScene,
   NativeTool,
 } from "@/lib/native-agent-types"
+import { apiClient, isAbortError } from "@/lib/api-client"
 
 type AgentResource = "approvals" | "runs" | "scenes" | "tools"
 
@@ -71,14 +72,10 @@ export const useAgentWorkbenchStore = create<AgentWorkbenchState>((set, get) => 
     dedupe("approvals", async (signal) => {
       set({ approvalError: "", approvalLoading: true })
       try {
-        const res = await fetch("/api/agent/approvals?limit=100", {
-          cache: "no-store",
+        const data = await apiClient<NativeAgentApproval[]>("/api/agent/approvals?limit=100", {
           signal,
+          retries: 1,
         })
-        const data = (await res.json()) as NativeAgentApproval[] | { error?: string }
-        if (!res.ok) {
-          throw new Error("error" in data && data.error ? data.error : `HTTP ${res.status}`)
-        }
         set({ approvals: Array.isArray(data) ? data : [] })
       } catch (error) {
         handleFetchError(error, (message) => set({ approvalError: message }))
@@ -91,12 +88,11 @@ export const useAgentWorkbenchStore = create<AgentWorkbenchState>((set, get) => 
     dedupe("runs", async (signal) => {
       set({ runsError: "", runsLoading: true })
       try {
-        const res = await fetch("/api/agent/runs?limit=50", { cache: "no-store", signal })
-        const data = (await res.json()) as { data?: NativeAgentRun[]; error?: string } | NativeAgentRun[]
-        if (!res.ok) {
-          throw new Error(!Array.isArray(data) && data.error ? data.error : `HTTP ${res.status}`)
-        }
-        set({ runs: Array.isArray(data) ? data : data.data || [] })
+        const data = await apiClient<NativeAgentRun[]>("/api/agent/runs?limit=50", {
+          signal,
+          retries: 1,
+        })
+        set({ runs: Array.isArray(data) ? data : [] })
       } catch (error) {
         handleFetchError(error, (message) => set({ runsError: message }))
       } finally {
@@ -108,11 +104,7 @@ export const useAgentWorkbenchStore = create<AgentWorkbenchState>((set, get) => 
     dedupe("scenes", async (signal) => {
       set({ scenesError: "", scenesLoading: true })
       try {
-        const res = await fetch("/api/agent/scenes", { cache: "no-store", signal })
-        const data = (await res.json()) as NativeScene[] | { error?: string }
-        if (!res.ok) {
-          throw new Error("error" in data && data.error ? data.error : `HTTP ${res.status}`)
-        }
+        const data = await apiClient<NativeScene[]>("/api/agent/scenes", { signal, retries: 1 })
         const scenes = Array.isArray(data) ? data : []
         const selectedSceneId = get().selectedSceneId || scenes[0]?.id || ""
         set({ scenes, selectedSceneId })
@@ -127,11 +119,7 @@ export const useAgentWorkbenchStore = create<AgentWorkbenchState>((set, get) => 
     dedupe("tools", async (signal) => {
       set({ toolsError: "", toolsLoading: true })
       try {
-        const res = await fetch("/api/agent/tools", { cache: "no-store", signal })
-        const data = (await res.json()) as NativeTool[] | { error?: string }
-        if (!res.ok) {
-          throw new Error("error" in data && data.error ? data.error : `HTTP ${res.status}`)
-        }
+        const data = await apiClient<NativeTool[]>("/api/agent/tools", { signal, retries: 1 })
         set({ tools: Array.isArray(data) ? data : [] })
       } catch (error) {
         handleFetchError(error, (message) => set({ toolsError: message }))
@@ -165,7 +153,7 @@ async function dedupe(
 }
 
 function handleFetchError(error: unknown, setError: (message: string) => void) {
-  if (error instanceof DOMException && error.name === "AbortError") {
+  if (isAbortError(error)) {
     return
   }
   setError(error instanceof Error ? error.message : "Request failed")

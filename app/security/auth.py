@@ -57,6 +57,29 @@ def load_api_key_roles() -> dict[str, str]:
     return mapping
 
 
+@lru_cache(maxsize=1)
+def load_api_key_subjects() -> dict[str, str]:
+    """Load stable log subjects without deriving them from secret key material."""
+    subjects: dict[str, str] = {}
+    if config.api_keys_json:
+        try:
+            raw_mapping = json.loads(config.api_keys_json)
+            if isinstance(raw_mapping, dict):
+                subject_index = 1
+                for key, value in raw_mapping.items():
+                    if str(value) not in ROLE_CAPABILITIES:
+                        continue
+                    subjects[str(key)] = f"key:configured-{subject_index}"
+                    subject_index += 1
+        except json.JSONDecodeError:
+            pass
+
+    if config.app_api_key:
+        subjects.setdefault(config.app_api_key, "key:primary")
+
+    return subjects
+
+
 def _has_capability(role: str, capability: str) -> bool:
     capabilities = ROLE_CAPABILITIES.get(role, set())
     return "*" in capabilities or capability in capabilities
@@ -86,6 +109,14 @@ def validate_security_configuration() -> None:
             "DASHSCOPE_API_KEY is required when AGENT_DECISION_PROVIDER=qwen in production"
         )
 
+    redis_netloc = config.redis_url.split("://", 1)[-1].split("/", 1)[0]
+    if (
+        config.is_production
+        and config.task_queue_backend == "redis"
+        and not (config.redis_password.strip() or "@" in redis_netloc)
+    ):
+        raise RuntimeError("REDIS_PASSWORD or an authenticated REDIS_URL is required in production")
+
 
 async def get_current_principal(
     request: Request,
@@ -106,7 +137,7 @@ async def get_current_principal(
         return principal
 
     if x_api_key and x_api_key in api_key_roles:
-        principal = Principal(role=api_key_roles[x_api_key], subject=x_api_key[:8])
+        principal = Principal(role=api_key_roles[x_api_key], subject=_api_key_subject(x_api_key))
         request.state.principal = principal
         logger.info(
             f"Authenticated request principal: subject={principal.subject}, role={principal.role}"
@@ -145,3 +176,8 @@ async def require_api_key(
 ) -> Principal:
     """Require an API key and return the associated principal."""
     return await get_current_principal(request, x_api_key)
+
+
+def _api_key_subject(api_key: str) -> str:
+    """Return a stable non-reversible API key subject for logs and audit rows."""
+    return load_api_key_subjects().get(api_key, "key:unknown")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, cast
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from loguru import logger
 
@@ -50,9 +51,10 @@ class RedisManager:
         if RedisClient is None:
             raise RuntimeError("Redis support requires the optional 'redis' dependency")
 
-        self._client = RedisClient.from_url(self.redis_url, decode_responses=True)
+        redis_url = _redis_url_with_configured_password(self.redis_url)
+        self._client = RedisClient.from_url(redis_url, decode_responses=True)
         self._client.ping()
-        logger.info(f"Redis initialized: {self.redis_url}")
+        logger.info("Redis initialized")
 
     def _ensure_connection(self) -> None:
         try:
@@ -112,3 +114,14 @@ class RedisManager:
 
 
 redis_manager = RedisManager(config.redis_url)
+
+
+def _redis_url_with_configured_password(redis_url: str) -> str:
+    if not config.redis_password.strip():
+        return redis_url
+    parts = urlsplit(redis_url)
+    if "@" in parts.netloc:
+        return redis_url
+    password = quote(config.redis_password, safe="")
+    netloc = f":{password}@{parts.netloc}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))

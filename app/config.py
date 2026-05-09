@@ -22,6 +22,8 @@ _DEFAULT_SECRETS = {
     "smartsre",
     "your_dashscope_api_key",
     "replace_with_a_secure_key",
+    "<replace-with-strong-redis-password>",
+    "replace-with-strong-redis-password",
     "dev-only-minio-user",
     "dev-only-minio-password",
     "dev-only-postgres-password",
@@ -64,7 +66,12 @@ class Settings(BaseSettings):
     task_requeue_timeout_seconds: int = 300
     indexing_task_max_retries: int = 3
     redis_url: str = "redis://localhost:6379/0"
+    redis_password: str = ""
     redis_task_queue_name: str = "smartsre:indexing:queue"
+    rate_limit_enabled: bool = True
+    rate_limit_requests_per_minute: int = 120
+    rate_limit_streams_per_minute: int = 20
+    rate_limit_burst: int = 20
     object_storage_backend: str = "local"
     object_storage_local_path: str = str(UPLOADS_DIR)
     object_storage_local_cache_path: str = str(UPLOADS_DIR)
@@ -124,6 +131,7 @@ class Settings(BaseSettings):
             "dashscope_api_key": self.dashscope_api_key,
             "minio_access_key": self.minio_access_key,
             "minio_secret_key": self.minio_secret_key,
+            "redis_password": self.redis_password,
         }
         issues: list[str] = []
         for field_name, value in secret_fields.items():

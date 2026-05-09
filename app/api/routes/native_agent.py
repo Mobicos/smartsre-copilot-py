@@ -21,7 +21,7 @@ from app.domains.native_agent import (
     ToolPolicyUpdateRequest,
     WorkspaceCreateRequest,
 )
-from app.security import Principal, require_capability
+from app.security import Principal, require_capability, require_stream_rate_limit
 
 router = APIRouter()
 
@@ -203,7 +203,7 @@ async def create_agent_run(
 @router.post("/agent/runs/stream")
 async def stream_agent_run(
     request: AgentRunCreateRequest,
-    principal: Principal = Depends(require_capability("aiops:run")),
+    principal: Principal = Depends(require_stream_rate_limit("aiops:run")),
     native_agent_service: NativeAgentApplicationService = Depends(
         get_native_agent_application_service
     ),

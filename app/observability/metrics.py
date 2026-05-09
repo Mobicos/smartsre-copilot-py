@@ -42,30 +42,58 @@ _HTTP_REQUEST_DURATION = Histogram(
     registry=_REGISTRY,
 )
 _AGENT_RUNS = Gauge(
+    "smartsre_agent_runs",
+    "Current Native Agent runs grouped by status.",
+    ("status",),
+    registry=_REGISTRY,
+)
+_AGENT_RUNS_LEGACY = Gauge(
     "smartsre_agent_runs_total",
-    "Native Agent runs grouped by status.",
+    "Legacy alias for smartsre_agent_runs.",
     ("status",),
     registry=_REGISTRY,
 )
 _AGENT_TOOL_CALLS = Gauge(
+    "smartsre_agent_tool_calls",
+    "Current Native Agent tool call event count from storage.",
+    registry=_REGISTRY,
+)
+_AGENT_TOOL_CALLS_LEGACY = Gauge(
     "smartsre_agent_tool_calls_total",
-    "Native Agent tool call events.",
+    "Legacy alias for smartsre_agent_tool_calls.",
     registry=_REGISTRY,
 )
 _AGENT_APPROVALS = Gauge(
+    "smartsre_agent_approvals",
+    "Current Native Agent approval event count from storage.",
+    ("state",),
+    registry=_REGISTRY,
+)
+_AGENT_APPROVALS_LEGACY = Gauge(
     "smartsre_agent_approvals_total",
-    "Native Agent approval events.",
+    "Legacy alias for smartsre_agent_approvals.",
     ("state",),
     registry=_REGISTRY,
 )
 _AGENT_HANDOFFS = Gauge(
+    "smartsre_agent_handoffs",
+    "Current Native Agent handoff event count from storage.",
+    registry=_REGISTRY,
+)
+_AGENT_HANDOFFS_LEGACY = Gauge(
     "smartsre_agent_handoffs_total",
-    "Native Agent handoff events.",
+    "Legacy alias for smartsre_agent_handoffs.",
     registry=_REGISTRY,
 )
 _INDEXING_TASKS = Gauge(
+    "smartsre_indexing_tasks",
+    "Current indexing tasks grouped by status.",
+    ("status",),
+    registry=_REGISTRY,
+)
+_INDEXING_TASKS_LEGACY = Gauge(
     "smartsre_indexing_tasks_total",
-    "Indexing tasks grouped by status.",
+    "Legacy alias for smartsre_indexing_tasks.",
     ("status",),
     registry=_REGISTRY,
 )
@@ -108,12 +136,17 @@ def reset_metrics_for_testing() -> None:
         _HTTP_REQUESTS,
         _HTTP_REQUEST_DURATION,
         _AGENT_RUNS,
+        _AGENT_RUNS_LEGACY,
         _AGENT_APPROVALS,
+        _AGENT_APPROVALS_LEGACY,
         _INDEXING_TASKS,
+        _INDEXING_TASKS_LEGACY,
     ):
         metric.clear()
     _AGENT_TOOL_CALLS.set(0)
+    _AGENT_TOOL_CALLS_LEGACY.set(0)
     _AGENT_HANDOFFS.set(0)
+    _AGENT_HANDOFFS_LEGACY.set(0)
 
 
 def _refresh_database_metrics() -> None:
@@ -121,6 +154,16 @@ def _refresh_database_metrics() -> None:
     with engine.connect() as connection:
         _replace_gauge_labels(
             _AGENT_RUNS,
+            ("status",),
+            (
+                (str(row[0]), int(row[1]))
+                for row in connection.execute(
+                    text("SELECT status, COUNT(*) AS count FROM agent_runs GROUP BY status")
+                )
+            ),
+        )
+        _replace_gauge_labels(
+            _AGENT_RUNS_LEGACY,
             ("status",),
             (
                 (str(row[0]), int(row[1]))
@@ -137,12 +180,28 @@ def _refresh_database_metrics() -> None:
             )
         }
         _AGENT_TOOL_CALLS.set(event_counts.get("tool_call", 0))
+        _AGENT_TOOL_CALLS_LEGACY.set(event_counts.get("tool_call", 0))
         _AGENT_APPROVALS.labels(state="required").set(event_counts.get("approval_required", 0))
         _AGENT_APPROVALS.labels(state="resumed").set(event_counts.get("approval_resume", 0))
+        _AGENT_APPROVALS_LEGACY.labels(state="required").set(
+            event_counts.get("approval_required", 0)
+        )
+        _AGENT_APPROVALS_LEGACY.labels(state="resumed").set(event_counts.get("approval_resume", 0))
         _AGENT_HANDOFFS.set(event_counts.get("handoff", 0))
+        _AGENT_HANDOFFS_LEGACY.set(event_counts.get("handoff", 0))
 
         _replace_gauge_labels(
             _INDEXING_TASKS,
+            ("status",),
+            (
+                (str(row[0]), int(row[1]))
+                for row in connection.execute(
+                    text("SELECT status, COUNT(*) AS count FROM indexing_tasks GROUP BY status")
+                )
+            ),
+        )
+        _replace_gauge_labels(
+            _INDEXING_TASKS_LEGACY,
             ("status",),
             (
                 (str(row[0]), int(row[1]))
