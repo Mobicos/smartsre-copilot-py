@@ -6,6 +6,7 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.agent_runtime.constants import SIDE_EFFECTS_REQUIRING_APPROVAL
 from app.infrastructure.tools import ToolScope, tool_registry
 
 
@@ -64,7 +65,7 @@ def _tool_to_schema(tool: Any, *, scope: str) -> ToolSchema:
     input_schema = _input_schema(tool)
     side_effect = str(getattr(tool, "side_effect", "none") or "none")
     approval_required = bool(getattr(tool, "approval_required", False))
-    if side_effect in {"change", "destructive"}:
+    if side_effect in SIDE_EFFECTS_REQUIRING_APPROVAL:
         approval_required = True
     return ToolSchema(
         name=str(getattr(tool, "name", repr(tool))),

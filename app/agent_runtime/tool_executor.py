@@ -7,6 +7,7 @@ import inspect
 from dataclasses import dataclass
 from typing import Any
 
+from app.agent_runtime.constants import SIDE_EFFECTS_REQUIRING_APPROVAL
 from app.agent_runtime.ports import ToolPolicyStore
 from app.security.auth import ROLE_CAPABILITIES
 
@@ -252,7 +253,7 @@ class ToolExecutor:
     def _default_policy(tool_name: str, *, tool: Any | None = None) -> dict[str, Any]:
         side_effect = str(getattr(tool, "side_effect", "none") or "none")
         approval_required = bool(getattr(tool, "approval_required", False))
-        if side_effect in {"change", "destructive"}:
+        if side_effect in SIDE_EFFECTS_REQUIRING_APPROVAL:
             approval_required = True
         return {
             "tool_name": tool_name,

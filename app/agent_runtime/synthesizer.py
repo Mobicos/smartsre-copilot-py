@@ -22,6 +22,21 @@ class ReportSynthesizer:
             if knowledge_lines
             else "- No scene knowledge base is configured."
         )
+        # Confirmed Facts: only successful evidence outputs
+        confirmed_items = [item for item in state.evidence if item.status == "success"]
+        if confirmed_items:
+            confirmed_facts = "\n".join(
+                f"- {item.tool_name}: {item.output}" for item in confirmed_items
+            )
+        else:
+            confirmed_facts = "- No facts are confirmed yet."
+        # Executed Actions: tool name + execution status
+        if state.evidence:
+            executed_actions = "\n".join(
+                f"- {item.tool_name}: {item.status}" for item in state.evidence
+            )
+        else:
+            executed_actions = "- No tools were executed."
         tool_failures = [
             item.to_report_line() for item in state.evidence if item.status not in {"success"}
         ]
@@ -30,7 +45,6 @@ class ReportSynthesizer:
             if tool_failures
             else "- No tool failure, denial, timeout, or approval block was observed."
         )
-        confirmed_facts = evidence_text if evidence else "- No facts are confirmed yet."
         conclusion = (
             "The collected evidence supports the observations above, but the final root "
             "cause still requires operator confirmation."
@@ -49,7 +63,7 @@ class ReportSynthesizer:
             f"## Inference Conclusion\n{conclusion}\n\n"
             "## Uncertainty\n"
             "- Evidence can be incomplete, stale, or scoped to the configured scene.\n\n"
-            f"## Executed Actions\n{evidence_text}\n\n"
+            f"## Executed Actions\n{executed_actions}\n\n"
             f"## Unexecuted Or Blocked Actions\n{tool_failure_text}\n\n"
             "## Recovery And Degradation\n"
             "- Approval-required, denied, timed-out, or failed tools are non-authoritative.\n\n"
