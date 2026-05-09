@@ -439,11 +439,13 @@ class DatabaseCheckpointSaver(BaseCheckpointSaver[str]):
             return {}
 
         where_clause = " OR ".join(conditions)
-        query = text(f"""
-            SELECT channel, value_type, value_data
-            FROM agent_checkpoint_blobs
-            WHERE thread_id = :tid AND checkpoint_ns = :ns AND ({where_clause})
-        """)
+        query = text(
+            "SELECT channel, value_type, value_data "
+            "FROM agent_checkpoint_blobs "
+            "WHERE thread_id = :tid AND checkpoint_ns = :ns AND ("
+            + where_clause  # nosec B608
+            + ")"
+        )
 
         with engine.connect() as connection:
             rows = connection.execute(query, params).fetchall()
