@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 from dataclasses import dataclass
 from functools import lru_cache
-from hashlib import sha256
 
 from fastapi import Header, HTTPException, Request, status
 from loguru import logger
@@ -158,4 +158,10 @@ async def require_api_key(
 
 def _api_key_subject(api_key: str) -> str:
     """Return a stable non-reversible API key subject for logs and audit rows."""
-    return f"key:{sha256(api_key.encode('utf-8')).hexdigest()[:16]}"
+    secret = config.app_api_key.strip() or "smartsre-api-key-subject"
+    digest = hmac.new(
+        secret.encode("utf-8"),
+        api_key.encode("utf-8"),
+        "sha256",
+    ).hexdigest()
+    return f"key:{digest[:16]}"
