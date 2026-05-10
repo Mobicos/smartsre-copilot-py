@@ -31,7 +31,12 @@ class VectorStoreBackend(Protocol):
     def delete_by_source(self, file_path: str) -> int: ...
 
     def similarity_search(
-        self, query: str, k: int = 3, *, collection_name: str | None = None
+        self,
+        query: str,
+        k: int = 3,
+        *,
+        collection_name: str | None = None,
+        score_threshold: float = 0.0,
     ) -> list[Document]: ...
 
     def health_check(self) -> bool: ...
@@ -58,7 +63,12 @@ class DegradedVectorStoreAdapter:
         return 0
 
     def similarity_search(
-        self, query: str, k: int = 3, *, collection_name: str | None = None
+        self,
+        query: str,
+        k: int = 3,
+        *,
+        collection_name: str | None = None,
+        score_threshold: float = 0.0,
     ) -> list[Document]:
         logger.warning(f"Vector store is degraded; returning empty search results for k={k}")
         return []
@@ -100,9 +110,17 @@ class VectorStoreManager:
         return self._backend.delete_by_source(file_path)
 
     def similarity_search(
-        self, query: str, k: int = 3, *, collection_name: str | None = None
+        self,
+        query: str,
+        k: int = 3,
+        *,
+        collection_name: str | None = None,
+        score_threshold: float | None = None,
     ) -> list[Document]:
-        return self._backend.similarity_search(query, k=k, collection_name=collection_name)
+        threshold = score_threshold if score_threshold is not None else config.rag_score_threshold
+        return self._backend.similarity_search(
+            query, k=k, collection_name=collection_name, score_threshold=threshold
+        )
 
     def health_check(self) -> bool:
         return self._backend.health_check()
@@ -184,7 +202,12 @@ class MilvusVectorStoreAdapter:
         return self.vector_store
 
     def similarity_search(
-        self, query: str, k: int = 3, *, collection_name: str | None = None
+        self,
+        query: str,
+        k: int = 3,
+        *,
+        collection_name: str | None = None,
+        score_threshold: float = 0.0,
     ) -> list[Document]:
         try:
             store = self.get_vector_store()
@@ -192,8 +215,13 @@ class MilvusVectorStoreAdapter:
                 filter_expr = (
                     f'metadata["collection_name"] == {_milvus_string_literal(collection_name)}'
                 )
-                return store.similarity_search(query, k=k, expr=filter_expr)
-            return store.similarity_search(query, k=k)
+                results = store.similarity_search_with_relevance_scores(
+                    query, k=k, expr=filter_expr
+                )
+            else:
+                results = store.similarity_search_with_relevance_scores(query, k=k)
+            # Filter by score threshold
+            return [doc for doc, score in results if score >= score_threshold]
         except Exception as exc:
             logger.error(f"Milvus similarity search failed: {exc}")
             return []
@@ -254,75 +282,88 @@ class PgVectorStoreAdapter:
 
         contents = [document.page_content for document in documents]
         embeddings = self.embedding_service.embed_documents(contents)
-        ids: list[str] = []
+
+        # Prepare batches: deduplicate documents (by source) and build chunk rows.
+        doc_batch: dict[str, dict[str, Any]] = {}
+        chunk_batch: list[dict[str, Any]] = []
+
+        for document, embedding in zip(documents, embeddings, strict=True):
+            chunk_id = str(uuid.uuid4())
+            source = str(
+                document.metadata.get("_source")
+                or document.metadata.get("source")
+                or document.metadata.get("file_path")
+                or "unknown"
+            )
+            document_id = _document_id(source)
+            metadata = _json_metadata(document.metadata)
+
+            if document_id not in doc_batch:
+                doc_batch[document_id] = {
+                    "document_id": document_id,
+                    "collection_name": self.collection_name,
+                    "source": source,
+                    "content": document.page_content,
+                    "metadata": metadata,
+                }
+
+            chunk_batch.append(
+                {
+                    "chunk_id": chunk_id,
+                    "document_id": document_id,
+                    "collection_name": self.collection_name,
+                    "source": source,
+                    "content": document.page_content,
+                    "metadata": metadata,
+                    "embedding": _vector_literal(embedding),
+                }
+            )
+
         engine = get_engine()
         try:
             with engine.begin() as connection:
-                for document, embedding in zip(documents, embeddings, strict=True):
-                    chunk_id = str(uuid.uuid4())
-                    source = str(
-                        document.metadata.get("_source")
-                        or document.metadata.get("source")
-                        or document.metadata.get("file_path")
-                        or "unknown"
-                    )
-                    metadata = _json_metadata(document.metadata)
-                    document_id = _document_id(source)
-                    connection.execute(
-                        text(
-                            """
-                            INSERT INTO knowledge_documents (
-                                document_id, collection_name, source, content, metadata
-                            )
-                            VALUES (
-                                :document_id, :collection_name, :source, :content, CAST(:metadata AS jsonb)
-                            )
-                            ON CONFLICT (document_id) DO UPDATE SET
-                                content = EXCLUDED.content,
-                                metadata = EXCLUDED.metadata
-                            """
-                        ),
-                        {
-                            "document_id": document_id,
-                            "collection_name": self.collection_name,
-                            "source": source,
-                            "content": document.page_content,
-                            "metadata": metadata,
-                        },
-                    )
-                    connection.execute(
-                        text(
-                            """
-                            INSERT INTO knowledge_chunks (
-                                chunk_id, document_id, collection_name, source, content, metadata, embedding
-                            )
-                            VALUES (
-                                :chunk_id,
-                                :document_id,
-                                :collection_name,
-                                :source,
-                                :content,
-                                CAST(:metadata AS jsonb),
-                                CAST(:embedding AS vector)
-                            )
-                            """
-                        ),
-                        {
-                            "chunk_id": chunk_id,
-                            "document_id": document_id,
-                            "collection_name": self.collection_name,
-                            "source": source,
-                            "content": document.page_content,
-                            "metadata": metadata,
-                            "embedding": _vector_literal(embedding),
-                        },
-                    )
-                    ids.append(chunk_id)
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO knowledge_documents (
+                            document_id, collection_name, source, content, metadata
+                        )
+                        VALUES (
+                            :document_id, :collection_name, :source, :content, CAST(:metadata AS jsonb)
+                        )
+                        ON CONFLICT (document_id) DO UPDATE SET
+                            content = EXCLUDED.content,
+                            metadata = EXCLUDED.metadata
+                        """
+                    ),
+                    list(doc_batch.values()),
+                )
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO knowledge_chunks (
+                            chunk_id, document_id, collection_name, source, content, metadata, embedding
+                        )
+                        VALUES (
+                            :chunk_id,
+                            :document_id,
+                            :collection_name,
+                            :source,
+                            :content,
+                            CAST(:metadata AS jsonb),
+                            CAST(:embedding AS vector)
+                        )
+                        """
+                    ),
+                    chunk_batch,
+                )
         except Exception as exc:
             logger.warning(f"pgvector add degraded during write: {exc}")
             return []
-        logger.info(f"Added {len(ids)} documents to pgvector collection={self.collection_name}")
-        return ids
+        logger.info(
+            f"Added {len(chunk_batch)} documents to pgvector collection={self.collection_name}"
+        )
+        return [c["chunk_id"] for c in chunk_batch]
 
     def delete_by_source(self, file_path: str) -> int:
         try:
@@ -346,7 +387,12 @@ class PgVectorStoreAdapter:
         return deleted
 
     def similarity_search(
-        self, query: str, k: int = 3, *, collection_name: str | None = None
+        self,
+        query: str,
+        k: int = 3,
+        *,
+        collection_name: str | None = None,
+        score_threshold: float = 0.0,
     ) -> list[Document]:
         try:
             self._initialize_vector_store()
@@ -372,8 +418,11 @@ class PgVectorStoreAdapter:
                 ).mappings()
                 documents = []
                 for row in rows:
+                    score = float(row["score"])
+                    if score < score_threshold:
+                        continue
                     metadata = dict(row["metadata"] or {})
-                    metadata["score"] = row["score"]
+                    metadata["score"] = score
                     documents.append(Document(page_content=str(row["content"]), metadata=metadata))
                 return documents
         except Exception as exc:

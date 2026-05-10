@@ -16,6 +16,13 @@ from typing import Any, cast
 
 from loguru import logger
 
+from app.agent_runtime.constants import (
+    CONFIDENCE_LOW,
+    CONFIDENCE_NONE,
+    CONFIDENCE_PARTIAL,
+    CONFIDENCE_STRONG,
+    RUNTIME_VERSION,
+)
 from app.agent_runtime.context import KnowledgeContextProvider
 from app.agent_runtime.decision import (
     AgentDecision,
@@ -30,6 +37,7 @@ from app.agent_runtime.decision import (
 )
 from app.agent_runtime.events import AgentRuntimeEvent
 from app.agent_runtime.executor import AgentToolExecutor
+from app.agent_runtime.guardrails import sanitize_goal
 from app.agent_runtime.planner import AgentPlanner
 from app.agent_runtime.policy import ToolPolicyGate
 from app.agent_runtime.ports import AgentRunStore, SceneStore, ToolPolicyStore
@@ -168,7 +176,7 @@ class MetricsCollector:
                 return
             self._run_store.update_run_metrics(
                 run_id,
-                runtime_version="native-agent-dev",
+                runtime_version=RUNTIME_VERSION,
                 trace_id=run_id,
                 model_name=_runtime_model_name(),
                 decision_provider=_runtime_decision_provider(),
@@ -203,7 +211,7 @@ class StepRunner:
     ) -> ToolExecutionResult:
         return cast(
             ToolExecutionResult,
-            await self._runtime._execute_tool_with_timeout(
+            await self._runtime.execute_tool_with_timeout(
                 tool,
                 action,
                 principal=principal,
@@ -456,6 +464,8 @@ class AgentRuntime:
         and an ``error`` event is persisted and yielded so callers can handle
         the failure gracefully.
         """
+        goal = sanitize_goal(goal)
+
         scene = self._scene_store.get_scene(scene_id)
         if scene is None:
             raise ValueError(f"Scene not found: {scene_id}")
@@ -880,10 +890,6 @@ class AgentRuntime:
         except Exception as exc:
             error_type = type(exc).__name__
             error_message = str(exc)
-            if isinstance(exc, TimeoutError) and not error_message:
-                error_message = (
-                    f"Agent run timed out after {safety_config.run_timeout_seconds:g} seconds"
-                )
             logger.error(
                 "Agent run {run_id} failed: {error_type}: {error_message}",
                 run_id=run_id,
@@ -895,7 +901,7 @@ class AgentRuntime:
             for event in self._failure_handler.error_event(runtime_context, exc):
                 yield event
 
-    async def _execute_tool_with_timeout(
+    async def execute_tool_with_timeout(
         self,
         tool: Any,
         action: Any,
@@ -1037,34 +1043,34 @@ def _assess_evidence_item(evidence: EvidenceItem) -> EvidenceAssessment:
             quality="error",
             summary=f"{evidence.tool_name} returned {evidence.status}: {evidence.error or 'no detail'}",
             citations=[citation],
-            confidence=0.0,
+            confidence=CONFIDENCE_NONE,
         )
     if evidence.status == "approval_required":
         return EvidenceAssessment(
             quality="partial",
             summary=f"{evidence.tool_name} requires approval before evidence can be collected.",
             citations=[citation],
-            confidence=0.2,
+            confidence=CONFIDENCE_LOW,
         )
     if evidence.status == "partial":
         return EvidenceAssessment(
             quality="partial",
             summary=f"{evidence.tool_name} returned partial evidence.",
             citations=[citation],
-            confidence=0.4,
+            confidence=CONFIDENCE_PARTIAL,
         )
     if evidence.output in {None, ""}:
         return EvidenceAssessment(
             quality="empty",
             summary=f"{evidence.tool_name} returned no usable evidence.",
             citations=[citation],
-            confidence=0.0,
+            confidence=CONFIDENCE_NONE,
         )
     return EvidenceAssessment(
         quality="strong",
         summary=f"{evidence.tool_name} returned usable evidence.",
         citations=[citation],
-        confidence=0.8,
+        confidence=CONFIDENCE_STRONG,
     )
 
 

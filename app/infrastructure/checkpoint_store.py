@@ -424,26 +424,38 @@ class DatabaseCheckpointSaver(BaseCheckpointSaver[str]):
 
         channel_values: dict[str, Any] = {}
         engine = get_engine()
+        # Build a single query with OR conditions for all (channel, version) pairs
+        # to avoid N+1 queries
+        conditions = []
+        params: dict[str, Any] = {"tid": thread_id, "ns": checkpoint_ns}
+        for i, (channel, version) in enumerate(versions.items()):
+            ch_key = f"ch_{i}"
+            ver_key = f"ver_{i}"
+            conditions.append(f"(channel = :{ch_key} AND version = :{ver_key})")
+            params[ch_key] = str(channel)
+            params[ver_key] = str(version)
+
+        if not conditions:
+            return {}
+
+        where_clause = " OR ".join(conditions)
+        query = text(
+            "SELECT channel, value_type, value_data "
+            "FROM agent_checkpoint_blobs "
+            "WHERE thread_id = :tid AND checkpoint_ns = :ns AND ("
+            + where_clause  # nosec B608
+            + ")"
+        )
+
         with engine.connect() as connection:
-            for channel, version in versions.items():
-                row = connection.execute(
-                    text("""
-                        SELECT value_type, value_data
-                        FROM agent_checkpoint_blobs
-                        WHERE thread_id = :tid AND checkpoint_ns = :ns AND channel = :ch AND version = :ver
-                    """),
-                    {
-                        "tid": thread_id,
-                        "ns": checkpoint_ns,
-                        "ch": str(channel),
-                        "ver": str(version),
-                    },
-                ).fetchone()
-                if row is None or row[0] == "empty":
+            rows = connection.execute(query, params).fetchall()
+            for row in rows:
+                channel_name = str(row[0])
+                if row[1] == "empty":
                     continue
-                channel_values[str(channel)] = self._deserialize_typed(
-                    str(row[0]),
-                    bytes(row[1]),
+                channel_values[channel_name] = self._deserialize_typed(
+                    str(row[1]),
+                    bytes(row[2]),
                 )
         return channel_values
 

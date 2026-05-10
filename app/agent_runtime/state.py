@@ -6,7 +6,9 @@ import json
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-_MAX_TOOL_OUTPUT_CHARS = 4000
+from app.agent_runtime.constants import MAX_TOOL_OUTPUT_CHARS
+
+_MAX_TOOL_OUTPUT_CHARS = MAX_TOOL_OUTPUT_CHARS
 
 
 @dataclass(frozen=True)
@@ -104,6 +106,33 @@ class ToolPolicySnapshot:
         }
 
 
+def _infer_arguments(
+    tool_name: str,
+    *,
+    goal: str,
+    tool_schema: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build tool arguments from the goal, using schema properties when available."""
+    # If we have a tool schema with properties, map goal to matching string properties
+    if tool_schema and isinstance(tool_schema, dict):
+        properties = tool_schema.get("properties", {})
+        if properties and isinstance(properties, dict):
+            arguments: dict[str, Any] = {}
+            for prop_name, prop_def in properties.items():
+                if isinstance(prop_def, dict) and prop_def.get("type") == "string":
+                    arguments[prop_name] = goal
+            if arguments:
+                return arguments
+
+    # Fallback: infer from tool name heuristics
+    lowered = tool_name.lower()
+    if "log" in lowered or "search" in lowered:
+        return {"query": goal, "keyword": goal}
+    if "metric" in lowered or "monitor" in lowered:
+        return {"query": goal}
+    return {"query": goal}
+
+
 @dataclass(frozen=True)
 class ToolAction:
     """A planned tool action with normalized arguments."""
@@ -120,14 +149,9 @@ class ToolAction:
         *,
         goal: str,
         policy: dict[str, Any] | None = None,
+        tool_schema: dict[str, Any] | None = None,
     ) -> ToolAction:
-        lowered = tool_name.lower()
-        if "log" in lowered or "search" in lowered:
-            arguments = {"query": goal, "keyword": goal}
-        elif "metric" in lowered or "monitor" in lowered:
-            arguments = {"query": goal}
-        else:
-            arguments = {"query": goal}
+        arguments = _infer_arguments(tool_name, goal=goal, tool_schema=tool_schema)
         return cls(
             tool_name=tool_name,
             arguments=arguments,

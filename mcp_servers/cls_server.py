@@ -3,107 +3,21 @@
 本地实现的 CLS 日志服务 MCP Server，提供日志查询、检索和分析功能。
 """
 
-import functools
-import json
 import logging
-from datetime import datetime, timedelta
+import random
+from datetime import datetime
 from typing import Any
 
 from fastmcp import FastMCP
 
-# 配置日志
+from mcp_servers.common import log_tool_call
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("CLS_MCP_Server")
 
 mcp = FastMCP("CLS")
-
-
-def log_tool_call(func):
-    """装饰器：记录工具调用的日志，包括方法名、参数和返回状态"""
-
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        method_name = func.__name__
-
-        # 记录调用信息
-        logger.info("=" * 80)
-        logger.info(f"调用方法: {method_name}")
-
-        # 记录参数（排除self等）
-        if kwargs:
-            # 使用 json.dumps 格式化参数，处理可能的序列化错误
-            try:
-                params_str = json.dumps(kwargs, ensure_ascii=False, indent=2)
-            except (TypeError, ValueError):
-                params_str = str(kwargs)
-            logger.info(f"参数信息:\n{params_str}")
-        else:
-            logger.info("参数信息: 无")
-
-        # 执行方法
-        try:
-            result = func(*args, **kwargs)
-
-            # 记录返回状态
-            logger.info("返回状态: SUCCESS")
-
-            # 记录返回结果摘要（避免日志过长）
-            if isinstance(result, dict):
-                summary = {
-                    k: v
-                    if not isinstance(v, (list, dict))
-                    else f"<{type(v).__name__} with {len(v)} items>"
-                    for k, v in list(result.items())[:5]
-                }
-                logger.info(f"返回结果摘要: {json.dumps(summary, ensure_ascii=False)}")
-            else:
-                logger.info(f"返回结果: {result}")
-
-            logger.info("=" * 80)
-            return result
-
-        except Exception as e:
-            # 记录错误状态
-            logger.error("返回状态: ERROR")
-            logger.error(f"错误信息: {str(e)}")
-            logger.error("=" * 80)
-            raise
-
-    return wrapper
-
-
-def parse_time_or_default(time_str: str | None, default_offset_hours: int = 0) -> datetime:
-    """解析时间字符串或返回默认时间。
-
-    Args:
-        time_str: 时间字符串（格式：YYYY-MM-DD HH:MM:SS）
-        default_offset_hours: 默认时间偏移（小时）
-
-    Returns:
-        datetime: 解析后的时间对象
-    """
-    if time_str:
-        try:
-            return datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            pass
-    return datetime.now() + timedelta(hours=default_offset_hours)
-
-
-def generate_time_series(base_time: datetime, minutes_offset: int) -> str:
-    """生成基于基准时间的时间字符串。
-
-    Args:
-        base_time: 基准时间
-        minutes_offset: 分钟偏移量
-
-    Returns:
-        str: 格式化的时间字符串
-    """
-    result_time = base_time + timedelta(minutes=minutes_offset)
-    return result_time.strftime("%Y-%m-%d %H:%M:%S")
 
 
 @mcp.tool()
@@ -197,7 +111,25 @@ def get_topic_info_by_name(topic_name: str, region_code: str | None = None) -> d
             "create_time": "2024-01-01 10:00:00",
             "log_count": 0,
             "description": "服务应用日志",
-        }
+        },
+        {
+            "topic_id": "topic-002",
+            "topic_name": "数据同步服务错误日志",
+            "service_name": "data-sync-service",
+            "region_code": "ap-beijing",
+            "create_time": "2024-01-01 10:00:00",
+            "log_count": 0,
+            "description": "数据同步服务的错误日志，包含异常堆栈",
+        },
+        {
+            "topic_id": "topic-003",
+            "topic_name": "API网关服务日志",
+            "service_name": "api-gateway-service",
+            "region_code": "ap-shanghai",
+            "create_time": "2024-01-01 10:00:00",
+            "log_count": 0,
+            "description": "API网关服务日志，包含HTTP请求和响应状态",
+        },
     ]
 
     # 根据名称和地区筛选
@@ -407,45 +339,16 @@ def search_log(
             limit=100
         )
     """
-    # 根据 topic_id 返回不同的结果
-    if topic_id == "topic-001":
-        # topic-001: 应用日志，动态生成 INFO 日志
-        logs = []
-        current_time_ms = start_time
-        count = 0
+    query_start = datetime.now()
 
-        # 计算最大可生成的日志条数（基于时间范围）
-        max_logs_by_time = int((end_time - start_time) / (60 * 1000)) + 1
+    topic_handlers = {
+        "topic-001": _generate_app_logs,
+        "topic-002": _generate_error_logs,
+        "topic-003": _generate_gateway_logs,
+    }
 
-        # 实际生成的日志数量取 limit 和时间范围内最大日志数的较小值
-        actual_limit = min(limit, max_logs_by_time)
-
-        while current_time_ms <= end_time and count < actual_limit:
-            # 将毫秒时间戳转换为可读格式
-            log_time = datetime.fromtimestamp(current_time_ms / 1000)
-            time_str = log_time.strftime("%Y-%m-%d %H:%M:%S")
-
-            log_entry = {"timestamp": time_str, "level": "INFO", "message": "正在同步元数据……"}
-
-            logs.append(log_entry)
-            count += 1
-
-            # 下一条日志时间增加1分钟（60秒 * 1000毫秒）
-            current_time_ms += 60 * 1000
-
-        return {
-            "topic_id": topic_id,
-            "start_time": start_time,
-            "end_time": end_time,
-            "query": query,
-            "limit": limit,
-            "total": len(logs),
-            "logs": logs,
-            "took_ms": 50,
-            "message": f"成功查询 {len(logs)} 条应用日志",
-        }
-    else:
-        # 其他 topic_id: 返回错误，表示 topic 不存在
+    handler = topic_handlers.get(topic_id)
+    if handler is None:
         return {
             "topic_id": topic_id,
             "start_time": start_time,
@@ -458,6 +361,161 @@ def search_log(
             "error": f"主题不存在: {topic_id}",
             "message": f"错误: 未找到主题 {topic_id}，请检查 topic_id 是否正确",
         }
+
+    logs = handler(start_time, end_time, limit, query)
+    took_ms = int((datetime.now() - query_start).total_seconds() * 1000) + random.randint(5, 30)
+
+    return {
+        "topic_id": topic_id,
+        "start_time": start_time,
+        "end_time": end_time,
+        "query": query,
+        "limit": limit,
+        "total": len(logs),
+        "logs": logs,
+        "took_ms": took_ms,
+        "message": f"成功查询 {len(logs)} 条日志",
+    }
+
+
+def _ms_to_str(ts_ms: int) -> str:
+    return datetime.fromtimestamp(ts_ms / 1000).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _generate_app_logs(start_time: int, end_time: int, limit: int, query: str | None) -> list[dict]:
+    """topic-001: INFO-level application logs for data-sync-service."""
+    info_messages = [
+        "正在同步元数据……",
+        "同步任务开始执行，批次号: batch-{batch}",
+        "已同步 {n} 条记录到目标数据库",
+        "心跳检测正常，延迟 {latency}ms",
+        "消费 Kafka 消息: partition={p} offset={o}",
+        "连接池状态: active={a} idle={i} pending=0",
+        "缓存命中率 {rate}%，命中 {hits} 次",
+        "定时任务 cron-sync 完成，耗时 {dur}s",
+    ]
+    logs: list[dict] = []
+    current_ms = start_time
+    step = max(60_000, (end_time - start_time) // max(limit, 1))
+    while current_ms <= end_time and len(logs) < limit:
+        msg = random.choice(info_messages).format(
+            batch=random.randint(1000, 9999),
+            n=random.randint(50, 5000),
+            latency=random.randint(1, 50),
+            p=random.randint(0, 7),
+            o=random.randint(100000, 999999),
+            a=random.randint(5, 20),
+            i=random.randint(2, 10),
+            rate=random.randint(85, 99),
+            hits=random.randint(100, 5000),
+            dur=random.randint(1, 30),
+        )
+        logs.append({"timestamp": _ms_to_str(current_ms), "level": "INFO", "message": msg})
+        current_ms += step
+    return logs
+
+
+def _generate_error_logs(
+    start_time: int, end_time: int, limit: int, query: str | None
+) -> list[dict]:
+    """topic-002: ERROR-level logs with stack traces for data-sync-service."""
+    error_templates = [
+        {
+            "message": "数据库连接超时: Connection to db-master:5432 timed out after 30s",
+            "stack": (
+                "psycopg.OperationalError: connection timeout\n"
+                "  at app.db.pool.get_connection(pool.py:128)\n"
+                "  at app.sync.pipeline.execute(pipeline.py:67)\n"
+                "  at app.sync.worker.run(worker.py:45)"
+            ),
+        },
+        {
+            "message": "Kafka consumer group rebalance detected, partition assignment changed",
+            "stack": (
+                "kafka.errors.CommitFailedError: Commit cannot be completed since the group has already rebalanced\n"
+                "  at kafka.consumer.group.Consumer._commit_offsets(consumer.py:892)\n"
+                "  at app.sync.kafka_handler.process_batch(handler.py:134)"
+            ),
+        },
+        {
+            "message": "序列化失败: 无法解析消息体，格式不符合预期 schema",
+            "stack": (
+                "json.JSONDecodeError: Expecting property name enclosed in double quotes: line 1 column 15 (char 14)\n"
+                "  at json.decoder.raw_decode(decoder.py:355)\n"
+                "  at app.sync.serializer.deserialize(serializer.py:89)\n"
+                "  at app.sync.pipeline.process_message(pipeline.py:112)"
+            ),
+        },
+        {
+            "message": "目标数据库写入失败: duplicate key value violates unique constraint",
+            "stack": (
+                'psycopg.errors.UniqueViolation: duplicate key value violates unique constraint "records_pkey"\n'
+                "  at app.db.writer.batch_insert(writer.py:203)\n"
+                "  at app.sync.pipeline.flush_buffer(pipeline.py:178)"
+            ),
+        },
+        {
+            "message": "OOM 风险: 进程内存使用达到 92%，触发保护性拒绝",
+            "stack": (
+                "MemoryError: Process memory limit exceeded (rss=3.68GB limit=4.00GB)\n"
+                "  at app.sync.buffer.acquire_buffer(buffer.py:56)\n"
+                "  at app.sync.pipeline.accumulate(pipeline.py:95)"
+            ),
+        },
+    ]
+    logs: list[dict] = []
+    current_ms = start_time
+    step = max(120_000, (end_time - start_time) // max(limit, 1))
+    while current_ms <= end_time and len(logs) < limit:
+        tmpl = random.choice(error_templates)
+        logs.append(
+            {
+                "timestamp": _ms_to_str(current_ms),
+                "level": "ERROR",
+                "message": tmpl["message"],
+                "stack_trace": tmpl["stack"],
+                "service": "data-sync-service",
+                "instance": f"data-sync-{random.randint(1, 4):03d}",
+            }
+        )
+        current_ms += step
+    return logs
+
+
+def _generate_gateway_logs(
+    start_time: int, end_time: int, limit: int, query: str | None
+) -> list[dict]:
+    """topic-003: API gateway access logs with HTTP status codes."""
+    endpoints = [
+        ("GET", "/api/v1/users", [200, 200, 200, 404]),
+        ("POST", "/api/v1/orders", [201, 201, 400, 500]),
+        ("GET", "/api/v1/products/{id}", [200, 200, 404, 404]),
+        ("PUT", "/api/v1/users/{id}/profile", [200, 200, 403, 422]),
+        ("DELETE", "/api/v1/sessions/{id}", [204, 204, 401, 500]),
+        ("GET", "/api/v1/health", [200, 200, 200, 200]),
+    ]
+    logs: list[dict] = []
+    current_ms = start_time
+    step = max(30_000, (end_time - start_time) // max(limit, 1))
+    while current_ms <= end_time and len(logs) < limit:
+        method, path = random.choice(endpoints)
+        status = random.choice([200, 200, 200, 200, 201, 301, 400, 403, 404, 500, 502, 503])
+        latency_ms = random.randint(2, 800) if status < 500 else random.randint(1000, 5000)
+        logs.append(
+            {
+                "timestamp": _ms_to_str(current_ms),
+                "level": "WARN" if status >= 400 else "INFO",
+                "message": f"{method} {path} -> {status} ({latency_ms}ms)",
+                "http_method": method,
+                "path": path,
+                "status_code": status,
+                "latency_ms": latency_ms,
+                "client_ip": f"10.0.{random.randint(1, 254)}.{random.randint(1, 254)}",
+                "request_id": f"req-{random.randint(100000, 999999)}",
+            }
+        )
+        current_ms += step
+    return logs
 
 
 if __name__ == "__main__":

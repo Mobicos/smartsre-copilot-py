@@ -354,7 +354,7 @@ async def test_agent_runtime_accepts_injected_persistence_ports():
     assert run_store.events[0]["type"] == "run_started"
     assert run_store.events[-1]["type"] == "final_report"
     assert "External MCP tools are unavailable" in str(run_store.final_report)
-    assert run_store.metrics["runtime_version"] == "native-agent-dev"
+    assert run_store.metrics["runtime_version"] == "native-agent-v1"
     assert run_store.metrics["trace_id"] == "run-1"
     assert run_store.metrics["model_name"] == "deterministic-native-agent"
     assert run_store.metrics["step_count"] >= 1

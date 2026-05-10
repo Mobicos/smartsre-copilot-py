@@ -40,12 +40,47 @@ class StaticCatalog:
         return self._tools
 
 
+_TOOL_EVIDENCE_TEMPLATES: dict[str, str] = {
+    "SearchLog": (
+        "Found {count} error log entries in the last 15 minutes: "
+        "'{sample_error}' — pattern indicates {diagnosis}."
+    ),
+    "SearchMetric": (
+        "Metric query returned: p99 latency={p99}ms, error_rate={err}% — {diagnosis}."
+    ),
+    "RestartService": "Service restart command dispatched successfully — pod is rolling.",
+    "get_current_time": "Current server time: 2026-05-09T10:32:00Z.",
+}
+
+_EVIDENCE_BY_TOOL: dict[str, dict[str, str]] = {
+    "SearchLog": {
+        "count": "127",
+        "sample_error": "Connection refused to upstream:5432",
+        "diagnosis": "upstream dependency connection exhaustion",
+    },
+    "SearchMetric": {
+        "p99": "2340",
+        "err": "12.7",
+        "diagnosis": "elevated latency with elevated error rate suggesting downstream failure",
+    },
+}
+
+
 class SuccessExecutor:
     async def execute(self, tool, args, *, principal):
+        template = _TOOL_EVIDENCE_TEMPLATES.get(tool.name)
+        if template:
+            params = _EVIDENCE_BY_TOOL.get(tool.name, {})
+            try:
+                output = template.format(**params)
+            except KeyError:
+                output = f"Evidence from {tool.name}: operation completed successfully."
+        else:
+            output = f"Evidence from {tool.name}: operation completed successfully."
         return SimpleNamespace(
             tool_name=tool.name,
             status="success",
-            output=f"Evidence from {tool.name}: latency spike detected at 14:32 UTC",
+            output=output,
             error=None,
             arguments=args,
         )

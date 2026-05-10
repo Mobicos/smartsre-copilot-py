@@ -1,8 +1,46 @@
 """向量嵌入服务模块 - 基于 LangChain Embeddings 标准接口。"""
 
+from __future__ import annotations
+
+import time
+from collections.abc import Callable
+from typing import Any, TypeVar
+
 from langchain_core.embeddings import Embeddings
 from loguru import logger
 from openai import OpenAI
+
+T = TypeVar("T")
+
+_MAX_RETRIES = 3
+_INITIAL_BACKOFF_SECONDS = 1.0
+_BACKOFF_MULTIPLIER = 2.0
+
+
+def _retry_with_backoff(
+    func: Callable[..., T],
+    *args: Any,
+    max_retries: int = _MAX_RETRIES,
+    initial_backoff: float = _INITIAL_BACKOFF_SECONDS,
+    **kwargs: Any,
+) -> T:
+    """Call *func* with exponential-backoff retry on transient failures."""
+    last_exc: Exception | None = None
+    backoff = initial_backoff
+    for attempt in range(1, max_retries + 1):
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            last_exc = exc
+            if attempt == max_retries:
+                break
+            logger.warning(
+                f"Embedding call failed (attempt {attempt}/{max_retries}), "
+                f"retrying in {backoff:.1f}s: {exc}"
+            )
+            time.sleep(backoff)
+            backoff *= _BACKOFF_MULTIPLIER
+    raise RuntimeError(f"Embedding call failed after {max_retries} attempts") from last_exc
 
 
 class DashScopeEmbeddings(Embeddings):
@@ -72,7 +110,8 @@ class DashScopeEmbeddings(Embeddings):
             # DashScope embedding 接口当前单次最多支持 10 条输入。
             for batch_start in range(0, len(texts), self.MAX_BATCH_SIZE):
                 batch = texts[batch_start : batch_start + self.MAX_BATCH_SIZE]
-                response = self.client.embeddings.create(
+                response = _retry_with_backoff(
+                    self.client.embeddings.create,
                     model=self.model,
                     input=batch,
                     dimensions=self.dimensions,
@@ -104,8 +143,12 @@ class DashScopeEmbeddings(Embeddings):
         try:
             logger.debug(f"嵌入查询, 长度: {len(text)} 字符")
 
-            response = self.client.embeddings.create(
-                model=self.model, input=text, dimensions=self.dimensions, encoding_format="float"
+            response = _retry_with_backoff(
+                self.client.embeddings.create,
+                model=self.model,
+                input=text,
+                dimensions=self.dimensions,
+                encoding_format="float",
             )
 
             embedding = response.data[0].embedding

@@ -100,6 +100,7 @@ class Settings(BaseSettings):
 
     # RAG settings
     rag_top_k: int = 3
+    rag_score_threshold: float = 0.3
     rag_model: str = "qwen-max"
     chat_recursion_limit: int = 12
     aiops_recursion_limit: int = 24
