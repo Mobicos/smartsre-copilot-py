@@ -8,7 +8,7 @@ from langchain_mcp_adapters.interceptors import MCPToolCallRequest
 from loguru import logger
 from mcp.types import CallToolResult, TextContent
 
-from app.config import config
+from app.core.config import AppSettings
 
 # 全局 MCP 客户端（延迟初始化）
 _mcp_client: MultiServerMCPClient | None = None
@@ -70,8 +70,14 @@ async def retry_interceptor(
     return CallToolResult(content=[TextContent(type="text", text=error_msg)], isError=True)
 
 
-# 使用配置文件中定义的完整 MCP 服务器配置
-DEFAULT_MCP_SERVERS = config.mcp_servers
+def _get_default_mcp_servers() -> dict[str, dict[str, str]]:
+    """Build the default MCP servers dict from AppSettings."""
+    settings = AppSettings.from_env()
+    servers = settings.mcp_servers()
+    return {name: {"transport": s.transport, "url": s.url} for name, s in servers.items()}
+
+
+DEFAULT_MCP_SERVERS = _get_default_mcp_servers()
 
 
 def _normalize_servers(

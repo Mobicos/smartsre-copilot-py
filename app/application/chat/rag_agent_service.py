@@ -24,7 +24,7 @@ from loguru import logger
 from pydantic import SecretStr
 from typing_extensions import TypedDict
 
-from app.config import config
+from app.core.config import AppSettings
 from app.infrastructure.tools import retrieve_knowledge, tool_registry
 
 # 阿里千问大模型和langchain集成参考： https://docs.langchain.com/oss/python/integrations/chat/qwen
@@ -84,19 +84,29 @@ def trim_messages_middleware(state: AgentState) -> dict[str, Any] | None:
 class RagAgentService:
     """RAG Agent 服务 - 使用 LangGraph + ChatQwen 原生集成"""
 
-    def __init__(self, *, streaming: bool = True, checkpointer: BaseCheckpointSaver[str]):
+    def __init__(
+        self,
+        settings: AppSettings | None = None,
+        *,
+        streaming: bool = True,
+        checkpointer: BaseCheckpointSaver[str],
+    ) -> None:
         """初始化 RAG Agent 服务
 
         Args:
+            settings: AppSettings instance. If None, loads from environment.
             streaming: 是否启用流式输出，默认为 True
         """
-        self.model_name = config.rag_model
+        if settings is None:
+            settings = AppSettings.from_env()
+        self._settings = settings
+        self.model_name = settings.rag_model
         self.streaming = streaming
         self.system_prompt = self._build_system_prompt()
 
         self.model = ChatQwen(
             model=self.model_name,
-            api_key=SecretStr(config.dashscope_api_key),
+            api_key=SecretStr(settings.dashscope_api_key),
             temperature=0.7,
             streaming=streaming,
         )
@@ -207,7 +217,7 @@ class RagAgentService:
                     "thread_id": session_id,
                     "checkpoint_ns": self.checkpoint_ns,
                 },
-                "recursion_limit": config.chat_recursion_limit,
+                "recursion_limit": self._settings.chat_recursion_limit,
             }
 
             result = await self._get_agent().ainvoke(
@@ -346,7 +356,7 @@ class RagAgentService:
                     "thread_id": session_id,
                     "checkpoint_ns": self.checkpoint_ns,
                 },
-                "recursion_limit": config.chat_recursion_limit,
+                "recursion_limit": self._settings.chat_recursion_limit,
             }
 
             async for token, metadata in self._get_agent().astream(

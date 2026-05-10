@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from app.config import config
+from app.core.config import AppSettings
 from app.infrastructure import checkpoint_saver
 from app.infrastructure.knowledge import (
     DashScopeEmbeddings,
@@ -57,11 +57,13 @@ class RuntimeContainer:
 
     def __init__(
         self,
+        settings: AppSettings,
         *,
         scene_store: Any = scene_repository,
         run_store: Any = agent_run_repository,
         policy_store: Any = tool_policy_repository,
     ) -> None:
+        self._settings = settings
         self.scene_store = scene_store
         self.run_store = run_store
         self.policy_store = policy_store
@@ -87,7 +89,7 @@ class RuntimeContainer:
             QwenDecisionProvider,
         )
 
-        provider_name = config.agent_decision_provider.strip().lower()
+        provider_name = self._settings.agent_decision_provider.strip().lower()
         provider: Any
         if provider_name == "qwen":
             from app.core.llm_factory import llm_factory
@@ -95,7 +97,7 @@ class RuntimeContainer:
             provider = QwenDecisionProvider(
                 LangChainQwenDecisionInvoker(
                     llm_factory.create_chat_model(
-                        model=config.dashscope_model,
+                        model=self._settings.dashscope_model,
                         temperature=0,
                         streaming=False,
                     )
@@ -111,6 +113,7 @@ class RuntimeContainer:
         from app.agent_runtime import AgentRuntime
 
         return AgentRuntime(
+            settings=self._settings,
             tool_catalog=self.tool_catalog,
             tool_executor=self.tool_executor,
             scene_store=self.scene_store,
@@ -128,15 +131,16 @@ class RuntimeContainer:
 class AppContainer:
     """Application composition root for API, runtime, and infrastructure services."""
 
-    def __init__(self) -> None:
-        self.runtime = RuntimeContainer()
+    def __init__(self, settings: AppSettings) -> None:
+        self._settings = settings
+        self.runtime = RuntimeContainer(settings=settings)
 
     @cached_property
     def embedding_service(self) -> DashScopeEmbeddings:
         logger.info("Initializing DashScope Embeddings service...")
         return DashScopeEmbeddings(
-            api_key=config.dashscope_api_key,
-            model=config.dashscope_embedding_model,
+            api_key=self._settings.dashscope_api_key,
+            model=self._settings.dashscope_embedding_model,
             dimensions=1024,
         )
 
@@ -160,17 +164,17 @@ class AppContainer:
             MinioObjectStorageAdapter,
         )
 
-        backend = config.object_storage_backend.strip().lower()
+        backend = self._settings.object_storage_backend.strip().lower()
         if backend == "minio":
             return MinioObjectStorageAdapter(
-                endpoint=config.minio_endpoint,
-                access_key=config.minio_access_key,
-                secret_key=config.minio_secret_key,
-                bucket=config.minio_bucket,
-                secure=config.minio_secure,
-                local_cache_root=Path(config.object_storage_local_cache_path),
+                endpoint=self._settings.minio_endpoint,
+                access_key=self._settings.minio_access_key,
+                secret_key=self._settings.minio_secret_key,
+                bucket=self._settings.minio_bucket,
+                secure=self._settings.minio_secure,
+                local_cache_root=Path(self._settings.object_storage_local_cache_path),
             )
-        return LocalObjectStorageAdapter(root=Path(config.object_storage_local_path))
+        return LocalObjectStorageAdapter(root=Path(self._settings.object_storage_local_path))
 
     @cached_property
     def vector_index_service(self) -> VectorIndexService:
@@ -185,7 +189,11 @@ class AppContainer:
         logger.info("Initializing RAG Agent service...")
         from app.application.chat import RagAgentService
 
-        return RagAgentService(streaming=True, checkpointer=checkpoint_saver)
+        return RagAgentService(
+            settings=self._settings,
+            streaming=True,
+            checkpointer=checkpoint_saver,
+        )
 
     @cached_property
     def indexing_task_service(self) -> IndexingTaskService:
@@ -194,7 +202,7 @@ class AppContainer:
         return IndexingTaskService(
             repository=indexing_task_repository,
             vector_indexer_provider=lambda: self.vector_index_service,
-            max_retries_provider=lambda: config.indexing_task_max_retries,
+            max_retries_provider=lambda: self._settings.indexing_task_max_retries,
         )
 
     @cached_property
@@ -266,7 +274,7 @@ class AppContainer:
         if self.has("rag_agent_service"):
             await self.rag_agent_service.cleanup()
 
-        if config.vector_store_backend.strip().lower() == "milvus":
+        if self._settings.vector_store_backend.strip().lower() == "milvus":
             from app.core.milvus_client import milvus_manager
 
             milvus_manager.close()
@@ -296,9 +304,16 @@ class AppContainer:
 
 
 @lru_cache(maxsize=1)
-def get_app_container() -> AppContainer:
-    """Return the process-level application container."""
-    return AppContainer()
+def get_app_container(settings: AppSettings | None = None) -> AppContainer:
+    """Return the process-level application container.
+
+    Args:
+        settings: AppSettings instance. If None, loads from environment via
+            `AppSettings.from_env()`. Cached per unique settings instance.
+    """
+    if settings is None:
+        settings = AppSettings.from_env()
+    return AppContainer(settings=settings)
 
 
 def reset_container_for_testing() -> None:
@@ -378,7 +393,8 @@ def get_native_agent_application_service() -> NativeAgentApplicationService:
 
 def initialize_services() -> None:
     """Initialize services required at application startup."""
-    if not config.dashscope_api_key.strip():
+    settings = get_app_container()._settings
+    if not settings.dashscope_api_key.strip():
         logger.warning(
             "Skipping VectorStore startup initialization because DASHSCOPE_API_KEY is not configured"
         )
@@ -395,6 +411,7 @@ async def shutdown_services() -> None:
 def get_service_health() -> dict[str, ServiceHealth]:
     """Return a health summary of core dependencies."""
     container = get_app_container()
+    settings = container._settings
     embedding_ready = container.has("embedding_service")
     vector_store_ready = (
         container.has("vector_store_manager") and container.vector_store_manager.is_initialized
@@ -403,8 +420,8 @@ def get_service_health() -> dict[str, ServiceHealth]:
     rag_ready = container.has("rag_agent_service")
     aiops_ready = container.has("aiops_application_service")
     checkpoint_ready = checkpoint_saver is not None
-    decision_provider = config.agent_decision_provider.strip().lower()
-    dashscope_ready = bool(config.dashscope_api_key.strip())
+    decision_provider = settings.agent_decision_provider.strip().lower()
+    dashscope_ready = bool(settings.dashscope_api_key.strip())
     decision_runtime_status = "ready"
     decision_runtime_message = "Deterministic decision runtime is configured"
     if decision_provider == "qwen":
@@ -434,7 +451,7 @@ def get_service_health() -> dict[str, ServiceHealth]:
         ),
         "object_storage": ServiceHealth(
             status="ready" if object_storage_ready else "configured",
-            message=f"Object storage backend: {config.object_storage_backend}",
+            message=f"Object storage backend: {settings.object_storage_backend}",
         ),
         "decision_runtime": ServiceHealth(
             status=decision_runtime_status,

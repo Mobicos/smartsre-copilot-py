@@ -1,7 +1,7 @@
 """Composition-root checks for Native Agent dependency injection."""
 
 from app.api.providers import RuntimeContainer, get_agent_runtime, reset_container_for_testing
-from app.config import config
+from app.core.config import AppSettings
 from app.platform.persistence import (
     agent_run_repository,
     scene_repository,
@@ -21,7 +21,8 @@ def test_agent_runtime_is_composed_with_explicit_stores():
 
 
 def test_runtime_container_reset_rebuilds_runtime_dependency_graph():
-    container = RuntimeContainer()
+    settings = AppSettings.from_env()
+    container = RuntimeContainer(settings=settings)
     first_runtime = container.agent_runtime
 
     container.reset_for_testing()
@@ -31,16 +32,20 @@ def test_runtime_container_reset_rebuilds_runtime_dependency_graph():
 
 def test_initialize_services_skips_vector_store_without_dashscope_key(monkeypatch):
     from app.api import providers
+    from app.core.config import AppSettings
 
     class FakeContainer:
         @property
         def vector_store_manager(self):
             raise AssertionError("vector store should not initialize without DashScope key")
 
-    original_key = config.dashscope_api_key
-    config.dashscope_api_key = ""
-    monkeypatch.setattr(providers, "get_app_container", lambda: FakeContainer())
+    fake_settings = AppSettings.defaults()
+    fake_container = FakeContainer()
+    fake_container._settings = fake_settings
+
+    monkeypatch.setattr(providers, "get_app_container", lambda: fake_container)
+    monkeypatch.setattr(AppSettings, "from_env", lambda: fake_settings)
     try:
         providers.initialize_services()
     finally:
-        config.dashscope_api_key = original_key
+        pass  # AppSettings.from_env reads config at call time, no restore needed

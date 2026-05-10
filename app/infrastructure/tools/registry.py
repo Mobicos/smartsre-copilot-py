@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from loguru import logger
 
-from app.config import config
+from app.core.config import AppSettings
 from app.infrastructure.tools.local import get_current_time, retrieve_knowledge
 from app.infrastructure.tools.mcp_client import get_mcp_tools_with_fallback
 
@@ -20,6 +20,9 @@ ToolScope = Literal["chat", "diagnosis"]
 
 class ToolRegistry:
     """按场景提供统一的工具集合。"""
+
+    def __init__(self, settings: AppSettings | None = None) -> None:
+        self._settings = settings or AppSettings.from_env()
 
     def get_local_tools(self, scope: ToolScope) -> list[Any]:
         """返回指定场景的本地工具。"""
@@ -62,12 +65,12 @@ class ToolRegistry:
         try:
             return await asyncio.wait_for(
                 get_mcp_tools_with_fallback(force_refresh=force_refresh),
-                timeout=config.mcp_tools_load_timeout_seconds,
+                timeout=self._settings.mcp_tools_load_timeout_seconds,
             )
         except TimeoutError:
             logger.warning(
                 "MCP 工具加载超时，已降级跳过，timeout={}s",
-                config.mcp_tools_load_timeout_seconds,
+                self._settings.mcp_tools_load_timeout_seconds,
             )
         except Exception as exc:  # pragma: no cover - defensive fallback
             logger.warning("MCP 工具加载失败，已降级跳过: {}", exc)
@@ -97,4 +100,17 @@ class ToolRegistry:
         return repr(tool)
 
 
-tool_registry = ToolRegistry()
+_tool_registry_instance: ToolRegistry | None = None
+
+
+def get_tool_registry(settings: AppSettings | None = None) -> ToolRegistry:
+    global _tool_registry_instance
+    if _tool_registry_instance is None:
+        _tool_registry_instance = ToolRegistry(settings=settings)
+    return _tool_registry_instance
+
+
+def __getattr__(name: str) -> ToolRegistry:
+    if name == "tool_registry":
+        return get_tool_registry()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

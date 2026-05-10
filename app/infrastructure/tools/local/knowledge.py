@@ -5,7 +5,7 @@ from langchain_core.tools import tool
 from loguru import logger
 
 from app.api.providers import get_vector_store_manager
-from app.config import config
+from app.core.config import AppSettings
 
 
 @tool(response_format="content_and_artifact")
@@ -24,8 +24,9 @@ def retrieve_knowledge(query: str) -> tuple[str, list[Document]]:
         logger.info(f"知识检索工具被调用: query='{query}'")
 
         # 从向量存储中检索相关文档（通过 VectorStoreManager 以支持 collection_name 过滤）
+        settings = AppSettings.from_env()
         docs = get_vector_store_manager().similarity_search(
-            query, k=config.rag_top_k, collection_name=config.pgvector_collection_name
+            query, k=settings.rag_top_k, collection_name=settings.pgvector_collection_name
         )
 
         if not docs:

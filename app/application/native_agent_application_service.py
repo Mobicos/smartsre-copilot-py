@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.agent_runtime import AgentRuntime, ToolCatalog
-from app.config import config
+from app.core.config import AppSettings
 from app.infrastructure import redis_manager
 from app.platform.persistence.repositories.native_agent import (
     AgentFeedbackRepository,
@@ -819,6 +819,10 @@ def _build_tool_trajectory(
     return trajectories
 
 
+def _get_settings() -> AppSettings:
+    return AppSettings.from_env()
+
+
 def _enqueue_approval_resume_task(
     *,
     run_id: str,
@@ -826,7 +830,8 @@ def _enqueue_approval_resume_task(
     decision: str,
     actor: str | None,
 ) -> str:
-    if config.task_queue_backend != "redis":
+    settings = _get_settings()
+    if settings.task_queue_backend != "redis":
         return "deferred_until_resume_worker_enabled"
     payload = {
         "run_id": run_id,
@@ -836,7 +841,7 @@ def _enqueue_approval_resume_task(
         "checkpoint_ns": "agent-v2",
     }
     try:
-        redis_manager.enqueue_json(config.agent_resume_queue_name, payload)
+        redis_manager.enqueue_json(settings.agent_resume_queue_name, payload)
     except Exception:
         return "enqueue_failed"
     return "queued"
@@ -860,7 +865,7 @@ def _approval_expires_at(created_at: Any) -> str | None:
     if not isinstance(created_at, datetime):
         return None
     aware_dt: datetime = _ensure_aware_utc(created_at)
-    expires_at = aware_dt + timedelta(seconds=config.agent_approval_timeout_seconds)
+    expires_at = aware_dt + timedelta(seconds=_get_settings().agent_approval_timeout_seconds)
     return expires_at.isoformat()
 
 
@@ -869,7 +874,7 @@ def _approval_is_expired(created_at: Any, *, now: datetime) -> bool:
         return False
     aware_dt: datetime = _ensure_aware_utc(created_at)
     now = _ensure_aware_utc(now)
-    expires_at = aware_dt + timedelta(seconds=config.agent_approval_timeout_seconds)
+    expires_at = aware_dt + timedelta(seconds=_get_settings().agent_approval_timeout_seconds)
     return expires_at <= now
 
 

@@ -10,32 +10,35 @@
 - 其他兼容 OpenAI API 的服务
 """
 
+from typing import Any
+
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
-from app.config import config
+from app.core.config import AppSettings
 
 
 class LLMFactory:
     """LLM 工厂类 - 使用 OpenAI 兼容模式"""
 
-    # 阿里云 DashScope OpenAI 兼容模式 URL
     DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
-    @staticmethod
     def create_chat_model(
+        self,
         model: str | None = None,
         temperature: float = 0.7,
         streaming: bool = True,
         base_url: str | None = None,
         api_key: str | None = None,
+        settings: AppSettings | None = None,
     ) -> ChatOpenAI:
-        model = model or config.dashscope_model
+        if settings is None:
+            settings = AppSettings.from_env()
+        model = model or settings.dashscope_model
         base_url = base_url or LLMFactory.DASHSCOPE_BASE_URL
-        api_key = api_key or config.dashscope_api_key
+        api_key = api_key or settings.dashscope_api_key
 
-        # 参考：https://help.aliyun.com/zh/model-studio/getting-started/models
-        extra_body = {}
+        extra_body: dict[str, Any] = {}
         extra_body["stream"] = streaming
 
         llm = ChatOpenAI(
@@ -44,9 +47,9 @@ class LLMFactory:
             streaming=streaming,
             base_url=base_url,
             api_key=SecretStr(api_key),
-            timeout=config.llm_request_timeout_seconds,
-            max_retries=config.llm_max_retries,
-            model_kwargs={"retry_delay": config.llm_retry_delay_seconds},
+            timeout=settings.llm_request_timeout_seconds,
+            max_retries=settings.llm_max_retries,
+            model_kwargs={"retry_delay": settings.llm_retry_delay_seconds},
             extra_body=extra_body if extra_body else None,
         )
 

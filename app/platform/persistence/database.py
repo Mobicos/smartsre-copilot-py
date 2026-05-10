@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import Pool, QueuePool
 from sqlmodel import Session
 
-from app.config import config
+from app.core.config import AppSettings
 
 # ---------------------------------------------------------------------------
 # SQLAlchemy engine
@@ -45,10 +45,15 @@ def _install_pool_listeners(pool: Pool) -> None:
         pass
 
 
+def _get_settings() -> AppSettings:
+    return AppSettings.from_env()
+
+
 def get_engine() -> Engine:
     global _engine
     if _engine is None:
-        uri = config.sqlalchemy_database_uri
+        settings = _get_settings()
+        uri = settings.postgres_dsn.strip()
         if not uri:
             raise RuntimeError("POSTGRES_DSN must be configured")
         _engine = create_engine(
@@ -56,7 +61,7 @@ def get_engine() -> Engine:
             pool_size=_POOL_SIZE,
             max_overflow=_POOL_MAX_OVERFLOW,
             pool_pre_ping=True,
-            connect_args={"connect_timeout": config.postgres_connect_timeout_seconds},
+            connect_args={"connect_timeout": settings.postgres_connect_timeout_seconds},
         )
         _install_pool_listeners(_engine.pool)
     return _engine

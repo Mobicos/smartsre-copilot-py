@@ -12,7 +12,7 @@ from pymilvus import (
     utility,
 )
 
-from app.config import config
+from app.core.config import AppSettings
 
 _MILVUS_CLIENT_PATCHED = False
 
@@ -55,8 +55,15 @@ class MilvusClientManager:
     CONTENT_MAX_LENGTH: int = 8000
     DEFAULT_SHARD_NUMBER: int = 2
 
-    def __init__(self) -> None:
-        """初始化 Milvus 客户端管理器"""
+    def __init__(self, settings: AppSettings | None = None) -> None:
+        """初始化 Milvus 客户端管理器
+
+        Args:
+            settings: AppSettings instance. If None, loads from environment.
+        """
+        if settings is None:
+            settings = AppSettings.from_env()
+        self._settings = settings
         self._client: MilvusClient | None = None
         self._collection: Collection | None = None
 
@@ -78,18 +85,20 @@ class MilvusClientManager:
         try:
             _patch_pymilvus_milvus_client_orm_alias()
 
-            logger.info(f"正在连接到 Milvus: {config.milvus_host}:{config.milvus_port}")
+            logger.info(
+                f"正在连接到 Milvus: {self._settings.milvus_host}:{self._settings.milvus_port}"
+            )
 
             # 建立连接
             connections.connect(
                 alias="default",
-                host=config.milvus_host,
-                port=str(config.milvus_port),
-                timeout=config.milvus_timeout / 1000,  # 转换为秒
+                host=self._settings.milvus_host,
+                port=str(self._settings.milvus_port),
+                timeout=self._settings.milvus_timeout / 1000,  # 转换为秒
             )
 
             # 创建客户端
-            uri = f"http://{config.milvus_host}:{config.milvus_port}"
+            uri = f"http://{self._settings.milvus_host}:{self._settings.milvus_port}"
             self._client = MilvusClient(uri=uri)
 
             logger.info("成功连接到 Milvus")
@@ -319,5 +328,18 @@ class MilvusClientManager:
         self.close()
 
 
-# 全局单例
-milvus_manager = MilvusClientManager()
+# Lazy-init singleton via __getattr__ (supports test isolation)
+_milvus_manager_instance: MilvusClientManager | None = None
+
+
+def _get_milvus_manager() -> MilvusClientManager:
+    global _milvus_manager_instance
+    if _milvus_manager_instance is None:
+        _milvus_manager_instance = MilvusClientManager()
+    return _milvus_manager_instance
+
+
+def __getattr__(name: str) -> MilvusClientManager:
+    if name == "milvus_manager":
+        return _get_milvus_manager()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

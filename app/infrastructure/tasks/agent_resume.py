@@ -8,7 +8,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.config import config
+from app.core.config import AppSettings
 from app.infrastructure import redis_manager
 
 AgentResumeTaskProcessor = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
@@ -25,9 +25,11 @@ class AgentResumeDispatcher:
 
     def __init__(
         self,
+        settings: AppSettings | None = None,
         *,
         resume_task_processor: AgentResumeTaskProcessor | None = None,
     ) -> None:
+        self._settings = settings or AppSettings.from_env()
         self._resume_task_processor = resume_task_processor or _default_agent_resume_task_processor
         self._worker_task: asyncio.Task[None] | None = None
         self._started = False
@@ -36,7 +38,7 @@ class AgentResumeDispatcher:
         if self._started:
             return
         self._started = True
-        if config.task_queue_backend != "redis":
+        if self._settings.task_queue_backend != "redis":
             logger.info("Agent resume dispatcher idle because Redis queue backend is disabled")
             return
         redis_manager.initialize()
@@ -57,7 +59,7 @@ class AgentResumeDispatcher:
         while self._started:
             payload = await asyncio.to_thread(
                 redis_manager.dequeue_json,
-                config.agent_resume_queue_name,
+                self._settings.agent_resume_queue_name,
                 1,
             )
             if payload is None:
@@ -70,4 +72,17 @@ class AgentResumeDispatcher:
         return self._started
 
 
-agent_resume_dispatcher = AgentResumeDispatcher()
+_agent_resume_dispatcher_instance: AgentResumeDispatcher | None = None
+
+
+def _get_agent_resume_dispatcher() -> AgentResumeDispatcher:
+    global _agent_resume_dispatcher_instance
+    if _agent_resume_dispatcher_instance is None:
+        _agent_resume_dispatcher_instance = AgentResumeDispatcher()
+    return _agent_resume_dispatcher_instance
+
+
+def __getattr__(name: str) -> AgentResumeDispatcher:
+    if name == "agent_resume_dispatcher":
+        return _get_agent_resume_dispatcher()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -13,7 +13,7 @@ from langchain_milvus import Milvus
 from loguru import logger
 from sqlalchemy import text
 
-from app.config import config
+from app.core.config import AppSettings
 from app.core.milvus_client import milvus_manager
 from app.platform.persistence.database import get_engine
 
@@ -80,17 +80,20 @@ class DegradedVectorStoreAdapter:
 class VectorStoreManager:
     """Facade over the configured vector-store backend."""
 
-    def __init__(self, embedding_service: Embeddings):
+    def __init__(self, embedding_service: Embeddings, settings: AppSettings | None = None):
         self.embedding_service = embedding_service
-        backend = config.vector_store_backend.strip().lower()
+        settings = settings or AppSettings.from_env()
+        backend = settings.vector_store_backend.strip().lower()
         try:
             if backend == "pgvector":
                 self._backend: VectorStoreBackend = PgVectorStoreAdapter(
                     embedding_service=embedding_service,
-                    collection_name=config.pgvector_collection_name,
+                    collection_name=settings.pgvector_collection_name,
                 )
             else:
-                self._backend = MilvusVectorStoreAdapter(embedding_service=embedding_service)
+                self._backend = MilvusVectorStoreAdapter(
+                    embedding_service=embedding_service, settings=settings
+                )
         except Exception as exc:
             logger.warning(f"Vector store backend '{backend}' degraded during init: {exc}")
             self._backend = DegradedVectorStoreAdapter(backend_name=f"{backend}_degraded")
@@ -116,8 +119,10 @@ class VectorStoreManager:
         *,
         collection_name: str | None = None,
         score_threshold: float | None = None,
+        settings: AppSettings | None = None,
     ) -> list[Document]:
-        threshold = score_threshold if score_threshold is not None else config.rag_score_threshold
+        settings = settings or AppSettings.from_env()
+        threshold = score_threshold if score_threshold is not None else settings.rag_score_threshold
         return self._backend.similarity_search(
             query, k=k, collection_name=collection_name, score_threshold=threshold
         )
@@ -131,8 +136,9 @@ class MilvusVectorStoreAdapter:
 
     backend_name = "milvus"
 
-    def __init__(self, embedding_service: Embeddings):
+    def __init__(self, embedding_service: Embeddings, settings: AppSettings | None = None):
         self.embedding_service = embedding_service
+        self._settings = settings or AppSettings.from_env()
         self.vector_store: Milvus | None = None
         self.collection_name = COLLECTION_NAME
         self._initialize_vector_store()
@@ -148,7 +154,7 @@ class MilvusVectorStoreAdapter:
         try:
             _ = milvus_manager.connect()
             connection_args = {
-                "uri": f"http://{config.milvus_host}:{config.milvus_port}",
+                "uri": f"http://{self._settings.milvus_host}:{self._settings.milvus_port}",
             }
             self.vector_store = Milvus(
                 embedding_function=self.embedding_service,
@@ -162,7 +168,7 @@ class MilvusVectorStoreAdapter:
                 metadata_field="metadata",
             )
             logger.info(
-                f"Milvus VectorStore initialized: {config.milvus_host}:{config.milvus_port}, "
+                f"Milvus VectorStore initialized: {self._settings.milvus_host}:{self._settings.milvus_port}, "
                 f"collection={self.collection_name}"
             )
         except Exception as exc:

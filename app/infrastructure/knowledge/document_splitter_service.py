@@ -7,16 +7,18 @@ from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from loguru import logger
 
-from app.config import config
+from app.core.config import AppSettings
 
 
 class DocumentSplitterService:
     """文档分割服务 - 使用 LangChain 的分割器"""
 
-    def __init__(self):
+    def __init__(self, settings: AppSettings | None = None):
         """初始化文档分割服务"""
-        self.chunk_size = config.chunk_max_size
-        self.chunk_overlap = config.chunk_overlap
+        if settings is None:
+            settings = AppSettings.from_env()
+        self.chunk_size = settings.chunk_max_size
+        self.chunk_overlap = settings.chunk_overlap
 
         # Markdown 标题分割器 (只按一级和二级标题分割，减少分片数)
         self.markdown_splitter = MarkdownHeaderTextSplitter(
