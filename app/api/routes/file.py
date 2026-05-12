@@ -55,7 +55,7 @@ async def upload_file(
             safe_filename,
             safe_filename,
         )
-        await task_dispatcher.enqueue_indexing_task(
+        await task_dispatcher.enqueue_indexing_task(  # type: ignore[attr-defined]
             task_id,
             safe_filename,
         )
@@ -168,7 +168,7 @@ async def retry_index_task(
         raise HTTPException(status_code=409, detail="indexing_task_processing")
 
     indexing_task_repository.update_task(task_id, status="queued", error_message=None)
-    await task_dispatcher.enqueue_indexing_task(task_id, str(task["file_path"]))
+    await task_dispatcher.enqueue_indexing_task(task_id, str(task["file_path"]))  # type: ignore[attr-defined]
     requeued = indexing_task_repository.get_task(task_id)
     return json_response(
         status_code=202,

@@ -61,15 +61,15 @@ def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
         }
 
     health_data["task_dispatcher"] = {
-        "status": "running" if task_dispatcher.is_started else "external",
+        "status": "running" if task_dispatcher.is_started else "external",  # type: ignore[attr-defined]
         "message": (
             "Embedded task dispatcher is running"
-            if task_dispatcher.is_started
+            if task_dispatcher.is_started  # type: ignore[attr-defined]
             else f"Task dispatcher mode: {settings.task_dispatcher_mode}"
         ),
     }
     health_data["agent_resume_dispatcher"] = {
-        "status": "running" if agent_resume_dispatcher.is_started else "idle",
+        "status": "running" if agent_resume_dispatcher.is_started else "idle",  # type: ignore[attr-defined]
         "queue": settings.agent_resume_queue_name,
     }
 

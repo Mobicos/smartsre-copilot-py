@@ -57,7 +57,7 @@ class ToolCatalog:
         *,
         force_refresh: bool = False,
     ) -> list[ToolSchema]:
-        tools = await tool_registry.get_tools(scope, force_refresh=force_refresh)
+        tools = await tool_registry.get_tools(scope, force_refresh=force_refresh)  # type: ignore[attr-defined]
         return [_tool_to_schema(tool, scope=str(scope)) for tool in tools]
 
 
