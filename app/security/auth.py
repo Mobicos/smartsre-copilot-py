@@ -31,6 +31,13 @@ _api_key_roles_cache: tuple[str, str] | None = None
 _api_key_subjects_cache: tuple[str, str] | None = None
 
 
+def _clear_auth_caches() -> None:
+    """Reset all manual caches in this module (test helper)."""
+    global _api_key_roles_cache, _api_key_subjects_cache
+    _api_key_roles_cache = None
+    _api_key_subjects_cache = None
+
+
 def _get_settings() -> AppSettings:
     return AppSettings.from_env()
 
@@ -106,6 +113,13 @@ def load_api_key_subjects(settings: AppSettings | None = None) -> dict[str, str]
 
     _api_key_subjects_cache = cache_key
     return subjects
+
+
+# Expose cache_clear on both functions so tests can call
+# load_api_key_roles.cache_clear() / load_api_key_subjects.cache_clear()
+# without importing the private helper.
+load_api_key_roles.cache_clear = _clear_auth_caches  # type: ignore[attr-defined]
+load_api_key_subjects.cache_clear = _clear_auth_caches  # type: ignore[attr-defined]
 
 
 def _has_capability(role: str, capability: str) -> bool:
