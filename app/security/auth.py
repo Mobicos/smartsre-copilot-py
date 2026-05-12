@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from functools import lru_cache
 
 from fastapi import Header, HTTPException, Request, status
 from loguru import logger
 
-from app.config import config
+from app.core.config import AppSettings
 
 ROLE_CAPABILITIES = {
     "viewer": {"chat:read", "knowledge:read"},
@@ -27,18 +26,44 @@ class Principal:
     subject: str
 
 
-def is_auth_configured() -> bool:
+# Cache keys that encode the settings values so tests can use different configs.
+_api_key_roles_cache: tuple[str, str] | None = None
+_api_key_subjects_cache: tuple[str, str] | None = None
+
+
+def _clear_auth_caches() -> None:
+    """Reset all manual caches in this module (test helper)."""
+    global _api_key_roles_cache, _api_key_subjects_cache
+    _api_key_roles_cache = None
+    _api_key_subjects_cache = None
+
+
+def _get_settings() -> AppSettings:
+    return AppSettings.from_env()
+
+
+def is_auth_configured(settings: AppSettings | None = None) -> bool:
     """Return whether API-key authentication is configured."""
-    return bool(config.app_api_key or config.api_keys_json)
+    if settings is None:
+        settings = _get_settings()
+    return bool(settings.app_api_key or settings.api_keys_json)
 
 
-@lru_cache(maxsize=1)
-def load_api_key_roles() -> dict[str, str]:
-    """Load API key to role mappings from configuration."""
+def load_api_key_roles(settings: AppSettings | None = None) -> dict[str, str]:
+    """Load API key to role mappings from configuration.
+
+    Results are cached per (app_api_key, api_keys_json) tuple.
+    """
+    if settings is None:
+        settings = _get_settings()
+    cache_key = (settings.app_api_key, settings.api_keys_json)
+    global _api_key_roles_cache
+    if _api_key_roles_cache == cache_key:
+        return {}
     mapping: dict[str, str] = {}
-    if config.api_keys_json:
+    if settings.api_keys_json:
         try:
-            raw_mapping = json.loads(config.api_keys_json)
+            raw_mapping = json.loads(settings.api_keys_json)
             if isinstance(raw_mapping, dict):
                 for key, value in raw_mapping.items():
                     role = str(value)
@@ -51,19 +76,28 @@ def load_api_key_roles() -> dict[str, str]:
         except json.JSONDecodeError as exc:
             logger.warning(f"API_KEYS_JSON is not valid JSON: {exc}")
 
-    if config.app_api_key:
-        mapping.setdefault(config.app_api_key, "admin")
+    if settings.app_api_key:
+        mapping.setdefault(settings.app_api_key, "admin")
 
+    _api_key_roles_cache = cache_key
     return mapping
 
 
-@lru_cache(maxsize=1)
-def load_api_key_subjects() -> dict[str, str]:
-    """Load stable log subjects without deriving them from secret key material."""
+def load_api_key_subjects(settings: AppSettings | None = None) -> dict[str, str]:
+    """Load stable log subjects without deriving them from secret key material.
+
+    Results are cached per (app_api_key, api_keys_json) tuple.
+    """
+    if settings is None:
+        settings = _get_settings()
+    cache_key = (settings.app_api_key, settings.api_keys_json)
+    global _api_key_subjects_cache
+    if _api_key_subjects_cache == cache_key:
+        return {}
     subjects: dict[str, str] = {}
-    if config.api_keys_json:
+    if settings.api_keys_json:
         try:
-            raw_mapping = json.loads(config.api_keys_json)
+            raw_mapping = json.loads(settings.api_keys_json)
             if isinstance(raw_mapping, dict):
                 subject_index = 1
                 for key, value in raw_mapping.items():
@@ -74,10 +108,18 @@ def load_api_key_subjects() -> dict[str, str]:
         except json.JSONDecodeError:
             pass
 
-    if config.app_api_key:
-        subjects.setdefault(config.app_api_key, "key:primary")
+    if settings.app_api_key:
+        subjects.setdefault(settings.app_api_key, "key:primary")
 
+    _api_key_subjects_cache = cache_key
     return subjects
+
+
+# Expose cache_clear on both functions so tests can call
+# load_api_key_roles.cache_clear() / load_api_key_subjects.cache_clear()
+# without importing the private helper.
+load_api_key_roles.cache_clear = _clear_auth_caches  # type: ignore[attr-defined]
+load_api_key_subjects.cache_clear = _clear_auth_caches  # type: ignore[attr-defined]
 
 
 def _has_capability(role: str, capability: str) -> bool:
@@ -85,35 +127,41 @@ def _has_capability(role: str, capability: str) -> bool:
     return "*" in capabilities or capability in capabilities
 
 
-def validate_security_configuration() -> None:
-    """Validate production security requirements at startup."""
-    api_key_roles = load_api_key_roles()
-    cors_origins = config.cors_origins
+def validate_security_configuration(settings: AppSettings | None = None) -> None:
+    """Validate production security requirements at startup.
 
-    if config.is_production and not api_key_roles:
+    In production (ENVIRONMENT=production|staging), this raises RuntimeError
+    if critical security settings are missing or misconfigured.
+    """
+    if settings is None:
+        settings = _get_settings()
+    api_key_roles = load_api_key_roles(settings=settings)
+    cors_origins = settings.cors_origins()
+
+    if settings.is_production and not api_key_roles:
         raise RuntimeError(
             "APP_API_KEY or API_KEYS_JSON is required when ENVIRONMENT is production"
         )
 
-    if config.is_production and "*" in cors_origins:
+    if settings.is_production and "*" in cors_origins:
         raise RuntimeError(
             "CORS_ALLOWED_ORIGINS must not include '*' when ENVIRONMENT is production"
         )
 
     if (
-        config.is_production
-        and config.agent_decision_provider.strip().lower() == "qwen"
-        and not config.dashscope_api_key.strip()
+        settings.is_production
+        and settings.agent_decision_provider.strip().lower() == "qwen"
+        and not settings.dashscope_api_key.strip()
     ):
         raise RuntimeError(
             "DASHSCOPE_API_KEY is required when AGENT_DECISION_PROVIDER=qwen in production"
         )
 
-    redis_netloc = config.redis_url.split("://", 1)[-1].split("/", 1)[0]
+    redis_netloc = settings.redis_url.split("://", 1)[-1].split("/", 1)[0]
     if (
-        config.is_production
-        and config.task_queue_backend == "redis"
-        and not (config.redis_password.strip() or "@" in redis_netloc)
+        settings.is_production
+        and settings.task_queue_backend == "redis"
+        and not (settings.redis_password.strip() or "@" in redis_netloc)
     ):
         raise RuntimeError("REDIS_PASSWORD or an authenticated REDIS_URL is required in production")
 
@@ -121,12 +169,15 @@ def validate_security_configuration() -> None:
 async def get_current_principal(
     request: Request,
     x_api_key: str | None = Header(default=None),
+    settings: AppSettings | None = None,
 ) -> Principal:
     """Resolve the current request principal."""
-    api_key_roles = load_api_key_roles()
+    if settings is None:
+        settings = _get_settings()
+    api_key_roles = load_api_key_roles(settings=settings)
 
     if not api_key_roles:
-        if config.is_production:
+        if settings.is_production:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication is required in production",
@@ -137,7 +188,9 @@ async def get_current_principal(
         return principal
 
     if x_api_key and x_api_key in api_key_roles:
-        principal = Principal(role=api_key_roles[x_api_key], subject=_api_key_subject(x_api_key))
+        principal = Principal(
+            role=api_key_roles[x_api_key], subject=_api_key_subject(x_api_key, settings=settings)
+        )
         request.state.principal = principal
         logger.info(
             f"Authenticated request principal: subject={principal.subject}, role={principal.role}"
@@ -151,14 +204,15 @@ async def get_current_principal(
     )
 
 
-def require_capability(capability: str):
+def require_capability(capability: str, settings: AppSettings | None = None):
     """Return a FastAPI dependency that enforces one capability."""
+    _settings = settings if settings is not None else _get_settings()
 
     async def capability_dependency(
         request: Request,
         x_api_key: str | None = Header(default=None),
     ) -> Principal:
-        principal = await get_current_principal(request, x_api_key)
+        principal = await get_current_principal(request, x_api_key, settings=_settings)
         if _has_capability(principal.role, capability):
             return principal
 
@@ -173,11 +227,12 @@ def require_capability(capability: str):
 async def require_api_key(
     request: Request,
     x_api_key: str | None = Header(default=None),
+    settings: AppSettings | None = None,
 ) -> Principal:
     """Require an API key and return the associated principal."""
-    return await get_current_principal(request, x_api_key)
+    return await get_current_principal(request, x_api_key, settings=settings)
 
 
-def _api_key_subject(api_key: str) -> str:
+def _api_key_subject(api_key: str, settings: AppSettings | None = None) -> str:
     """Return a stable non-reversible API key subject for logs and audit rows."""
-    return load_api_key_subjects().get(api_key, "key:unknown")
+    return load_api_key_subjects(settings=settings).get(api_key, "key:unknown")

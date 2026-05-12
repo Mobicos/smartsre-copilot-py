@@ -9,7 +9,7 @@ from typing import cast
 
 from fastapi import Header, HTTPException, Request, status
 
-from app.config import config
+from app.core.config import AppSettings
 from app.security.auth import Principal, require_capability
 
 
@@ -63,6 +63,10 @@ class RateLimiter:
 rate_limiter = RateLimiter()
 
 
+def _get_settings() -> AppSettings:
+    return AppSettings.from_env()
+
+
 def require_stream_rate_limit(capability: str):
     """Return a dependency that authenticates and rate-limits high-cost streams."""
     capability_dependency = require_capability(capability)
@@ -76,8 +80,8 @@ def require_stream_rate_limit(capability: str):
             return principal
 
         policy = RateLimitPolicy(
-            requests_per_minute=config.rate_limit_streams_per_minute,
-            burst=config.rate_limit_burst,
+            requests_per_minute=_get_settings().rate_limit_streams_per_minute,
+            burst=_get_settings().rate_limit_burst,
         )
         key = _rate_limit_key(request, principal, scope="stream")
         if not rate_limiter.allow(key, policy):
@@ -91,7 +95,8 @@ def require_stream_rate_limit(capability: str):
 
 
 def _rate_limit_enabled() -> bool:
-    return config.rate_limit_enabled or config.is_production
+    settings = _get_settings()
+    return settings.rate_limit_enabled or settings.is_production
 
 
 def _rate_limit_key(request: Request, principal: Principal, *, scope: str) -> str:

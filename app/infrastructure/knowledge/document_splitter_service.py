@@ -1,22 +1,23 @@
 """文档分割服务模块 - 基于 LangChain 的智能文档分割"""
 
 from pathlib import Path
-from typing import cast
 
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from loguru import logger
 
-from app.config import config
+from app.core.config import AppSettings
 
 
 class DocumentSplitterService:
     """文档分割服务 - 使用 LangChain 的分割器"""
 
-    def __init__(self):
+    def __init__(self, settings: AppSettings | None = None):
         """初始化文档分割服务"""
-        self.chunk_size = config.chunk_max_size
-        self.chunk_overlap = config.chunk_overlap
+        if settings is None:
+            settings = AppSettings.from_env()
+        self.chunk_size = settings.chunk_max_size
+        self.chunk_overlap = settings.chunk_overlap
 
         # Markdown 标题分割器 (只按一级和二级标题分割，减少分片数)
         self.markdown_splitter = MarkdownHeaderTextSplitter(
@@ -109,7 +110,7 @@ class DocumentSplitterService:
             )
 
             logger.info(f"文本分割完成: {file_path} -> {len(docs)} 个分片")
-            return cast(list[Document], docs)
+            return docs
 
         except Exception as e:
             logger.error(f"文本分割失败: {file_path}, 错误: {e}")

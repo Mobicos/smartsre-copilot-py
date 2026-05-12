@@ -45,7 +45,7 @@ from app.agent_runtime.state import EvidenceItem
 from app.agent_runtime.synthesizer import ReportSynthesizer
 from app.agent_runtime.tool_catalog import ToolCatalog
 from app.agent_runtime.tool_executor import ToolExecutionResult, ToolExecutor
-from app.config import config
+from app.core.config import AppSettings
 
 
 @dataclass(frozen=True)
@@ -57,19 +57,23 @@ class RuntimeSafetyConfig:
     run_timeout_seconds: float = 120.0
 
     @classmethod
-    def from_scene(cls, scene: dict[str, Any]) -> RuntimeSafetyConfig:
+    def from_scene(
+        cls,
+        scene: dict[str, Any],
+        settings: AppSettings,
+    ) -> RuntimeSafetyConfig:
         agent_config = scene.get("agent_config")
         if not isinstance(agent_config, dict):
             agent_config = {}
 
         defaults = cls(
-            max_steps=_positive_int(config.agent_max_steps, default=cls.max_steps),
+            max_steps=_positive_int(settings.agent_max_steps, default=cls.max_steps),
             tool_timeout_seconds=_positive_float(
-                config.agent_step_timeout_seconds,
+                settings.agent_step_timeout_seconds,
                 default=cls.tool_timeout_seconds,
             ),
             run_timeout_seconds=_positive_float(
-                config.agent_total_timeout_seconds,
+                settings.agent_total_timeout_seconds,
                 default=cls.run_timeout_seconds,
             ),
         )
@@ -165,8 +169,9 @@ class EventRecorder:
 class MetricsCollector:
     """Derive and persist run-level metrics from stored events."""
 
-    def __init__(self, run_store: AgentRunStore) -> None:
+    def __init__(self, run_store: AgentRunStore, settings: AppSettings) -> None:
         self._run_store = run_store
+        self._settings = settings
 
     def persist(self, run_id: str) -> None:
         try:
@@ -178,8 +183,8 @@ class MetricsCollector:
                 run_id,
                 runtime_version=RUNTIME_VERSION,
                 trace_id=run_id,
-                model_name=_runtime_model_name(),
-                decision_provider=_runtime_decision_provider(),
+                model_name=_runtime_model_name(self._settings),
+                decision_provider=_runtime_decision_provider(self._settings),
                 step_count=_metric_step_count(events),
                 tool_call_count=len(_events_by_type(events, "tool_call")),
                 latency_ms=_latency_ms(run.get("created_at"), run.get("updated_at")),
@@ -385,6 +390,7 @@ class AgentRuntime:
 
     def __init__(
         self,
+        settings: AppSettings,
         *,
         tool_catalog: Any | None = None,
         tool_executor: Any | None = None,
@@ -398,11 +404,12 @@ class AgentRuntime:
         knowledge_context_provider: KnowledgeContextProvider | None = None,
         decision_runtime: AgentDecisionRuntime | None = None,
     ) -> None:
+        self._settings = settings
         self._scene_store = _required_dependency(scene_store, "scene_store")
         self._run_store = _required_dependency(run_store, "run_store")
         self._policy_store = _required_dependency(policy_store, "policy_store")
         self._event_recorder = EventRecorder(self._run_store)
-        self._metrics_collector = MetricsCollector(self._run_store)
+        self._metrics_collector = MetricsCollector(self._run_store, self._settings)
         self._tool_catalog = tool_catalog or ToolCatalog()
         tool_executor = tool_executor or ToolExecutor(policy_store=self._policy_store)
         self._planner = planner or AgentPlanner()
@@ -470,7 +477,7 @@ class AgentRuntime:
         if scene is None:
             raise ValueError(f"Scene not found: {scene_id}")
 
-        safety_config = RuntimeSafetyConfig.from_scene(scene)
+        safety_config = RuntimeSafetyConfig.from_scene(scene, self._settings)
         deadline = RuntimeDeadline.start(safety_config.run_timeout_seconds)
         run_id = self._run_store.create_run(
             workspace_id=str(scene["workspace_id"]),
@@ -1020,15 +1027,15 @@ def _decision_runtime_enabled(scene: dict[str, Any]) -> bool:
     return value if value is not None else True
 
 
-def _runtime_model_name() -> str:
-    provider = config.agent_decision_provider.strip().lower()
+def _runtime_model_name(settings: AppSettings) -> str:
+    provider = settings.agent_decision_provider.strip().lower()
     if provider == "qwen":
-        return config.dashscope_model
+        return settings.dashscope_model
     return "deterministic-native-agent"
 
 
-def _runtime_decision_provider() -> str:
-    provider = config.agent_decision_provider.strip().lower()
+def _runtime_decision_provider(settings: AppSettings) -> str:
+    provider = settings.agent_decision_provider.strip().lower()
     return provider or "deterministic"
 
 

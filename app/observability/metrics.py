@@ -15,7 +15,6 @@ from prometheus_client import (
 )
 from sqlalchemy import text
 
-from app.config import config
 from app.platform.persistence.database import get_engine
 
 METRICS_CONTENT_TYPE = CONTENT_TYPE_LATEST
@@ -104,7 +103,7 @@ _SCRAPE_ERRORS = Counter(
     registry=_REGISTRY,
 )
 
-_SERVICE_INFO.labels(service=config.app_name, version=config.app_version).set(1)
+_SERVICE_INFO.labels(service="SmartSRE Copilot", version="0.1.0.dev0").set(1)
 
 
 def observe_http_request(

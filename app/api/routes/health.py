@@ -9,9 +9,10 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from loguru import logger
 
 from app.api.providers import get_service_health, get_vector_store_manager
-from app.config import config
+from app.core.config import AppSettings
 from app.infrastructure import redis_manager
-from app.infrastructure.tasks import agent_resume_dispatcher, task_dispatcher
+from app.infrastructure.tasks.agent_resume import agent_resume_dispatcher
+from app.infrastructure.tasks.dispatcher import task_dispatcher
 from app.observability import METRICS_CONTENT_TYPE, render_prometheus_metrics
 from app.platform.persistence.database import health_check as db_health_check
 from app.platform.persistence.repositories.indexing import indexing_task_repository
@@ -27,10 +28,15 @@ _DEGRADED_STATUSES = {
 }
 
 
+def _get_settings() -> AppSettings:
+    return AppSettings.from_env()
+
+
 def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
+    settings = _get_settings()
     health_data: dict[str, Any] = {
-        "service": config.app_name,
-        "version": config.app_version,
+        "service": settings.app_name,
+        "version": settings.app_version,
         "status": "healthy",
     }
 
@@ -47,7 +53,7 @@ def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
         "message": "Database connected" if database_healthy else "Database disconnected",
     }
 
-    if config.task_queue_backend == "redis":
+    if settings.task_queue_backend == "redis":
         redis_healthy = redis_manager.health_check()
         health_data["redis"] = {
             "status": "connected" if redis_healthy else "disconnected",
@@ -55,16 +61,16 @@ def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
         }
 
     health_data["task_dispatcher"] = {
-        "status": "running" if task_dispatcher.is_started else "external",
+        "status": "running" if task_dispatcher.is_started else "external",  # type: ignore[attr-defined]
         "message": (
             "Embedded task dispatcher is running"
-            if task_dispatcher.is_started
-            else f"Task dispatcher mode: {config.task_dispatcher_mode}"
+            if task_dispatcher.is_started  # type: ignore[attr-defined]
+            else f"Task dispatcher mode: {settings.task_dispatcher_mode}"
         ),
     }
     health_data["agent_resume_dispatcher"] = {
-        "status": "running" if agent_resume_dispatcher.is_started else "idle",
-        "queue": config.agent_resume_queue_name,
+        "status": "running" if agent_resume_dispatcher.is_started else "idle",  # type: ignore[attr-defined]
+        "queue": settings.agent_resume_queue_name,
     }
 
     try:
@@ -94,7 +100,7 @@ def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
     except Exception as exc:
         logger.warning(f"Vector backend health check failed: {exc}")
         health_data["vector_backend"] = {
-            "backend": config.vector_store_backend,
+            "backend": settings.vector_store_backend,
             "status": "error",
             "message": str(exc),
         }
@@ -127,7 +133,7 @@ def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
         status_code = 503
         health_data["error"] = "Database unavailable"
 
-    if config.task_queue_backend == "redis" and health_data["redis"]["status"] != "connected":
+    if settings.task_queue_backend == "redis" and health_data["redis"]["status"] != "connected":
         overall_status = "unhealthy"
         status_code = 503
         health_data["error"] = "Redis unavailable"
@@ -149,14 +155,15 @@ def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
 
 @router.get("/health/live")
 async def live_health_check():
+    settings = _get_settings()
     return JSONResponse(
         status_code=200,
         content={
             "code": 200,
             "message": "alive",
             "data": {
-                "service": config.app_name,
-                "version": config.app_version,
+                "service": settings.app_name,
+                "version": settings.app_version,
                 "status": "alive",
             },
         },

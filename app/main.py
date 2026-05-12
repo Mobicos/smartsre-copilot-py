@@ -65,8 +65,8 @@ async def lifespan(app: FastAPI):
 
     if config.task_dispatcher_mode == "embedded":
         logger.info("Starting embedded task dispatchers...")
-        await task_dispatcher.start()
-        await agent_resume_dispatcher.start()
+        await task_dispatcher.start()  # type: ignore[attr-defined]
+        await agent_resume_dispatcher.start()  # type: ignore[attr-defined]
         logger.info("Embedded task dispatchers started")
     else:
         logger.info("Using detached task dispatcher mode via app/worker.py")
@@ -79,10 +79,10 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    if task_dispatcher.is_started:
+    if task_dispatcher.is_started:  # type: ignore[attr-defined]
         logger.info("Shutting down embedded task dispatchers...")
-        await agent_resume_dispatcher.shutdown()
-        await task_dispatcher.shutdown()
+        await agent_resume_dispatcher.shutdown()  # type: ignore[attr-defined]
+        await task_dispatcher.shutdown()  # type: ignore[attr-defined]
     logger.info("Shutting down application services...")
     await shutdown_services()
     logger.info(f"Stopped {config.app_name}")

@@ -8,7 +8,7 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 from loguru import logger
 
-from app.config import config
+from app.core.config import AppSettings
 
 _RedisClient: Any = None
 _RedisError: Any = Exception
@@ -34,8 +34,9 @@ RedisError = _RedisError
 class RedisManager:
     """Simple Redis connection wrapper for queue operations."""
 
-    def __init__(self, redis_url: str) -> None:
+    def __init__(self, redis_url: str, settings: AppSettings) -> None:
         self.redis_url = redis_url
+        self._settings = settings
         self._client: Any | None = None
 
     @property
@@ -51,7 +52,7 @@ class RedisManager:
         if RedisClient is None:
             raise RuntimeError("Redis support requires the optional 'redis' dependency")
 
-        redis_url = _redis_url_with_configured_password(self.redis_url)
+        redis_url = _redis_url_with_configured_password(self.redis_url, self._settings)
         self._client = RedisClient.from_url(redis_url, decode_responses=True)
         self._client.ping()
         logger.info("Redis initialized")
@@ -113,15 +114,40 @@ class RedisManager:
         return cast(dict[str, Any], payload)
 
 
-redis_manager = RedisManager(config.redis_url)
-
-
-def _redis_url_with_configured_password(redis_url: str) -> str:
-    if not config.redis_password.strip():
+def _redis_url_with_configured_password(redis_url: str, settings: AppSettings) -> str:
+    if not settings.redis_password.strip():
         return redis_url
     parts = urlsplit(redis_url)
     if "@" in parts.netloc:
         return redis_url
-    password = quote(config.redis_password, safe="")
+    password = quote(settings.redis_password, safe="")
     netloc = f":{password}@{parts.netloc}"
     return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
+
+# Lazy-initialized singleton. Replaces the old module-level `redis_manager = RedisManager(...)`.
+_redis_manager_instance: RedisManager | None = None
+_redis_settings: AppSettings | None = None
+
+
+def _get_redis_manager() -> RedisManager:
+    """Return the lazily-initialized global RedisManager instance."""
+    global _redis_manager_instance, _redis_settings
+    if _redis_manager_instance is None:
+        settings = _redis_settings if _redis_settings is not None else AppSettings.from_env()
+        _redis_manager_instance = RedisManager(settings.redis_url, settings=settings)
+    return _redis_manager_instance
+
+
+def _configure_redis_manager(settings: AppSettings) -> None:
+    """Update the global redis manager settings (for testing / reconfiguration)."""
+    global _redis_manager_instance, _redis_settings
+    _redis_settings = settings
+    _redis_manager_instance = None
+
+
+def __getattr__(name: str) -> RedisManager:
+    """Support `from app.infrastructure.redis_client import redis_manager`."""
+    if name == "redis_manager":
+        return _get_redis_manager()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

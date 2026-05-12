@@ -7,7 +7,7 @@ from collections.abc import Callable
 
 from loguru import logger
 
-from app.config import config
+from app.core.config import AppSettings
 from app.infrastructure import redis_manager
 from app.platform.persistence.repositories.indexing import indexing_task_repository
 
@@ -29,9 +29,11 @@ class LocalTaskDispatcher:
 
     def __init__(
         self,
+        settings: AppSettings | None = None,
         *,
         indexing_task_processor: IndexingTaskProcessor | None = None,
     ) -> None:
+        self._settings = settings or AppSettings.from_env()
         self._wake_event = asyncio.Event()
         self._worker_task: asyncio.Task[None] | None = None
         self._started = False
@@ -44,12 +46,12 @@ class LocalTaskDispatcher:
 
         self._started = True
         requeued = indexing_task_repository.requeue_stale_processing_tasks(
-            config.task_requeue_timeout_seconds
+            self._settings.task_requeue_timeout_seconds
         )
         if requeued:
             logger.warning(f"已重新入队 {requeued} 个超时 processing 任务")
 
-        if config.task_queue_backend == "redis":
+        if self._settings.task_queue_backend == "redis":
             redis_manager.initialize()
             self._republish_queued_tasks_to_redis()
 
@@ -70,9 +72,9 @@ class LocalTaskDispatcher:
     async def enqueue_indexing_task(self, task_id: str, file_path: str) -> None:
         """通知调度器有新任务入队。"""
         logger.info(f"索引任务已入队: {task_id}, file={file_path}")
-        if config.task_queue_backend == "redis":
+        if self._settings.task_queue_backend == "redis":
             redis_manager.enqueue_json(
-                config.redis_task_queue_name,
+                self._settings.redis_task_queue_name,
                 {"task_id": task_id, "file_path": file_path},
             )
             return
@@ -82,11 +84,11 @@ class LocalTaskDispatcher:
 
     async def _worker_loop(self) -> None:
         """持续消费索引任务。"""
-        if config.task_queue_backend == "redis":
+        if self._settings.task_queue_backend == "redis":
             await self._redis_worker_loop()
             return
 
-        poll_interval = max(config.task_poll_interval_ms, 100) / 1000
+        poll_interval = max(self._settings.task_poll_interval_ms, 100) / 1000
         while self._started:
             task = indexing_task_repository.claim_next_queued_task()
             if task is not None:
@@ -106,7 +108,7 @@ class LocalTaskDispatcher:
         while self._started:
             payload = await asyncio.to_thread(
                 redis_manager.dequeue_json,
-                config.redis_task_queue_name,
+                self._settings.redis_task_queue_name,
                 1,
             )
             if payload is None:
@@ -126,7 +128,7 @@ class LocalTaskDispatcher:
             result = self._indexing_task_processor(task_id, file_path)
             if result == "queued":
                 redis_manager.enqueue_json(
-                    config.redis_task_queue_name,
+                    self._settings.redis_task_queue_name,
                     {"task_id": task_id, "file_path": file_path},
                 )
 
@@ -135,7 +137,7 @@ class LocalTaskDispatcher:
         queued_tasks = indexing_task_repository.list_tasks_by_status(["queued"])
         for task in queued_tasks:
             redis_manager.enqueue_json(
-                config.redis_task_queue_name,
+                self._settings.redis_task_queue_name,
                 {"task_id": task["task_id"], "file_path": task["file_path"]},
             )
 
@@ -145,4 +147,18 @@ class LocalTaskDispatcher:
         return self._started
 
 
-task_dispatcher = LocalTaskDispatcher()
+def _get_task_dispatcher() -> LocalTaskDispatcher:
+    """Return the lazily-initialized module-level dispatcher."""
+    global _task_dispatcher_instance
+    if _task_dispatcher_instance is None:
+        _task_dispatcher_instance = LocalTaskDispatcher()
+    return _task_dispatcher_instance
+
+
+_task_dispatcher_instance: LocalTaskDispatcher | None = None
+
+
+def __getattr__(name: str) -> LocalTaskDispatcher:
+    if name == "task_dispatcher":
+        return _get_task_dispatcher()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
