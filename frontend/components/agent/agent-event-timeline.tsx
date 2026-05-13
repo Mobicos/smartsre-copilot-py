@@ -130,7 +130,7 @@ export function AgentEventTimeline({ events, isRunning }: AgentEventTimelineProp
             <div className="flex-1 min-w-0 rounded-md border border-dashed border-primary/30 bg-primary/5 p-3">
               <div className="flex items-center gap-2 text-xs text-primary">
                 <Loader2 className="size-3 animate-spin" />
-                <span>Agent is working...</span>
+                <span>Agent 运行中...</span>
               </div>
             </div>
           </div>
@@ -142,24 +142,24 @@ export function AgentEventTimeline({ events, isRunning }: AgentEventTimelineProp
 
 function formatEventType(type: string): string {
   const labels: Record<string, string> = {
-    run_started: "Run Started",
-    hypothesis: "Hypothesis",
-    knowledge_context: "Knowledge Context",
-    decision: "Decision",
-    approval_required: "Approval Required",
-    approval_decision: "Approval Decision",
-    approval_resume: "Approval Resume",
-    approval_resumed_tool_result: "Approved Tool Result",
-    tool_call: "Tool Call",
-    tool_result: "Tool Result",
-    limit_reached: "Limit Reached",
-    timeout: "Timeout",
-    recover: "Recover",
-    handoff: "Handoff",
-    final_report: "Final Report",
-    complete: "Complete",
-    error: "Error",
-    cancelled: "Cancelled",
+    run_started: "运行开始",
+    hypothesis: "假设",
+    knowledge_context: "知识上下文",
+    decision: "决策",
+    approval_required: "需要审批",
+    approval_decision: "审批决策",
+    approval_resume: "审批恢复",
+    approval_resumed_tool_result: "已审批工具结果",
+    tool_call: "工具调用",
+    tool_result: "工具结果",
+    limit_reached: "达到限制",
+    timeout: "超时",
+    recover: "恢复",
+    handoff: "交接",
+    final_report: "最终报告",
+    complete: "完成",
+    error: "错误",
+    cancelled: "已取消",
   }
   return labels[type] || type
 }
@@ -177,7 +177,7 @@ function formatPayloadSummary(payload: unknown): string {
 function formatTime(timestamp: string): string {
   try {
     const date = new Date(timestamp)
-    return date.toLocaleTimeString("en-US", {
+    return date.toLocaleTimeString("zh-CN", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",

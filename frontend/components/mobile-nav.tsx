@@ -20,14 +20,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { cn } from "@/lib/utils"
 
 const NAV = [
-  { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/agent", label: "Diagnose", icon: Stethoscope },
-  { href: "/agent/history", label: "History", icon: History },
-  { href: "/agent/approvals", label: "Approvals", icon: ShieldCheck },
-  { href: "/scenarios", label: "Scenarios", icon: Route },
-  { href: "/operations", label: "Operations", icon: ServerCog },
-  { href: "/contracts", label: "API Contracts", icon: FileText },
-  { href: "/knowledge", label: "Knowledge", icon: BookOpen },
+  { href: "/chat", label: "对话", icon: MessageSquare },
+  { href: "/agent", label: "诊断", icon: Stethoscope },
+  { href: "/agent/history", label: "历史记录", icon: History },
+  { href: "/agent/approvals", label: "审批", icon: ShieldCheck },
+  { href: "/scenarios", label: "场景", icon: Route },
+  { href: "/operations", label: "运维", icon: ServerCog },
+  { href: "/contracts", label: "API 契约", icon: FileText },
+  { href: "/knowledge", label: "知识库", icon: BookOpen },
 ] as const
 
 export function MobileNav() {

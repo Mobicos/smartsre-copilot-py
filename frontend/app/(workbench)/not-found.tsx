@@ -10,18 +10,18 @@ export default function WorkbenchNotFound() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <FileQuestion className="size-4 text-muted-foreground" />
-            Page not found
+            页面未找到
           </CardTitle>
           <CardDescription>
-            This workbench page does not exist. Check the URL or navigate back.
+            此工作台页面不存在，请检查 URL 或返回。
           </CardDescription>
         </CardHeader>
         <CardContent className="flex gap-2">
           <Button asChild>
-            <Link href="/agent">Agent Console</Link>
+            <Link href="/agent">Agent 控制台</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/chat">Go to chat</Link>
+            <Link href="/chat">返回对话</Link>
           </Button>
         </CardContent>
       </Card>

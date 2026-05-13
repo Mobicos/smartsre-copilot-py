@@ -10,15 +10,15 @@ export default function NotFound() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <FileQuestion className="size-4 text-muted-foreground" />
-            Page not found
+            页面未找到
           </CardTitle>
           <CardDescription>
-            The page you are looking for does not exist or has been moved.
+            您访问的页面不存在或已被移动。
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Button asChild>
-            <Link href="/chat">Go to chat</Link>
+            <Link href="/chat">返回对话</Link>
           </Button>
         </CardContent>
       </Card>

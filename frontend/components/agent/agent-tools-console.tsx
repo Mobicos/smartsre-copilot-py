@@ -25,7 +25,7 @@ export function AgentToolsConsole() {
   const loadTools = useAgentWorkbenchStore((state) => state.loadTools)
 
   useEffect(() => {
-    void loadTools().catch(() => toast.error("Failed to load tools"))
+    void loadTools().catch(() => toast.error("加载工具失败"))
   }, [loadTools])
 
   if (loading) {
@@ -40,18 +40,18 @@ export function AgentToolsConsole() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Tool Registry</h1>
+          <h1 className="text-2xl font-bold">工具注册表</h1>
           <p className="text-sm text-muted-foreground">
-            {tools.length} tool{tools.length !== 1 ? "s" : ""} registered
+            已注册 {tools.length} 个工具
           </p>
         </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => void loadTools().catch(() => toast.error("Failed to load tools"))}
+          onClick={() => void loadTools().catch(() => toast.error("加载工具失败"))}
         >
           <RefreshCw className="mr-2 size-4" />
-          Refresh
+          刷新
         </Button>
       </div>
 
@@ -66,7 +66,7 @@ export function AgentToolsConsole() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <Wrench className="mb-4 size-8" />
-            <p>No tools registered</p>
+            <p>暂无工具</p>
           </CardContent>
         </Card>
       ) : (
@@ -98,25 +98,25 @@ function ToolCard({ tool }: { tool: NativeTool }) {
             {approvalRequired && (
               <Badge variant="outline" className="text-xs">
                 <ShieldAlert className="mr-1 size-3" />
-                approval
+                需审批
               </Badge>
             )}
             {!enabled && (
               <Badge variant="secondary" className="text-xs">
-                disabled
+                已禁用
               </Badge>
             )}
           </div>
         </div>
         <CardDescription className="line-clamp-2">
-          {tool.description || "No description"}
+          {tool.description || "暂无描述"}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 text-xs text-muted-foreground">
         {tool.owner && (
           <div className="flex items-center gap-1.5">
             <Shield className="size-3" />
-            <span>Owner: {tool.owner}</span>
+            <span>所有者：{tool.owner}</span>
           </div>
         )}
         {tool.allowed_scopes && tool.allowed_scopes.length > 0 && (
@@ -131,7 +131,7 @@ function ToolCard({ tool }: { tool: NativeTool }) {
         {tool.schema && (
           <details className="mt-2">
             <summary className="cursor-pointer text-xs font-medium text-foreground/70 hover:text-foreground">
-              Schema
+              模式
             </summary>
             <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted p-2 text-[10px]">
               {JSON.stringify(tool.schema, null, 2)}

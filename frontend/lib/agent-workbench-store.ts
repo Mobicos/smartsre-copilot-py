@@ -156,5 +156,5 @@ function handleFetchError(error: unknown, setError: (message: string) => void) {
   if (isAbortError(error)) {
     return
   }
-  setError(error instanceof Error ? error.message : "Request failed")
+  setError(error instanceof Error ? error.message : "请求失败")
 }

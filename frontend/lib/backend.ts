@@ -19,7 +19,11 @@ export function buildHeaders(extra: Record<string, string> = {}): Headers {
   return headers
 }
 
-export async function backendFetch(path: string, init: RequestInit = {}) {
+export async function backendFetch(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs?: number,
+) {
   const headers = buildHeaders(
     (init.headers as Record<string, string> | undefined) ?? {},
   )
@@ -27,7 +31,7 @@ export async function backendFetch(path: string, init: RequestInit = {}) {
     headers.set("content-type", "application/json")
   }
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), timeoutMs ?? BACKEND_TIMEOUT_MS)
   try {
     return await fetch(`${BACKEND_URL}${path}`, {
       ...init,

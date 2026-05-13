@@ -5,11 +5,15 @@ export const runtime = "nodejs"
 
 export async function POST(req: Request) {
   try {
-    const res = await backendFetch("/api/agent/runs/stream", {
-      method: "POST",
-      body: await req.text(),
-      headers: { accept: "text/event-stream" },
-    })
+    const res = await backendFetch(
+      "/api/agent/runs/stream",
+      {
+        method: "POST",
+        body: await req.text(),
+        headers: { accept: "text/event-stream" },
+      },
+      150_000,
+    )
 
     return new Response(res.body, {
       status: res.status,

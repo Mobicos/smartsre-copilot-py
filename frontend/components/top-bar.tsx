@@ -6,14 +6,14 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { MobileNav } from "@/components/mobile-nav"
 
 const TITLES = [
-  { path: "/agent/approvals", title: "Approvals", subtitle: "Tool approvals and resumes" },
-  { path: "/agent/history", title: "History", subtitle: "Past runs and replays" },
-  { path: "/agent", title: "Diagnose", subtitle: "Native agent runs and traces" },
-  { path: "/chat", title: "Chat", subtitle: "Conversation and response trace" },
-  { path: "/contracts", title: "API Contracts", subtitle: "OpenAPI snapshot and diff" },
-  { path: "/knowledge", title: "Knowledge", subtitle: "Uploads, indexing, and documents" },
-  { path: "/operations", title: "Operations", subtitle: "Runtime health and service readiness" },
-  { path: "/scenarios", title: "Scenarios", subtitle: "Regression scenarios and evaluation" },
+  { path: "/agent/approvals", title: "审批", subtitle: "工具审批与恢复" },
+  { path: "/agent/history", title: "历史记录", subtitle: "运行记录与回放" },
+  { path: "/agent", title: "诊断", subtitle: "Agent 运行与追踪" },
+  { path: "/chat", title: "对话", subtitle: "对话与响应追踪" },
+  { path: "/contracts", title: "API 契约", subtitle: "OpenAPI 快照与差异" },
+  { path: "/knowledge", title: "知识库", subtitle: "上传、索引与文档" },
+  { path: "/operations", title: "运维", subtitle: "运行时健康与服务就绪" },
+  { path: "/scenarios", title: "场景", subtitle: "回归场景与评估" },
 ] as const
 
 export function TopBar() {

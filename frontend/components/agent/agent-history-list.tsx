@@ -19,27 +19,27 @@ import { cn } from "@/lib/utils"
 const STATUS_CONFIG: Record<string, { icon: ElementType; label: string; className: string }> = {
   completed: {
     icon: CheckCircle2,
-    label: "Done",
+    label: "完成",
     className: "text-success bg-success/10 border-success/20",
   },
   running: {
     icon: Loader2,
-    label: "Running",
+    label: "运行中",
     className: "text-primary bg-primary/10 border-primary/20",
   },
   failed: {
     icon: XCircle,
-    label: "Failed",
+    label: "失败",
     className: "text-destructive bg-destructive/10 border-destructive/20",
   },
   waiting_approval: {
     icon: AlertTriangle,
-    label: "Approval",
+    label: "审批中",
     className: "text-amber-600 bg-amber-500/10 border-amber-500/20",
   },
   handoff_required: {
     icon: AlertTriangle,
-    label: "Handoff",
+    label: "交接中",
     className: "text-cyan-600 bg-cyan-500/10 border-cyan-500/20",
   },
 }
@@ -51,7 +51,7 @@ export function AgentHistoryList() {
   const loadRuns = useAgentWorkbenchStore((state) => state.loadRuns)
 
   useEffect(() => {
-    void loadRuns().catch(() => toast.error("Failed to load history"))
+    void loadRuns().catch(() => toast.error("加载历史记录失败"))
   }, [loadRuns])
 
   if (loading) {
@@ -66,13 +66,13 @@ export function AgentHistoryList() {
     <div className="h-full overflow-y-auto scrollbar-thin">
       <div className="mx-auto max-w-4xl px-4 py-6 md:px-6">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">History</h1>
+          <h1 className="text-2xl font-bold">历史记录</h1>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void loadRuns().catch(() => toast.error("Failed to load history"))}
+            onClick={() => void loadRuns().catch(() => toast.error("加载历史记录失败"))}
           >
-            Refresh
+            刷新
           </Button>
         </div>
 
@@ -86,9 +86,9 @@ export function AgentHistoryList() {
         ) : runs.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
-              <p className="text-sm text-muted-foreground">No runs yet</p>
+              <p className="text-sm text-muted-foreground">暂无运行记录</p>
               <Button asChild className="mt-4" size="sm">
-                <Link href="/agent">Start Diagnosis</Link>
+                <Link href="/agent">开始诊断</Link>
               </Button>
             </CardContent>
           </Card>
@@ -157,7 +157,7 @@ export function AgentHistoryList() {
 function formatDate(timestamp: string): string {
   try {
     const date = new Date(timestamp)
-    return date.toLocaleString("en-US", {
+    return date.toLocaleString("zh-CN", {
       month: "short",
       day: "numeric",
       hour: "2-digit",

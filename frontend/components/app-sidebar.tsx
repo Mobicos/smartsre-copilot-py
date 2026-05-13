@@ -17,15 +17,15 @@ import {
 import { cn } from "@/lib/utils"
 
 const NAV = [
-  { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/agent", label: "Diagnose", icon: Stethoscope },
-  { href: "/agent/history", label: "History", icon: History },
-  { href: "/agent/approvals", label: "Approvals", icon: ShieldCheck },
-  { href: "/agent/tools", label: "Tools", icon: Wrench },
-  { href: "/scenarios", label: "Scenarios", icon: Route },
-  { href: "/knowledge", label: "Knowledge", icon: BookOpen },
-  { href: "/operations", label: "Operations", icon: ServerCog },
-  { href: "/contracts", label: "API Contracts", icon: FileText },
+  { href: "/chat", label: "对话", icon: MessageSquare },
+  { href: "/agent", label: "诊断", icon: Stethoscope },
+  { href: "/agent/history", label: "历史记录", icon: History },
+  { href: "/agent/approvals", label: "审批", icon: ShieldCheck },
+  { href: "/agent/tools", label: "工具", icon: Wrench },
+  { href: "/scenarios", label: "场景", icon: Route },
+  { href: "/knowledge", label: "知识库", icon: BookOpen },
+  { href: "/operations", label: "运维", icon: ServerCog },
+  { href: "/contracts", label: "API 契约", icon: FileText },
 ]
 
 export function AppSidebar() {
@@ -42,7 +42,7 @@ export function AppSidebar() {
         </div>
         <div className="flex flex-col">
           <span className="text-sm font-semibold leading-tight">SmartSRE</span>
-          <span className="text-xs text-muted-foreground leading-tight">SRE Copilot</span>
+          <span className="text-xs text-muted-foreground leading-tight">SRE 副驾</span>
         </div>
       </div>
 

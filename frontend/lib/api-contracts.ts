@@ -56,7 +56,7 @@ export function toBackendChatRequest(payload: ChatRequestPayload): BackendChatRe
   const question = payload.Question ?? payload.question ?? payload.query
 
   if (!id || !question) {
-    throw new Error("Chat requests require both session id and question")
+    throw new Error("聊天请求需要会话 ID 和问题内容")
   }
 
   return { Id: id, Question: question }

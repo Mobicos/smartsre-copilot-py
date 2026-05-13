@@ -37,7 +37,7 @@ export function ScenarioRegressionConsole() {
       setScenarios(items)
       setSelectedScenarioId((current) => current || items[0]?.id || "")
     } catch (err) {
-      toast.error((err as Error).message || "Failed to load scenarios")
+      toast.error((err as Error).message || "加载场景失败")
     } finally {
       setLoading(false)
     }
@@ -49,7 +49,7 @@ export function ScenarioRegressionConsole() {
 
   const evaluate = useCallback(async () => {
     if (!selectedScenarioId || !runId.trim()) {
-      toast.error("Select a scenario and enter a run id")
+      toast.error("请选择场景并输入运行 ID")
       return
     }
     setEvaluating(true)
@@ -71,7 +71,7 @@ export function ScenarioRegressionConsole() {
       setEvaluation(data as RegressionEvaluation)
       toast.success(`Scenario ${(data as RegressionEvaluation).status}`)
     } catch (err) {
-      toast.error((err as Error).message || "Evaluation failed")
+      toast.error((err as Error).message || "评估失败")
     } finally {
       setEvaluating(false)
     }
@@ -89,9 +89,9 @@ export function ScenarioRegressionConsole() {
     <div className="h-full overflow-y-auto scrollbar-thin">
       <div className="mx-auto max-w-6xl px-4 py-6 md:px-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold">Scenario Regression</h1>
+          <h1 className="text-2xl font-bold">场景回归</h1>
           <Button variant="outline" size="sm" onClick={() => void loadScenarios()}>
-            <RefreshCw className="size-4" /> Refresh
+            <RefreshCw className="size-4" /> 刷新
           </Button>
         </div>
 
@@ -143,12 +143,12 @@ export function ScenarioRegressionConsole() {
           <div className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Evaluate Run</CardTitle>
+                <CardTitle className="text-base">评估运行</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="rounded-md bg-muted/50 p-3">
                   <p className="text-sm font-medium">
-                    {selectedScenario?.title || "No scenario selected"}
+                    {selectedScenario?.title || "未选择场景"}
                   </p>
                   <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">
                     {selectedScenario?.goal}
@@ -157,7 +157,7 @@ export function ScenarioRegressionConsole() {
                 <Input
                   value={runId}
                   onChange={(event) => setRunId(event.target.value)}
-                  placeholder="Agent run id"
+                  placeholder="Agent 运行 ID"
                   className="font-mono"
                 />
                 <Button
@@ -170,7 +170,7 @@ export function ScenarioRegressionConsole() {
                   ) : (
                     <PlayCircle className="size-4" />
                   )}
-                  Evaluate
+                  评估
                 </Button>
               </CardContent>
             </Card>
@@ -179,7 +179,7 @@ export function ScenarioRegressionConsole() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between gap-3 text-base">
-                    <span>Result</span>
+                    <span>结果</span>
                     <span
                       className={cn(
                         "rounded-full px-2 py-0.5 text-xs font-medium",
@@ -194,9 +194,9 @@ export function ScenarioRegressionConsole() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-3 gap-2 text-center">
-                    <Metric label="Score" value={`${Math.round(evaluation.score * 100)}%`} />
-                    <Metric label="Events" value={evaluation.summary.event_count ?? 0} />
-                    <Metric label="Failed" value={evaluation.summary.failed_checks ?? 0} />
+                    <Metric label="得分" value={`${Math.round(evaluation.score * 100)}%`} />
+                    <Metric label="事件" value={evaluation.summary.event_count ?? 0} />
+                    <Metric label="失败" value={evaluation.summary.failed_checks ?? 0} />
                   </div>
                   <div className="space-y-2">
                     {evaluation.checks.map((check) => (

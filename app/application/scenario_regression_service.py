@@ -35,9 +35,9 @@ class RegressionScenario:
 SCENARIOS: tuple[RegressionScenario, ...] = (
     RegressionScenario(
         id="agent-runtime-safety-boundary",
-        title="Agent runtime safety boundary",
+        title="Agent 运行时安全边界",
         priority="P0",
-        goal="Diagnose a production latency incident while respecting runtime budget and tool governance.",
+        goal="诊断生产环境延迟事故，同时遵守运行时预算和工具治理。",
         expected_signals=("latency", "evidence", "tool", "report"),
         required_event_types=("run_started", "hypothesis", "tool_result", "final_report"),
         blocked_terms=("release ready", "planned release"),
@@ -45,9 +45,9 @@ SCENARIOS: tuple[RegressionScenario, ...] = (
     ),
     RegressionScenario(
         id="approval-resume-high-risk-tool",
-        title="Approval resume for high-risk tools",
+        title="高风险工具审批恢复",
         priority="P1",
-        goal="Request approval for a high-risk action and resume only after an audited approval decision.",
+        goal="对高风险操作请求审批，仅在审计通过后恢复执行。",
         expected_signals=("approval", "resume", "checkpoint"),
         required_event_types=("tool_result", "approval_decision", "approval_resume"),
         blocked_terms=("execute_without_checkpoint", "regenerate_high_risk_action:true"),
@@ -55,27 +55,27 @@ SCENARIOS: tuple[RegressionScenario, ...] = (
     ),
     RegressionScenario(
         id="knowledge-grounded-report",
-        title="Knowledge grounded final report",
+        title="基于知识库的最终报告",
         priority="P1",
-        goal="Use retrieved knowledge context and produce an evidence-grounded diagnosis report.",
+        goal="使用检索到的知识上下文，生成基于证据的诊断报告。",
         expected_signals=("knowledge", "citation", "evidence"),
         required_event_types=("knowledge_context", "final_report"),
         blocked_terms=("root cause confirmed without evidence", "unknown exact root cause"),
     ),
     RegressionScenario(
         id="decision-runtime-checkpoint",
-        title="Decision runtime checkpoint",
+        title="决策运行时检查点",
         priority="P2",
-        goal="Record decision state and checkpoint namespace for decision-runtime enabled agent runs.",
+        goal="为启用决策运行时的 Agent 运行记录决策状态和检查点命名空间。",
         expected_signals=("decision", "checkpoint", "agent-v2"),
         required_event_types=("decision", "final_report"),
         blocked_terms=("traceback", "exception"),
     ),
     RegressionScenario(
         id="cpu_high",
-        title="CPU high utilization diagnosis",
+        title="CPU 高利用率诊断",
         priority="P0",
-        goal="Diagnose CPU saturation on production hosts and identify the root-cause process or query.",
+        goal="诊断生产主机 CPU 饱和问题，定位根因进程或查询。",
         expected_signals=("cpu", "evidence", "process"),
         required_event_types=("run_started", "tool_result", "final_report"),
         blocked_terms=("root cause confirmed without evidence",),
@@ -83,9 +83,9 @@ SCENARIOS: tuple[RegressionScenario, ...] = (
     ),
     RegressionScenario(
         id="http_5xx_spike",
-        title="HTTP 5xx spike diagnosis",
+        title="HTTP 5xx 激增诊断",
         priority="P0",
-        goal="Diagnose a sudden increase in HTTP 5xx responses across the API gateway.",
+        goal="诊断 API 网关 HTTP 5xx 响应突然增加的问题。",
         expected_signals=("5xx", "error", "evidence"),
         required_event_types=("run_started", "tool_result", "final_report"),
         blocked_terms=("root cause confirmed without evidence",),
@@ -93,9 +93,9 @@ SCENARIOS: tuple[RegressionScenario, ...] = (
     ),
     RegressionScenario(
         id="slow_response",
-        title="Slow response time diagnosis",
+        title="响应缓慢诊断",
         priority="P0",
-        goal="Diagnose elevated p99 response latency on the checkout service.",
+        goal="诊断结算服务 p99 响应延迟升高的问题。",
         expected_signals=("latency", "slow", "evidence"),
         required_event_types=("run_started", "tool_result", "final_report"),
         blocked_terms=("root cause confirmed without evidence",),
@@ -103,9 +103,9 @@ SCENARIOS: tuple[RegressionScenario, ...] = (
     ),
     RegressionScenario(
         id="disk_full",
-        title="Disk full incident diagnosis",
+        title="磁盘满事故诊断",
         priority="P1",
-        goal="Diagnose disk space exhaustion on database nodes and identify large or orphaned files.",
+        goal="诊断数据库节点磁盘空间耗尽问题，定位大文件或孤立文件。",
         expected_signals=("disk", "space", "evidence"),
         required_event_types=("run_started", "tool_result", "final_report"),
         blocked_terms=("root cause confirmed without evidence",),
@@ -113,9 +113,9 @@ SCENARIOS: tuple[RegressionScenario, ...] = (
     ),
     RegressionScenario(
         id="dependency_failure",
-        title="External dependency failure diagnosis",
+        title="外部依赖故障诊断",
         priority="P1",
-        goal="Diagnose an upstream dependency failure causing cascading errors in the payment service.",
+        goal="诊断导致支付服务级联错误的上游依赖故障。",
         expected_signals=("dependency", "upstream", "evidence"),
         required_event_types=("run_started", "tool_result", "final_report"),
         blocked_terms=("root cause confirmed without evidence",),
@@ -149,24 +149,24 @@ class ScenarioRegressionService:
             _check(
                 "run_completed",
                 run.get("status") == "completed",
-                f"Run status is {run.get('status') or 'unknown'}",
+                f"运行状态为 {run.get('status') or '未知'}",
             ),
             _check(
                 "final_report_present",
                 bool(report.strip()),
-                "Final report is present" if report.strip() else "Final report is missing",
+                "最终报告已生成" if report.strip() else "最终报告缺失",
             ),
             _check(
                 "min_tool_calls",
                 tool_call_count >= scenario.min_tool_calls,
-                f"Observed {tool_call_count} tool calls; required {scenario.min_tool_calls}",
+                f"观测到 {tool_call_count} 次工具调用，要求 {scenario.min_tool_calls} 次",
             ),
         ]
         checks.extend(
             _check(
                 f"event:{event_type}",
                 event_type in event_types,
-                f"Required event {event_type} {'observed' if event_type in event_types else 'missing'}",
+                f"必需事件 {event_type} {'已观测到' if event_type in event_types else '缺失'}",
             )
             for event_type in scenario.required_event_types
         )
@@ -174,7 +174,7 @@ class ScenarioRegressionService:
             _check(
                 f"signal:{signal}",
                 signal.lower() in searchable_text,
-                f"Expected signal {signal} {'observed' if signal.lower() in searchable_text else 'missing'}",
+                f"期望信号 {signal} {'已观测到' if signal.lower() in searchable_text else '缺失'}",
             )
             for signal in scenario.expected_signals
         )
@@ -182,7 +182,7 @@ class ScenarioRegressionService:
             _check(
                 f"blocked:{term}",
                 term.lower() not in searchable_text,
-                f"Blocked term {term} {'absent' if term.lower() not in searchable_text else 'present'}",
+                f"禁用词 {term} {'不存在' if term.lower() not in searchable_text else '存在'}",
             )
             for term in scenario.blocked_terms
         )

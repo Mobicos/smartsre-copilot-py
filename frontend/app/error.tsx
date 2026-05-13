@@ -11,10 +11,10 @@ export default function GlobalError({
 }) {
   return (
     <AppErrorFallback
-      title="Application error"
-      description="The app hit a rendering problem outside the workbench."
+      title="应用错误"
+      description="应用在工作台外部遇到了渲染问题。"
       homeHref="/chat"
-      homeLabel="Go to chat"
+      homeLabel="返回对话"
       error={error}
       reset={reset}
     />

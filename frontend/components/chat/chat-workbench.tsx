@@ -127,7 +127,7 @@ export function ChatWorkbench() {
                     content: buf.content,
                     sources: buf.sources,
                     streaming: false,
-                    error: typeof p.data === "string" ? p.data : "Stream error",
+                    error: typeof p.data === "string" ? p.data : "流式传输错误",
                   })
                   return
                 }

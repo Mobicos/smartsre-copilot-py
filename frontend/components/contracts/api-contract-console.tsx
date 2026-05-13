@@ -73,7 +73,7 @@ export function ApiContractConsole() {
       }
       setContract(data)
     } catch (err) {
-      toast.error((err as Error).message || "Failed to load contract snapshot")
+      toast.error((err as Error).message || "加载契约快照失败")
     } finally {
       setLoading(false)
     }
@@ -88,9 +88,9 @@ export function ApiContractConsole() {
 
   const counts = useMemo(
     () => [
-      { label: "Added", value: diff?.added_count ?? 0, tone: "text-success" },
-      { label: "Removed", value: diff?.removed_count ?? 0, tone: "text-destructive" },
-      { label: "Changed", value: diff?.changed_count ?? 0, tone: "text-amber-600 dark:text-amber-400" },
+      { label: "新增", value: diff?.added_count ?? 0, tone: "text-success" },
+      { label: "移除", value: diff?.removed_count ?? 0, tone: "text-destructive" },
+      { label: "变更", value: diff?.changed_count ?? 0, tone: "text-amber-600 dark:text-amber-400" },
     ],
     [diff],
   )
@@ -108,9 +108,9 @@ export function ApiContractConsole() {
       <div className="mx-auto max-w-6xl px-4 py-6 md:px-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold">API Contracts</h1>
+            <h1 className="text-2xl font-bold">API 契约</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Compare the live OpenAPI document against the committed snapshot.
+              对比在线 OpenAPI 文档与已提交的快照。
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -118,13 +118,13 @@ export function ApiContractConsole() {
               <Switch
                 checked={includeSpec}
                 onCheckedChange={setIncludeSpec}
-                aria-label="Include raw OpenAPI spec"
+                aria-label="包含原始 OpenAPI 规格"
               />
-              <span className="text-sm text-muted-foreground">Include spec</span>
+              <span className="text-sm text-muted-foreground">包含规格</span>
             </div>
             <Button variant="outline" size="sm" onClick={() => void loadContract(includeSpec)}>
               {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-              Refresh
+              刷新
             </Button>
           </div>
         </div>
@@ -132,11 +132,11 @@ export function ApiContractConsole() {
         <div className="grid gap-3 md:grid-cols-3">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Snapshot</CardTitle>
+              <CardTitle className="text-sm">快照</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-muted-foreground">Exists</span>
+                <span className="text-sm text-muted-foreground">状态</span>
                 <span
                   className={cn(
                     "rounded-full px-2 py-0.5 text-xs font-medium",
@@ -145,7 +145,7 @@ export function ApiContractConsole() {
                       : "bg-destructive/10 text-destructive",
                   )}
                 >
-                  {contract?.snapshot_exists ? "yes" : "missing"}
+                  {contract?.snapshot_exists ? "存在" : "缺失"}
                 </span>
               </div>
               <p className="break-all font-mono text-xs text-muted-foreground">
@@ -156,26 +156,26 @@ export function ApiContractConsole() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Current Spec</CardTitle>
+              <CardTitle className="text-sm">当前规格</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <p className="text-sm font-medium">{current?.title || "Unknown title"}</p>
+              <p className="text-sm font-medium">{current?.title || "未知标题"}</p>
               <p className="text-xs text-muted-foreground">
-                Version {current?.version || "n/a"} with {current?.operation_count ?? 0} operations
+                版本 {current?.version || "n/a"}，{current?.operation_count ?? 0} 个操作
               </p>
               <p className="text-xs text-muted-foreground">
-                {current?.path_count ?? 0} paths and {current?.tags?.length ?? 0} tags
+                {current?.path_count ?? 0} 个路径，{current?.tags?.length ?? 0} 个标签
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Diff Status</CardTitle>
+              <CardTitle className="text-sm">差异状态</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-muted-foreground">State</span>
+                <span className="text-sm text-muted-foreground">状态</span>
                 <span
                   className={cn(
                     "rounded-full px-2 py-0.5 text-xs font-medium",
@@ -184,7 +184,7 @@ export function ApiContractConsole() {
                       : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
                   )}
                 >
-                  {diff?.status || "unknown"}
+                  {diff?.status || "未知"}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -201,27 +201,27 @@ export function ApiContractConsole() {
 
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
           <OperationPanel
-            title="Added operations"
+            title="新增操作"
             icon={<FileText className="size-4 text-success" />}
             items={diff?.added_operations || []}
-            emptyLabel="No additions"
+            emptyLabel="无新增"
           />
           <OperationPanel
-            title="Removed operations"
+            title="移除操作"
             icon={<FileText className="size-4 text-destructive" />}
             items={diff?.removed_operations || []}
-            emptyLabel="No removals"
+            emptyLabel="无移除"
           />
           <OperationPanel
-            title="Changed operations"
+            title="变更操作"
             icon={<FileText className="size-4 text-amber-600 dark:text-amber-400" />}
             items={diff?.changed_operations || []}
-            emptyLabel="No changes"
+            emptyLabel="无变更"
             renderItem={(item) => (
               <div className="space-y-2">
                 <OperationLine operation={item.current} />
                 <p className="text-xs text-muted-foreground">
-                  Previous: {item.previous.summary || item.previous.operation_id || "n/a"}
+                  之前：{item.previous.summary || item.previous.operation_id || "n/a"}
                 </p>
               </div>
             )}
@@ -284,9 +284,9 @@ function OperationLine({ operation }: { operation: ApiOperation }) {
         </span>
         <span className="font-mono text-xs text-muted-foreground">{operation.path}</span>
       </div>
-      <p className="text-sm font-medium">{operation.summary || operation.operation_id || "Untitled"}</p>
+      <p className="text-sm font-medium">{operation.summary || operation.operation_id || "无标题"}</p>
       {operation.tags.length > 0 && (
-        <p className="text-xs text-muted-foreground">Tags: {operation.tags.join(", ")}</p>
+        <p className="text-xs text-muted-foreground">标签：{operation.tags.join(", ")}</p>
       )}
     </div>
   )

@@ -12,13 +12,13 @@ const ACCEPT = ".txt,.md,.markdown"
 const MAX_BYTES = 10 * 1024 * 1024
 
 const STATUS_LABEL: Record<IndexingTask["status"], string> = {
-  queued: "Queued",
-  processing: "Processing",
-  completed: "Indexed",
-  failed_permanently: "Failed",
-  running: "Uploading",
-  succeeded: "Indexed",
-  failed: "Failed",
+  queued: "排队中",
+  processing: "处理中",
+  completed: "已索引",
+  failed_permanently: "失败",
+  running: "上传中",
+  succeeded: "已索引",
+  failed: "失败",
 }
 
 function toTaskStatus(status: unknown): IndexingTask["status"] {
@@ -90,7 +90,7 @@ export function KnowledgeConsole() {
       })
       setTasks(persistedTasks)
     } catch (err) {
-      toast.error("Failed to load indexing tasks")
+      toast.error("加载索引任务失败")
     } finally {
       setLoadingTasks(false)
     }
@@ -146,11 +146,11 @@ export function KnowledgeConsole() {
       const list = Array.from(files)
       for (const file of list) {
         if (!/\.(txt|md|markdown)$/i.test(file.name)) {
-          toast.error(`${file.name}: only .txt and .md files are supported`)
+          toast.error(`${file.name}：仅支持 .txt 和 .md 文件`)
           continue
         }
         if (file.size > MAX_BYTES) {
-          toast.error(`${file.name}: file size must be 10MB or less`)
+          toast.error(`${file.name}：文件大小不能超过 10MB`)
           continue
         }
 
@@ -213,7 +213,7 @@ export function KnowledgeConsole() {
             ),
           )
           if (taskId) void pollIndexTask(id, taskId)
-          toast.success(`${file.name}: upload accepted`)
+          toast.success(`${file.name}：上传成功`)
         } catch (err) {
           setTasks((items) =>
             items.map((item) =>
@@ -221,13 +221,13 @@ export function KnowledgeConsole() {
                 ? {
                     ...item,
                     status: "failed",
-                    message: (err as Error).message ?? "Upload failed",
+                    message: (err as Error).message ?? "上传失败",
                     finishedAt: Date.now(),
                   }
                 : item,
             ),
           )
-          toast.error(`${file.name}: upload failed`)
+          toast.error(`${file.name}：上传失败`)
         }
       }
     },
@@ -241,13 +241,13 @@ export function KnowledgeConsole() {
       })
       if (!res.ok) {
         const json = (await res.json()) as { error?: string; detail?: string }
-        toast.error(json.error || json.detail || "Delete failed")
+        toast.error(json.error || json.detail || "删除失败")
         return
       }
       setTasks((items) => items.filter((item) => item.id !== task.id))
-      toast.success(`${task.filename}: deleted`)
+      toast.success(`${task.filename}：已删除`)
     } catch (err) {
-      toast.error(`${task.filename}: delete failed`)
+      toast.error(`${task.filename}：删除失败`)
     }
   }, [])
 
@@ -264,7 +264,7 @@ export function KnowledgeConsole() {
             ? json.error
             : typeof json.detail === "string"
               ? json.detail
-              : "Retry failed",
+              : "重试失败",
         )
         return
       }
@@ -274,16 +274,16 @@ export function KnowledgeConsole() {
             ? {
                 ...item,
                 status: "queued",
-                message: "Retry queued",
+                message: "已加入重试队列",
                 finishedAt: undefined,
               }
             : item,
         ),
       )
       void pollIndexTask(task.id, task.taskId)
-      toast.success(`${task.filename}: retry queued`)
+      toast.success(`${task.filename}：已加入重试队列`)
     } catch (err) {
-      toast.error(`${task.filename}: retry failed`)
+      toast.error(`${task.filename}：重试失败`)
     }
   }, [pollIndexTask])
 
@@ -299,7 +299,7 @@ export function KnowledgeConsole() {
         <div
           role="button"
           tabIndex={0}
-          aria-label="Upload knowledge files"
+          aria-label="上传知识文件"
           onClick={() => inputRef.current?.click()}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === " ") inputRef.current?.click()
@@ -319,14 +319,13 @@ export function KnowledgeConsole() {
             <UploadCloud className="size-6" />
           </div>
           <div className="max-w-sm">
-            <p className="text-sm font-medium">Upload operational knowledge</p>
+            <p className="text-sm font-medium">上传运维知识</p>
             <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-              Drop Markdown or text runbooks here. Files are uploaded to FastAPI and tracked until
-              the backend indexing task completes.
+              拖拽 Markdown 或文本文件到此处。文件将上传至后端并进行索引。
             </p>
           </div>
           <Button type="button" size="sm" variant="outline" className="pointer-events-none">
-            <FileUp className="size-4" /> Choose files
+            <FileUp className="size-4" /> 选择文件
           </Button>
           <input
             ref={inputRef}
@@ -341,9 +340,9 @@ export function KnowledgeConsole() {
           />
         </div>
 
-        <section aria-label="Indexing tasks">
+        <section aria-label="索引任务">
           <header className="flex items-center justify-between mb-2">
-            <h2 className="text-xs font-medium text-muted-foreground">Indexing tasks</h2>
+            <h2 className="text-xs font-medium text-muted-foreground">索引任务</h2>
             <div className="flex items-center gap-1">
               <Button
                 size="sm"
@@ -352,7 +351,7 @@ export function KnowledgeConsole() {
                 onClick={() => void loadPersistedTasks()}
                 disabled={loadingTasks}
               >
-                <RefreshCw className={cn("size-3.5", loadingTasks && "animate-spin")} /> Refresh
+                <RefreshCw className={cn("size-3.5", loadingTasks && "animate-spin")} /> 刷新
               </Button>
               {tasks.length > 0 && (
                 <Button
@@ -361,7 +360,7 @@ export function KnowledgeConsole() {
                   className="h-7 text-xs text-muted-foreground"
                   onClick={() => setTasks([])}
                 >
-                  <Trash2 className="size-3.5" /> Clear
+                  <Trash2 className="size-3.5" /> 清空
                 </Button>
               )}
             </div>
@@ -372,9 +371,9 @@ export function KnowledgeConsole() {
                 <EmptyMedia variant="icon">
                   <FileText className="size-5" />
                 </EmptyMedia>
-                <EmptyTitle>No uploads yet</EmptyTitle>
+                <EmptyTitle>暂无上传</EmptyTitle>
                 <EmptyDescription>
-                  Upload a runbook to make it searchable by the SRE copilot.
+                  上传 Runbook 文件，让 SRE 副驾可以检索相关知识。
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -447,7 +446,7 @@ export function KnowledgeConsole() {
                               void retryIndexTask(task)
                             }}
                           >
-                            <RefreshCw className="size-3.5" /> Retry
+                            <RefreshCw className="size-3.5" /> 重试
                           </Button>
                         )}
                       </div>
@@ -458,7 +457,7 @@ export function KnowledgeConsole() {
                       )}
                       {isSuccess(task.status) && (
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Indexed and ready for retrieval.
+                          已索引，可用于检索。
                         </p>
                       )}
                       {task.storageBackend && (

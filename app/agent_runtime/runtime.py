@@ -229,7 +229,7 @@ class StepRunner:
 class ApprovalBoundary:
     """Centralize approval pause semantics for the Agent runtime."""
 
-    waiting_message = "Tool execution is waiting for human approval."
+    waiting_message = "工具执行等待人工审批。"
 
     def __init__(
         self,
@@ -258,7 +258,7 @@ class ApprovalBoundary:
             context.run_id,
             event_type="approval_required",
             stage="approval",
-            message=f"Tool approval required: {tool_name}",
+            message=f"工具需要审批：{tool_name}",
             payload=payload,
         )
         self._metrics_collector.persist(context.run_id)
@@ -269,7 +269,7 @@ class ApprovalBoundary:
                 stage="approval",
                 run_id=context.run_id,
                 status="waiting_approval",
-                message=f"Tool approval required: {tool_name}",
+                message=f"工具需要审批：{tool_name}",
             ),
         ]
 
@@ -295,20 +295,20 @@ class RuntimeFailureHandler:
         self._run_store.update_run(
             context.run_id,
             status="cancelled",
-            error_message="Agent run cancelled",
+            error_message="Agent 运行已取消",
         )
         self._event_recorder.record(
             context.run_id,
             event_type="cancelled",
             stage="cancelled",
-            message="Agent run cancelled",
+            message="Agent 运行已取消",
             payload={"runtime_safety": context.safety_config.to_dict()},
         )
         self._metrics_collector.persist(context.run_id)
 
     def timeout_event(self, context: RuntimeContext, exc: TimeoutError) -> list[AgentRuntimeEvent]:
         error_message = str(exc) or (
-            f"Agent run timed out after {context.safety_config.run_timeout_seconds:g} seconds"
+            f"Agent 运行超时，已运行 {context.safety_config.run_timeout_seconds:g} 秒"
         )
         self._run_store.update_run(
             context.run_id,
@@ -319,7 +319,7 @@ class RuntimeFailureHandler:
             context.run_id,
             event_type="timeout",
             stage="error",
-            message=f"Run timed out: {error_message}",
+            message=f"运行超时：{error_message}",
             payload={
                 "error_type": "TimeoutError",
                 "error_message": error_message,
@@ -351,7 +351,7 @@ class RuntimeFailureHandler:
             context.run_id,
             event_type="error",
             stage="error",
-            message=f"Run failed: {error_message}",
+            message=f"运行失败：{error_message}",
             payload={
                 "error_type": error_type,
                 "error_message": error_message,
@@ -503,7 +503,7 @@ class AgentRuntime:
                 runtime_context.run_id,
                 event_type="run_started",
                 stage="start",
-                message="Agent run started",
+                message="Agent 运行已启动",
                 payload={
                     "scene_id": runtime_context.scene_id,
                     "workspace_id": runtime_context.workspace_id,
@@ -594,7 +594,7 @@ class AgentRuntime:
                     run_id,
                     event_type="limit_reached",
                     stage="planning",
-                    message="Tool step limit reached",
+                    message="工具步骤已达上限",
                     payload={
                         "max_steps": safety_config.max_steps,
                         "executed_tools": selected_tool_names,
@@ -612,7 +612,7 @@ class AgentRuntime:
                     run_id,
                     event_type="final_report",
                     stage="complete",
-                    message="Final report generated",
+                    message="最终报告已生成",
                     payload={"report": final_report},
                 )
                 self._persist_run_metrics(run_id)
@@ -646,7 +646,7 @@ class AgentRuntime:
                     run_id,
                     event_type="final_report",
                     stage="complete",
-                    message="Final report generated",
+                    message="最终报告已生成",
                     payload={"report": final_report},
                 )
                 self._persist_run_metrics(run_id)
@@ -671,7 +671,7 @@ class AgentRuntime:
                     run_id,
                     event_type="tool_call",
                     stage="tool",
-                    message=f"Calling tool: {tool_name}",
+                    message=f"正在调用工具：{tool_name}",
                     payload=action.to_event_payload(),
                 )
                 result = await self._step_runner.execute_tool(
@@ -685,7 +685,7 @@ class AgentRuntime:
                     run_id,
                     event_type="tool_result",
                     stage="tool",
-                    message=f"Tool {result.tool_name} finished with status {result.status}",
+                    message=f"工具 {result.tool_name} 执行完成，状态：{result.status}",
                     payload=action.result_event_payload(result),
                 )
                 evidence_item = EvidenceItem.from_tool_result(result)
@@ -718,26 +718,23 @@ class AgentRuntime:
                             run_id,
                             event_type="recovery",
                             stage="recover",
-                            message=f"Recovery required: {reason}",
+                            message=f"需要恢复：{reason}",
                             payload=recovery.model_dump(mode="json"),
                         )
                         report_contract = FinalReportContract(
                             summary=(
-                                "Evidence is not strong enough for a safe autonomous "
-                                "conclusion, so the run is handing off to a human."
+                                "证据不足以得出安全的自主结论，因此运行交由人工处理。"
                             ),
                             verified_facts=[],
                             inferences=[
                                 (
-                                    "The current tool result did not provide enough "
-                                    "verified evidence to confirm a root cause."
+                                    "当前工具结果未提供足够的经验证证据来确认根因。"
                                 ),
                             ],
                             recommendations=[
                                 (
-                                    "Have an operator inspect the cited tool output, "
-                                    "collect additional evidence, and resume the run "
-                                    "only after the boundary condition is understood."
+                                    "请运维人员检查引用的工具输出，收集额外证据，"
+                                    "并在理解边界条件后恢复运行。"
                                 ),
                             ],
                             citations=assessment.citations,
@@ -756,7 +753,7 @@ class AgentRuntime:
                             run_id,
                             event_type="handoff",
                             stage="handoff",
-                            message="Agent run requires human handoff",
+                            message="Agent 运行需要人工交接",
                             payload=report_contract.to_event_payload(),
                         )
                         self._persist_run_metrics(run_id)
@@ -773,7 +770,7 @@ class AgentRuntime:
                         final_decision = AgentDecision(
                             action_type="final_report",
                             reasoning_summary=(
-                                "Strong evidence is available and can support a final report."
+                                "已有充分证据支持生成最终报告。"
                             ),
                             evidence=assessment,
                             actual_evidence=assessment,
@@ -804,25 +801,23 @@ class AgentRuntime:
                     run_id,
                     event_type="recovery",
                     stage="recover",
-                    message="Recovery required: budget_exhausted",
+                    message="需要恢复：执行预算已耗尽",
                     payload=recovery.model_dump(mode="json"),
                 )
                 report_contract = FinalReportContract(
                     summary=(
-                        "The execution budget is exhausted and the available evidence "
-                        "is not sufficient for a safe final conclusion."
+                        "执行预算已耗尽，现有证据不足以得出安全的最终结论。"
                     ),
                     verified_facts=state.evidence_report_lines(),
                     inferences=[
                         (
-                            "Some scene-approved tools were skipped because the "
-                            "runtime boundary was reached."
+                            "部分场景允许的工具因达到运行时边界而被跳过。"
                         ),
                     ],
                     recommendations=[
                         (
-                            "Increase the run budget or narrow the scene tool set, "
-                            "then resume with the remaining evidence requirements."
+                            "增加运行预算或缩小场景工具集，"
+                            "然后根据剩余证据需求恢复运行。"
                         ),
                     ],
                     confidence=0.3,
@@ -885,7 +880,7 @@ class AgentRuntime:
             raise
         except TimeoutError as exc:
             error_message = str(exc) or (
-                f"Agent run timed out after {safety_config.run_timeout_seconds:g} seconds"
+                f"Agent 运行超时，已运行 {safety_config.run_timeout_seconds:g} 秒"
             )
             logger.warning(
                 "Agent run {run_id} timed out: {error_message}",
@@ -944,10 +939,10 @@ class AgentRuntime:
                 tool_name=action.tool_name,
                 status="timeout",
                 arguments=action.arguments,
-                error=f"Tool execution timed out after {timeout_seconds:g} seconds",
+                error=f"工具执行超时，已运行 {timeout_seconds:g} 秒",
                 policy=action.policy_snapshot.to_dict(),
                 decision="timeout",
-                decision_reason=f"Tool execution exceeded timeout: {timeout_seconds:g} seconds",
+                decision_reason=f"工具执行超时：{timeout_seconds:g} 秒",
             )
 
     def _record_event(
@@ -1048,34 +1043,34 @@ def _assess_evidence_item(evidence: EvidenceItem) -> EvidenceAssessment:
     if evidence.status in {"timeout", "disabled", "forbidden"} or evidence.error:
         return EvidenceAssessment(
             quality="error",
-            summary=f"{evidence.tool_name} returned {evidence.status}: {evidence.error or 'no detail'}",
+            summary=f"{evidence.tool_name} 返回 {evidence.status}：{evidence.error or '无详情'}",
             citations=[citation],
             confidence=CONFIDENCE_NONE,
         )
     if evidence.status == "approval_required":
         return EvidenceAssessment(
             quality="partial",
-            summary=f"{evidence.tool_name} requires approval before evidence can be collected.",
+            summary=f"{evidence.tool_name} 需要审批才能采集证据。",
             citations=[citation],
             confidence=CONFIDENCE_LOW,
         )
     if evidence.status == "partial":
         return EvidenceAssessment(
             quality="partial",
-            summary=f"{evidence.tool_name} returned partial evidence.",
+            summary=f"{evidence.tool_name} 返回了部分证据。",
             citations=[citation],
             confidence=CONFIDENCE_PARTIAL,
         )
     if evidence.output in {None, ""}:
         return EvidenceAssessment(
             quality="empty",
-            summary=f"{evidence.tool_name} returned no usable evidence.",
+            summary=f"{evidence.tool_name} 未返回可用证据。",
             citations=[citation],
             confidence=CONFIDENCE_NONE,
         )
     return EvidenceAssessment(
         quality="strong",
-        summary=f"{evidence.tool_name} returned usable evidence.",
+        summary=f"{evidence.tool_name} 返回了可用证据。",
         citations=[citation],
         confidence=CONFIDENCE_STRONG,
     )
@@ -1091,17 +1086,17 @@ def _handoff_reason_from_evidence(assessment: EvidenceAssessment) -> str:
 
 def _handoff_report(goal: str, report: FinalReportContract) -> str:
     lines = [
-        f"# Agent Handoff Report: {goal}",
+        f"# Agent 交接报告：{goal}",
         "",
         report.summary,
         "",
-        f"- handoff_reason: {report.handoff_reason or 'unknown'}",
-        f"- confidence: {report.confidence:.2f}",
+        f"- 交接原因：{report.handoff_reason or '未知'}",
+        f"- 置信度：{report.confidence:.2f}",
     ]
     if report.inferences:
-        lines.extend(["", "## Inferences", *[f"- {item}" for item in report.inferences]])
+        lines.extend(["", "## 推断", *[f"- {item}" for item in report.inferences]])
     if report.recommendations:
-        lines.extend(["", "## Recommendations", *[f"- {item}" for item in report.recommendations]])
+        lines.extend(["", "## 建议", *[f"- {item}" for item in report.recommendations]])
     return "\n".join(lines)
 
 

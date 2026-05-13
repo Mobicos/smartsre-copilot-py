@@ -50,22 +50,22 @@ def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
     database_healthy = db_health_check()
     health_data["database"] = {
         "status": "connected" if database_healthy else "disconnected",
-        "message": "Database connected" if database_healthy else "Database disconnected",
+        "message": "数据库已连接" if database_healthy else "数据库未连接",
     }
 
     if settings.task_queue_backend == "redis":
         redis_healthy = redis_manager.health_check()
         health_data["redis"] = {
             "status": "connected" if redis_healthy else "disconnected",
-            "message": "Redis connected" if redis_healthy else "Redis disconnected",
+            "message": "Redis 已连接" if redis_healthy else "Redis 未连接",
         }
 
     health_data["task_dispatcher"] = {
         "status": "running" if task_dispatcher.is_started else "external",  # type: ignore[attr-defined]
         "message": (
-            "Embedded task dispatcher is running"
+            "内置任务调度器运行中"
             if task_dispatcher.is_started  # type: ignore[attr-defined]
-            else f"Task dispatcher mode: {settings.task_dispatcher_mode}"
+            else f"任务调度模式：{settings.task_dispatcher_mode}"
         ),
     }
     health_data["agent_resume_dispatcher"] = {
@@ -87,7 +87,7 @@ def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
         logger.warning(f"Indexing task health summary failed: {exc}")
         health_data["indexing_tasks"] = {
             "status": "error",
-            "message": "Indexing task status unavailable",
+            "message": "索引任务状态不可用",
         }
 
     try:
@@ -116,31 +116,31 @@ def _build_ready_health_payload() -> tuple[int, dict[str, Any]]:
     if health_data["vector_backend"]["status"] != "connected":
         overall_status = "unhealthy"
         status_code = 503
-        health_data["error"] = "Vector backend unavailable"
+        health_data["error"] = "向量后端不可用"
 
     if health_data["embedding"]["status"] != "ready":
         overall_status = "unhealthy"
         status_code = 503
-        health_data["error"] = "Embedding service unavailable"
+        health_data["error"] = "嵌入服务不可用"
 
     if health_data["vector_store"]["status"] != "ready":
         overall_status = "unhealthy"
         status_code = 503
-        health_data["error"] = "Vector store unavailable"
+        health_data["error"] = "向量存储不可用"
 
     if health_data["database"]["status"] != "connected":
         overall_status = "unhealthy"
         status_code = 503
-        health_data["error"] = "Database unavailable"
+        health_data["error"] = "数据库不可用"
 
     if settings.task_queue_backend == "redis" and health_data["redis"]["status"] != "connected":
         overall_status = "unhealthy"
         status_code = 503
-        health_data["error"] = "Redis unavailable"
+        health_data["error"] = "Redis 不可用"
 
     if overall_status == "healthy" and degraded_components:
         overall_status = "degraded"
-        health_data["warning"] = "Some runtime services are configured but not yet initialized"
+        health_data["warning"] = "部分运行时服务已配置但尚未初始化"
 
     if degraded_components:
         health_data["degraded_components"] = degraded_components

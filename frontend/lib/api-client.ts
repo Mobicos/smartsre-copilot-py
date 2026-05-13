@@ -34,7 +34,7 @@ export async function apiClient<T>(url: string, options: ApiClientOptions = {}):
       lastError = error
     }
   }
-  throw lastError instanceof Error ? lastError : new Error("Request failed")
+  throw lastError instanceof Error ? lastError : new Error("请求失败")
 }
 
 export function isAbortError(error: unknown): boolean {

@@ -11,10 +11,10 @@ export default function WorkbenchError({
 }) {
   return (
     <AppErrorFallback
-      title="Workbench error"
-      description="A workbench panel failed to render. The rest of the app can keep going."
+      title="工作台错误"
+      description="工作台面板渲染失败，其余功能仍可正常使用。"
       homeHref="/chat"
-      homeLabel="Back to chat"
+      homeLabel="返回对话"
       error={error}
       reset={reset}
     />

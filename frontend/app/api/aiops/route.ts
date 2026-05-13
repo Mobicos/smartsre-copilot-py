@@ -6,11 +6,15 @@ export const runtime = "nodejs"
 export async function POST(req: Request) {
   const body = await req.text()
   try {
-    const upstream = await backendFetch("/api/aiops", {
-      method: "POST",
-      body,
-      headers: { "content-type": "application/json", accept: "text/event-stream" },
-    })
+    const upstream = await backendFetch(
+      "/api/aiops",
+      {
+        method: "POST",
+        body,
+        headers: { "content-type": "application/json", accept: "text/event-stream" },
+      },
+      150_000,
+    )
     if (!upstream.body) {
       return new Response("event: error\ndata: empty upstream\n\n", {
         status: 502,

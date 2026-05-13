@@ -26,7 +26,7 @@ import type {
 } from "@/lib/native-agent-types"
 import { cn } from "@/lib/utils"
 
-const DEFAULT_GOAL = "Investigate the current production incident, identify likely root cause, and produce an SRE-ready report."
+const DEFAULT_GOAL = "调查当前生产事故，识别可能的根本原因，生成 SRE 报告。"
 
 type RunPhase = "idle" | "running" | "done" | "error"
 
@@ -83,7 +83,7 @@ export function AgentHarnessConsole() {
       setSelectedSceneId(nextScenes[0]?.id || "")
       await loadStoreScenes()
     } catch (err) {
-      toast.error("Failed to load scenes")
+      toast.error("加载场景失败")
     } finally {
       setLoading(false)
     }
@@ -146,7 +146,7 @@ export function AgentHarnessConsole() {
                 if (typeof agentEvent.final_report === "string") {
                   newState.report = agentEvent.final_report
                 } else if (agentEvent.type === "approval_required") {
-                  newState.report = "Tool execution is waiting for human approval."
+                  newState.report = "工具执行等待人工审批。"
                 }
               } else if (agentEvent.type === "final_report") {
                 const payload = agentEvent.payload as Record<string, unknown> | undefined
@@ -155,7 +155,7 @@ export function AgentHarnessConsole() {
                 }
               } else if (agentEvent.type === "error") {
                 newState.phase = "error"
-                newState.error = agentEvent.message || "Diagnosis failed"
+                newState.error = agentEvent.message || "诊断失败"
                 void invalidateAgentData()
               }
 
@@ -167,7 +167,7 @@ export function AgentHarnessConsole() {
           setRunState((prev) => ({
             ...prev,
             phase: "error",
-            error: (err as Error)?.message ?? "Diagnosis failed",
+            error: (err as Error)?.message ?? "诊断失败",
           }))
         },
         onDone: () => {
@@ -187,7 +187,7 @@ export function AgentHarnessConsole() {
     setRunState((prev) => ({
       ...prev,
       phase: "error",
-      error: "Stopped by user",
+      error: "用户已停止",
     }))
   }
 
@@ -197,10 +197,10 @@ export function AgentHarnessConsole() {
   }
 
   const phaseLabel: Record<RunPhase, string> = {
-    idle: "Ready",
-    running: "Running",
-    done: "Done",
-    error: "Failed",
+    idle: "就绪",
+    running: "运行中",
+    done: "完成",
+    error: "失败",
   }
 
   const phaseClass: Record<RunPhase, string> = {
@@ -220,7 +220,7 @@ export function AgentHarnessConsole() {
             onChange={(event) => setGoal(event.target.value)}
             disabled={isRunning()}
             className="min-h-24 text-base"
-            placeholder="Describe the incident or problem to investigate..."
+            placeholder="描述需要调查的事故或问题..."
           />
         </div>
 
@@ -229,7 +229,7 @@ export function AgentHarnessConsole() {
           {isRunning() ? (
             <Button variant="destructive" onClick={stopDiagnosis}>
               <Square className="size-4 fill-current" />
-              Stop
+              停止
             </Button>
           ) : (
             <>
@@ -238,11 +238,11 @@ export function AgentHarnessConsole() {
                 disabled={!selectedSceneId || !goal.trim() || loading}
               >
                 <Play className="size-4" />
-                Run
+                运行
               </Button>
               {runState.phase !== "idle" && (
                 <Button variant="outline" size="sm" onClick={resetRun}>
-                  Reset
+                  重置
                 </Button>
               )}
             </>
@@ -278,7 +278,7 @@ export function AgentHarnessConsole() {
             onClick={() => setShowConfig(!showConfig)}
           >
             {showConfig ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-            Config
+            配置
           </Button>
         </div>
 
@@ -294,7 +294,7 @@ export function AgentHarnessConsole() {
           <div className="mb-4 rounded-md border border-border p-3 text-sm">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="space-y-1">
-                <span className="text-xs text-muted-foreground">Scene</span>
+                <span className="text-xs text-muted-foreground">场景</span>
                 <select
                   value={selectedSceneId}
                   onChange={(event) => setSelectedSceneId(event.target.value)}

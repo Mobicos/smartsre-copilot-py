@@ -423,35 +423,35 @@ def get_service_health() -> dict[str, ServiceHealth]:
     decision_provider = settings.agent_decision_provider.strip().lower()
     dashscope_ready = bool(settings.dashscope_api_key.strip())
     decision_runtime_status = "ready"
-    decision_runtime_message = "Deterministic decision runtime is configured"
+    decision_runtime_message = "确定性决策运行时已配置"
     if decision_provider == "qwen":
         decision_runtime_status = "configured" if dashscope_ready else "degraded"
         decision_runtime_message = (
-            "Qwen decision runtime is configured"
+            "Qwen 决策运行时已配置"
             if dashscope_ready
-            else "Qwen decision runtime is selected but DashScope API key is missing"
+            else "Qwen 决策运行时已选择但 DashScope API 密钥缺失"
         )
 
     return {
         "embedding": ServiceHealth(
             status="ready" if embedding_ready else "not_initialized",
             message=(
-                "Embedding service initialized"
+                "嵌入服务已初始化"
                 if embedding_ready
-                else "Embedding service not yet initialized"
+                else "嵌入服务尚未初始化"
             ),
         ),
         "vector_store": ServiceHealth(
             status="ready" if vector_store_ready else "not_initialized",
             message=(
-                "VectorStore initialized"
+                "向量存储已初始化"
                 if vector_store_ready
-                else "VectorStore not yet initialized"
+                else "向量存储尚未初始化"
             ),
         ),
         "object_storage": ServiceHealth(
             status="ready" if object_storage_ready else "configured",
-            message=f"Object storage backend: {settings.object_storage_backend}",
+            message=f"对象存储后端：{settings.object_storage_backend}",
         ),
         "decision_runtime": ServiceHealth(
             status=decision_runtime_status,
@@ -463,22 +463,22 @@ def get_service_health() -> dict[str, ServiceHealth]:
         ),
         "rag_agent": ServiceHealth(
             status="ready" if rag_ready else "not_initialized",
-            message="RAG Agent initialized" if rag_ready else "RAG Agent not yet initialized",
+            message="RAG Agent 已初始化" if rag_ready else "RAG Agent 尚未初始化",
         ),
         "aiops": ServiceHealth(
             status="ready" if aiops_ready else "not_initialized",
             message=(
-                "AIOps application service initialized"
+                "AIOps 应用服务已初始化"
                 if aiops_ready
-                else "AIOps application service not yet initialized"
+                else "AIOps 应用服务尚未初始化"
             ),
         ),
         "checkpoint": ServiceHealth(
             status="ready" if checkpoint_ready else "not_initialized",
             message=(
-                "Checkpoint store initialized"
+                "检查点存储已初始化"
                 if checkpoint_ready
-                else "Checkpoint store not yet initialized"
+                else "检查点存储尚未初始化"
             ),
         ),
     }

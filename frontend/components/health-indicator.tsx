@@ -32,7 +32,7 @@ export function HealthIndicator() {
   const { data, loading } = useHealth()
   const status = data?.payload?.status ?? (data?.ok ? "healthy" : "unhealthy")
   const tone: Tone = !data ? "muted" : !data.ok ? "error" : pickTone(status)
-  const label = tone === "ok" ? "Healthy" : tone === "warn" ? "Degraded" : tone === "error" ? "Down" : "Unknown"
+  const label = tone === "ok" ? "健康" : tone === "warn" ? "降级" : tone === "error" ? "宕机" : "未知"
 
   const services: Array<{ key: string; tone: Tone; label: string; detail: string }> = []
   const payload = data?.payload
@@ -91,20 +91,20 @@ export function HealthIndicator() {
           aria-label={`System health: ${label}`}
         >
           <StatusDot tone={tone} pulse={tone === "ok" || loading} />
-          <span className="hidden sm:inline">{loading ? "Checking" : label}</span>
+          <span className="hidden sm:inline">{loading ? "检测中" : label}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-0">
         <div className="border-b border-border px-3 py-2.5">
-          <p className="text-sm font-medium">System health</p>
+          <p className="text-sm font-medium">系统健康</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {loading ? "Checking current service status" : data?.error ? `Unreachable: ${data.error}` : "Live service snapshot"}
+            {loading ? "正在检测服务状态" : data?.error ? `无法连接：${data.error}` : "实时服务状态"}
           </p>
         </div>
         <ul className="p-2">
           {services.length === 0 ? (
             <li className="px-2 py-1.5 text-xs text-muted-foreground">
-              {loading ? "Loading details..." : "No component details available"}
+              {loading ? "加载详情中..." : "暂无组件详情"}
             </li>
           ) : (
             services.map((service) => (

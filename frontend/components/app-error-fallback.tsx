@@ -35,15 +35,15 @@ export function AppErrorFallback({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            {error?.message || "Something went wrong while rendering this view."}
+            {error?.message || "渲染此视图时出错。"}
           </div>
           {error?.digest && (
-            <p className="text-[11px] text-muted-foreground">Digest: {error.digest}</p>
+            <p className="text-[11px] text-muted-foreground">摘要：{error.digest}</p>
           )}
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={reset}>
               <RefreshCw className="mr-2 size-4" />
-              Retry
+              重试
             </Button>
             <Button asChild variant="outline">
               <Link href={homeHref}>{homeLabel}</Link>

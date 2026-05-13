@@ -71,7 +71,7 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
         setReplay(replayRes.ok ? replayData : null)
         setDecisionState(decisionStateRes.ok ? decisionStateData : null)
       } catch (err) {
-        toast.error("Failed to load run replay")
+        toast.error("加载运行回放失败")
       } finally {
         setLoading(false)
       }
@@ -90,12 +90,12 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
         body: JSON.stringify({ rating, comment: feedbackComment || undefined }),
       })
       if (res.ok) {
-        toast.success("Feedback submitted")
+        toast.success("反馈已提交")
       } else {
-        toast.error("Failed to submit feedback")
+        toast.error("提交反馈失败")
       }
     } catch (err) {
-      toast.error("Failed to submit feedback")
+      toast.error("提交反馈失败")
     } finally {
       setSubmittingFeedback(false)
     }
@@ -113,9 +113,9 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
         <XCircle className="size-12 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Run not found</p>
+        <p className="text-sm text-muted-foreground">未找到运行记录</p>
         <Button asChild variant="outline" size="sm">
-          <Link href="/agent/history">Back to History</Link>
+          <Link href="/agent/history">返回历史</Link>
         </Button>
       </div>
     )
@@ -124,27 +124,27 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
   const statusConfig: Record<string, { icon: ElementType; label: string; className: string }> = {
     completed: {
       icon: CheckCircle2,
-      label: "Done",
+      label: "完成",
       className: "text-success bg-success/10 border-success/20",
     },
     running: {
       icon: Loader2,
-      label: "Running",
+      label: "运行中",
       className: "text-primary bg-primary/10 border-primary/20",
     },
     failed: {
       icon: XCircle,
-      label: "Failed",
+      label: "失败",
       className: "text-destructive bg-destructive/10 border-destructive/20",
     },
     waiting_approval: {
       icon: AlertTriangle,
-      label: "Approval",
+      label: "审批中",
       className: "text-amber-600 bg-amber-500/10 border-amber-500/20",
     },
     handoff_required: {
       icon: AlertTriangle,
-      label: "Handoff",
+      label: "交接中",
       className: "text-cyan-600 bg-cyan-500/10 border-cyan-500/20",
     },
   }
@@ -160,7 +160,7 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
           <Button asChild variant="ghost" size="sm" className="mb-3 -ml-2">
             <Link href="/agent/history">
               <ArrowLeft className="mr-1 size-4" />
-              Back
+              返回
             </Link>
           </Button>
 
@@ -197,26 +197,26 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
         {replay?.metrics && (
           <Card className="mb-4">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Replay Snapshot</CardTitle>
+              <CardTitle className="text-base">回放快照</CardTitle>
             </CardHeader>
             <CardContent>
               <dl className="grid gap-3 text-xs sm:grid-cols-3">
-                <Metric label="Runtime" value={replay.metrics.runtime_version} />
-                <Metric label="Trace" value={replay.metrics.trace_id?.slice(0, 8)} mono />
-                <Metric label="Approval" value={replay.metrics.approval_state} />
-                <Metric label="Steps" value={replay.metrics.steps ?? replay.metrics.step_count} />
-                <Metric label="Tool Calls" value={replay.metrics.tool_calls ?? replay.metrics.tool_call_count} />
-                <Metric label="Retrievals" value={replay.metrics.retrieval_count} />
-                <Metric label="Latency" value={replay.metrics.latency_ms ? `${replay.metrics.latency_ms}ms` : "n/a"} />
-                <Metric label="Cost" value={replay.metrics.cost_estimate_usd ?? replay.metrics.cost_estimate ?? "n/a"} mono />
-                <Metric label="Errors" value={replay.metrics.error_count ?? 0} />
+                <Metric label="运行时间" value={replay.metrics.runtime_version} />
+                <Metric label="追踪" value={replay.metrics.trace_id?.slice(0, 8)} mono />
+                <Metric label="审批" value={replay.metrics.approval_state} />
+                <Metric label="步骤" value={replay.metrics.steps ?? replay.metrics.step_count} />
+                <Metric label="工具调用" value={replay.metrics.tool_calls ?? replay.metrics.tool_call_count} />
+                <Metric label="检索次数" value={replay.metrics.retrieval_count} />
+                <Metric label="延迟" value={replay.metrics.latency_ms ? `${replay.metrics.latency_ms}ms` : "n/a"} />
+                <Metric label="成本" value={replay.metrics.cost_estimate_usd ?? replay.metrics.cost_estimate ?? "n/a"} mono />
+                <Metric label="错误" value={replay.metrics.error_count ?? 0} />
               </dl>
               {replay.summary && (
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <Metric label="Events" value={replay.summary.event_count ?? 0} />
-                  <Metric label="Tool Results" value={replay.summary.tool_result_count ?? 0} />
-                  <Metric label="Approvals" value={replay.summary.approval_count ?? 0} />
-                  <Metric label="Resumes" value={replay.summary.approval_resume_count ?? 0} />
+                  <Metric label="事件" value={replay.summary.event_count ?? 0} />
+                  <Metric label="工具结果" value={replay.summary.tool_result_count ?? 0} />
+                  <Metric label="审批次数" value={replay.summary.approval_count ?? 0} />
+                  <Metric label="恢复次数" value={replay.summary.approval_resume_count ?? 0} />
                 </div>
               )}
             </CardContent>
@@ -226,14 +226,14 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
         {decisionState && (
           <Card className="mb-4">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Decision State</CardTitle>
+              <CardTitle className="text-base">决策状态</CardTitle>
             </CardHeader>
             <CardContent>
               <dl className="grid gap-3 text-xs sm:grid-cols-4">
-                <Metric label="Status" value={decisionState.latest_status} />
-                <Metric label="Priority" value={decisionState.goal?.priority} />
+                <Metric label="状态" value={decisionState.latest_status} />
+                <Metric label="优先级" value={decisionState.goal?.priority} />
                 <Metric
-                  label="Observations"
+                  label="观察次数"
                   value={
                     decisionState.summary?.observation_count ??
                     decisionState.observations?.length ??
@@ -241,7 +241,7 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
                   }
                 />
                 <Metric
-                  label="Decisions"
+                  label="决策次数"
                   value={
                     decisionState.summary?.decision_count ??
                     decisionState.decisions?.length ??
@@ -249,7 +249,7 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
                   }
                 />
                 <Metric
-                  label="Evidence"
+                  label="证据评估"
                   value={
                     decisionState.summary?.evidence_assessment_count ??
                     decisionState.evidence_assessments?.length ??
@@ -257,12 +257,12 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
                   }
                 />
                 <Metric
-                  label="Approvals"
+                  label="审批次数"
                   value={decisionState.approval_decisions?.length ?? 0}
                 />
-                <Metric label="Resume" value={decisionState.approval_resume?.length ?? 0} />
+                <Metric label="恢复" value={decisionState.approval_resume?.length ?? 0} />
                 <Metric
-                  label="Recovery"
+                  label="恢复事件"
                   value={
                     decisionState.summary?.recovery_count ??
                     decisionState.recovery_events?.length ??
@@ -270,23 +270,23 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
                   }
                 />
                 <Metric
-                  label="Handoff"
+                  label="交接"
                   value={decisionState.handoff?.required ? decisionState.handoff.reason || "required" : "no"}
                 />
               </dl>
               {decisionState.goal?.goal && (
                 <p className="mt-3 rounded-md bg-muted p-2 text-xs text-muted-foreground">
-                  Goal: {decisionState.goal.goal}
+                  目标：{decisionState.goal.goal}
                 </p>
               )}
               {decisionState.decisions?.at(-1)?.reasoning_summary && (
                 <p className="mt-2 rounded-md bg-muted p-2 text-xs text-muted-foreground">
-                  Latest decision: {decisionState.decisions.at(-1)?.reasoning_summary}
+                  最新决策：{decisionState.decisions.at(-1)?.reasoning_summary}
                 </p>
               )}
               {decisionState.evidence_assessments?.at(-1)?.summary && (
                 <p className="mt-2 rounded-md bg-muted p-2 text-xs text-muted-foreground">
-                  Evidence: {decisionState.evidence_assessments.at(-1)?.summary}
+                  证据：{decisionState.evidence_assessments.at(-1)?.summary}
                 </p>
               )}
             </CardContent>
@@ -296,7 +296,7 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
         {replay?.tool_trajectory && replay.tool_trajectory.length > 0 && (
           <Card className="mb-4">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Tool Trajectory</CardTitle>
+              <CardTitle className="text-base">工具轨迹</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {replay.tool_trajectory.map((item, index) => (
@@ -325,7 +325,7 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
         {replay?.knowledge_citations && replay.knowledge_citations.length > 0 && (
           <Card className="mb-4">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Knowledge Evidence</CardTitle>
+              <CardTitle className="text-base">知识证据</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -348,7 +348,7 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
         {run.final_report && (
           <Card className="mb-4">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Report</CardTitle>
+              <CardTitle className="text-base">报告</CardTitle>
             </CardHeader>
             <CardContent>
               <Markdown content={run.final_report} />
@@ -363,26 +363,26 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
               {feedbackRating ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <CheckCircle2 className="size-4 text-success" />
-                  <span>Thanks!</span>
+                  <span>谢谢！</span>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => submitFeedback("helpful")} disabled={submittingFeedback}>
                       <ThumbsUp className="mr-1 size-3" />
-                      Helpful
+                      有帮助
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => submitFeedback("not_helpful")} disabled={submittingFeedback}>
                       <ThumbsDown className="mr-1 size-3" />
-                      Not Helpful
+                      没帮助
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => submitFeedback("wrong")} disabled={submittingFeedback}>
                       <XCircle className="mr-1 size-3" />
-                      Wrong
+                      有误
                     </Button>
                   </div>
                   <Textarea
-                    placeholder="Comment (optional)"
+                    placeholder="备注（可选）"
                     value={feedbackComment}
                     onChange={(e) => setFeedbackComment(e.target.value)}
                     disabled={submittingFeedback}

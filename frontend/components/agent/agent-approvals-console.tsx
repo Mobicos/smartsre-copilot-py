@@ -26,7 +26,7 @@ export function AgentApprovalsConsole() {
   const [submittingKey, setSubmittingKey] = useState<string | null>(null)
 
   useEffect(() => {
-    void loadApprovals().catch(() => toast.error("Failed to load approvals"))
+    void loadApprovals().catch(() => toast.error("加载审批失败"))
   }, [loadApprovals])
 
   const decide = useCallback(
@@ -52,7 +52,7 @@ export function AgentApprovalsConsole() {
         await invalidateAgentData()
         toast.success(`Approval ${decision}`)
       } catch (err) {
-        toast.error((err as Error).message || "Approval update failed")
+        toast.error((err as Error).message || "审批更新失败")
       } finally {
         setSubmittingKey(null)
       }
@@ -84,7 +84,7 @@ export function AgentApprovalsConsole() {
       await invalidateAgentData()
       toast.success(`Resume ${json.status || "submitted"}`)
     } catch (err) {
-      toast.error((err as Error).message || "Resume failed")
+      toast.error((err as Error).message || "恢复失败")
     } finally {
       setSubmittingKey(null)
     }
@@ -102,15 +102,15 @@ export function AgentApprovalsConsole() {
     <div className="h-full overflow-y-auto scrollbar-thin">
       <div className="mx-auto max-w-4xl px-4 py-6 md:px-6">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Approvals</h1>
+          <h1 className="text-2xl font-bold">审批</h1>
           <Button
             variant="outline"
             size="sm"
             onClick={() =>
-              void loadApprovals().catch(() => toast.error("Failed to load approvals"))
+              void loadApprovals().catch(() => toast.error("加载审批失败"))
             }
           >
-            <RefreshCw className="size-4" /> Refresh
+            <RefreshCw className="size-4" /> 刷新
           </Button>
         </div>
 
@@ -125,7 +125,7 @@ export function AgentApprovalsConsole() {
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
               <ShieldAlert className="size-10 text-muted-foreground" />
-              <p className="mt-3 text-sm text-muted-foreground">No approval requests</p>
+              <p className="mt-3 text-sm text-muted-foreground">暂无审批请求</p>
             </CardContent>
           </Card>
         ) : (
@@ -192,7 +192,7 @@ export function AgentApprovalsConsole() {
                           onClick={() => void decide(approval, "approved")}
                           disabled={submittingKey === key}
                         >
-                          <CheckCircle2 className="size-4" /> Approve
+                          <CheckCircle2 className="size-4" /> 批准
                         </Button>
                         <Button
                           size="sm"
@@ -200,7 +200,7 @@ export function AgentApprovalsConsole() {
                           onClick={() => void decide(approval, "rejected")}
                           disabled={submittingKey === key}
                         >
-                          <XCircle className="size-4" /> Reject
+                          <XCircle className="size-4" /> 拒绝
                         </Button>
                       </div>
                     )}
@@ -211,7 +211,7 @@ export function AgentApprovalsConsole() {
                         onClick={() => void resume(approval)}
                         disabled={submittingKey === `${key}:resume`}
                       >
-                        <PlayCircle className="size-4" /> Resume
+                        <PlayCircle className="size-4" /> 恢复
                       </Button>
                     )}
                   </CardContent>

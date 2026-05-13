@@ -51,10 +51,10 @@ export function OperationsConsole() {
       const data = (await res.json()) as HealthResponse
       setHealth(data)
       if (!data.ok) {
-        toast.warning(data.payload?.error || data.error || "Health check is not green")
+        toast.warning(data.payload?.error || data.error || "健康检查异常")
       }
     } catch (err) {
-      toast.error((err as Error).message || "Health check failed")
+      toast.error((err as Error).message || "健康检查失败")
     } finally {
       setLoading(false)
     }
@@ -68,49 +68,49 @@ export function OperationsConsole() {
   const services = useMemo(
     () => [
       {
-        name: "Database",
+        name: "数据库",
         status: payload?.database?.status,
         message: payload?.database?.message,
         icon: Database,
       },
       {
-        name: "Vector Backend",
+        name: "向量后端",
         status: payload?.vector_backend?.status,
         message: payload?.vector_backend?.backend,
         icon: ServerCog,
       },
       {
-        name: "Embedding",
+        name: "嵌入服务",
         status: payload?.embedding?.status,
         message: payload?.embedding?.message,
         icon: Activity,
       },
       {
-        name: "Vector Store",
+        name: "向量存储",
         status: payload?.vector_store?.status,
         message: payload?.vector_store?.message,
         icon: ServerCog,
       },
         {
-          name: "Object Storage",
+          name: "对象存储",
           status: payload?.object_storage?.status,
           message: payload?.object_storage?.message,
           icon: ServerCog,
         },
         {
-          name: "Decision Runtime",
+          name: "决策运行时",
           status: payload?.decision_runtime?.status,
           message: payload?.decision_runtime?.message,
           icon: Activity,
         },
         {
-          name: "Task Dispatcher",
+          name: "任务调度",
           status: payload?.task_dispatcher?.status,
           message: payload?.task_dispatcher?.message,
           icon: Activity,
       },
       {
-        name: "Approval Resume",
+        name: "审批恢复",
         status: payload?.agent_resume_dispatcher?.status,
         message: payload?.agent_resume_dispatcher?.queue,
         icon: Activity,
@@ -138,7 +138,7 @@ export function OperationsConsole() {
       <div className="mx-auto max-w-6xl px-4 py-6 md:px-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold">Operations</h1>
+            <h1 className="text-2xl font-bold">运维</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {payload?.service || "SmartSRE"} {payload?.version}
             </p>
@@ -149,14 +149,14 @@ export function OperationsConsole() {
             ) : (
               <RefreshCw className="size-4" />
             )}
-            Refresh
+            刷新
           </Button>
         </div>
 
         <div className="mb-4 rounded-md border border-border bg-card p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm text-muted-foreground">Readiness</p>
+              <p className="text-sm text-muted-foreground">就绪状态</p>
               <p className="mt-1 text-lg font-semibold">{payload?.status || "unknown"}</p>
             </div>
             <StatusBadge status={payload?.status || (health?.ok ? "healthy" : "unhealthy")} />
@@ -199,7 +199,7 @@ export function OperationsConsole() {
 
         <Card className="mt-4">
           <CardHeader>
-            <CardTitle className="text-base">Indexing Tasks</CardTitle>
+            <CardTitle className="text-base">索引任务</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
@@ -210,7 +210,7 @@ export function OperationsConsole() {
                 </div>
               ))}
               {Object.keys(payload?.indexing_tasks?.counts || {}).length === 0 && (
-                <p className="text-sm text-muted-foreground">No indexing task counts available</p>
+                <p className="text-sm text-muted-foreground">暂无索引任务统计</p>
               )}
             </div>
           </CardContent>
