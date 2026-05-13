@@ -38,6 +38,7 @@ dependencies = [
     "fastmcp>=3.2.4",
     "langchain-qwq>=0.3.4",
     "prometheus-client>=0.25.0",
+    "playwright>=1.59.0",
 ]
 
 [project.optional-dependencies]
