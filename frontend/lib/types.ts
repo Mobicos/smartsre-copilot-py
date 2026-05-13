@@ -79,7 +79,7 @@ export interface HealthPayload {
   payload?: {
     status?: "healthy" | "degraded" | "unhealthy" | string
     milvus?: string | { status?: string; collection?: string }
-    redis?: string
+    redis?: string | { status?: string; message?: string }
     mcp?: Record<string, string>
     decision_runtime?: {
       status?: string

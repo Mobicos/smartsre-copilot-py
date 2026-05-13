@@ -51,7 +51,9 @@ export function HealthIndicator() {
         key: "redis",
         tone: pickTone(payload.redis),
         label: "Redis",
-        detail: String(payload.redis),
+        detail: typeof payload.redis === "object" && payload.redis !== null
+          ? (payload.redis.message || payload.redis.status || JSON.stringify(payload.redis))
+          : String(payload.redis),
       })
     }
     if ("decision_runtime" in payload && payload.decision_runtime) {
