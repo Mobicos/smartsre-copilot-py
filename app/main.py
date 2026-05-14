@@ -164,7 +164,7 @@ async def request_validation_exception_handler(
     return error_response(
         status_code=422,
         code="validation_error",
-        message="Request validation failed",
+        message="请求校验失败",
         request_id=request_id,
         details={"errors": exc.errors()},
     )
@@ -177,7 +177,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return error_response(
         status_code=500,
         code="internal_error",
-        message="Internal server error",
+        message="服务器内部错误",
         request_id=request_id,
     )
 
@@ -266,7 +266,7 @@ app.include_router(api_router, prefix="/api", include_in_schema=False)  # backwa
 async def root():
     """Basic API root endpoint."""
     return {
-        "message": f"Welcome to {config.app_name} API",
+        "message": f"欢迎使用 {config.app_name} API",
         "version": config.app_version,
         "docs": "/docs",
     }

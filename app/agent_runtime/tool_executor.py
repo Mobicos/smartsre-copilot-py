@@ -67,7 +67,7 @@ class ToolExecutor:
                 arguments=arguments,
                 policy=policy,
                 decision="denied",
-                decision_reason="Tool is disabled by policy",
+                decision_reason="工具已被策略禁用",
             )
 
         capability = policy.get("capability")
@@ -76,10 +76,10 @@ class ToolExecutor:
                 tool_name=tool_name,
                 status="forbidden",
                 arguments=arguments,
-                error=f"Missing capability: {capability}",
+                error=f"缺少能力：{capability}",
                 policy=policy,
                 decision="denied",
-                decision_reason=f"Principal is missing required capability: {capability}",
+                decision_reason=f"调用方缺少所需能力：{capability}",
             )
 
         validation_error = self._validate_arguments(tool, arguments)
@@ -91,7 +91,7 @@ class ToolExecutor:
                 error=validation_error,
                 policy=policy,
                 decision="denied",
-                decision_reason="Tool arguments failed schema validation",
+                decision_reason="工具参数未通过 schema 校验",
             )
 
         if bool(policy["approval_required"]):
@@ -101,7 +101,7 @@ class ToolExecutor:
                 arguments=arguments,
                 policy=policy,
                 decision="approval_required",
-                decision_reason="Tool requires explicit approval before execution",
+                decision_reason="工具需要明确审批后才能执行",
             )
 
         try:
@@ -116,7 +116,7 @@ class ToolExecutor:
                     error=output_validation_error,
                     policy=policy,
                     decision="executed",
-                    decision_reason="Tool output failed schema validation",
+                    decision_reason="工具输出未通过 schema 校验",
                 )
             return ToolExecutionResult(
                 tool_name=tool_name,
@@ -125,7 +125,7 @@ class ToolExecutor:
                 output=output,
                 policy=policy,
                 decision="executed",
-                decision_reason="Tool execution allowed by policy",
+                decision_reason="工具执行已通过策略授权",
             )
         except Exception as exc:  # pragma: no cover - defensive boundary
             return ToolExecutionResult(
@@ -135,7 +135,7 @@ class ToolExecutor:
                 error=str(exc),
                 policy=policy,
                 decision="executed",
-                decision_reason="Tool execution allowed by policy but failed",
+                decision_reason="工具执行已通过策略授权但执行失败",
             )
 
     async def execute_approved(
@@ -157,10 +157,10 @@ class ToolExecutor:
                 tool_name=tool_name,
                 status="forbidden",
                 arguments=arguments,
-                error="Approved action does not match requested tool execution",
+                error="审批操作与请求的工具执行不匹配",
                 policy=policy,
                 decision="denied",
-                decision_reason="Approval payload did not match the original tool action",
+                decision_reason="审批负载与原始工具操作不匹配",
             )
 
         if not bool(policy["enabled"]):
@@ -170,7 +170,7 @@ class ToolExecutor:
                 arguments=arguments,
                 policy=policy,
                 decision="denied",
-                decision_reason="Tool is disabled by policy",
+                decision_reason="工具已被策略禁用",
             )
 
         capability = policy.get("capability")
@@ -179,10 +179,10 @@ class ToolExecutor:
                 tool_name=tool_name,
                 status="forbidden",
                 arguments=arguments,
-                error=f"Missing capability: {capability}",
+                error=f"缺少能力：{capability}",
                 policy=policy,
                 decision="denied",
-                decision_reason=f"Principal is missing required capability: {capability}",
+                decision_reason=f"调用方缺少所需能力：{capability}",
             )
 
         validation_error = self._validate_arguments(tool, arguments)
@@ -194,7 +194,7 @@ class ToolExecutor:
                 error=validation_error,
                 policy=policy,
                 decision="denied",
-                decision_reason="Tool arguments failed schema validation",
+                decision_reason="工具参数未通过 schema 校验",
             )
 
         try:
@@ -209,7 +209,7 @@ class ToolExecutor:
                     error=output_validation_error,
                     policy=policy,
                     decision="executed_after_approval",
-                    decision_reason="Tool output failed schema validation",
+                    decision_reason="工具输出未通过 schema 校验",
                 )
             return ToolExecutionResult(
                 tool_name=tool_name,
@@ -218,7 +218,7 @@ class ToolExecutor:
                 output=output,
                 policy=policy,
                 decision="executed_after_approval",
-                decision_reason="Tool execution matched an explicit approval decision",
+                decision_reason="工具执行与明确审批决定匹配",
             )
         except Exception as exc:  # pragma: no cover - defensive boundary
             return ToolExecutionResult(
@@ -228,7 +228,7 @@ class ToolExecutor:
                 error=str(exc),
                 policy=policy,
                 decision="executed_after_approval",
-                decision_reason="Approved tool execution failed",
+                decision_reason="已审批工具执行失败",
             )
 
     def _normalized_policy(self, tool_name: str, *, tool: Any | None = None) -> dict[str, Any]:
@@ -362,7 +362,7 @@ def _validate_json_schema_arguments(
     required = schema.get("required") or []
     missing = [name for name in required if name not in arguments]
     if missing:
-        return f"Missing required arguments: {', '.join(str(item) for item in missing)}"
+        return f"缺少必需参数：{', '.join(str(item) for item in missing)}"
 
     properties = schema.get("properties") or {}
     for name, value in arguments.items():
@@ -371,7 +371,7 @@ def _validate_json_schema_arguments(
             continue
         expected_type = expected.get("type")
         if expected_type and not _matches_json_schema_type(value, str(expected_type)):
-            return f"Argument {name} must be {expected_type}"
+            return f"参数 {name} 必须为 {expected_type} 类型"
     return None
 
 

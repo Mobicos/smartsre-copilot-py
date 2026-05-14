@@ -309,8 +309,8 @@ def test_agent_runtime_state_objects_describe_reasoning_and_evidence():
     evidence = EvidenceItem.from_tool_result(result)
 
     assert hypothesis.summary == (
-        "Investigate goal 'diagnose latency' by checking scene knowledge, "
-        "approved tools, and collected evidence before making claims."
+        "调查目标「diagnose latency」，先检查场景知识、"
+        "已批准工具和已采集证据，再给出结论。"
     )
     assert action.tool_name == "SearchLog"
     assert action.arguments == {"query": "diagnose latency", "keyword": "diagnose latency"}
@@ -440,7 +440,7 @@ async def test_agent_runtime_applies_default_step_limit_and_records_skipped_tool
         "executed_tools": ["Tool0", "Tool1", "Tool2", "Tool3", "Tool4"],
         "skipped_tools": ["Tool5"],
     }
-    assert "Execution Boundaries" in str(run_store.final_report)
+    assert "执行边界" in str(run_store.final_report)
     assert "Tool5" in str(run_store.final_report)
 
 

@@ -115,7 +115,7 @@ class AgentResumeService:
                 run_id,
                 event_type="approval_resumed_tool_result",
                 stage="tool",
-                message=f"Approved tool {result.tool_name} finished with status {result.status}",
+                message=f"已批准工具 {result.tool_name} 执行完成，状态：{result.status}",
                 payload={
                     "tool_name": result.tool_name,
                     "arguments": result.arguments,
@@ -149,7 +149,7 @@ class AgentResumeService:
             run_id,
             event_type="approval_resume",
             stage="approval",
-            message=f"Approval resume evaluated for {tool_name}",
+            message=f"审批恢复已评估：{tool_name}",
             payload=payload,
         )
 
@@ -195,9 +195,9 @@ class AgentResumeService:
                 tool_name=tool_name,
                 status="error",
                 arguments=arguments,
-                error="Approved tool is not available in the current catalog",
+                error="已批准的工具在当前目录中不可用",
                 decision="denied",
-                decision_reason="Tool catalog did not contain the approved tool",
+                decision_reason="工具目录中未包含已批准的工具",
             )
         return await self._tool_executor.execute_approved(
             tool,

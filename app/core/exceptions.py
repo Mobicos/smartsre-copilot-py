@@ -10,7 +10,7 @@ class AppException(Exception):
 
     status_code = 500
     code = "app_error"
-    public_message = "Application error"
+    public_message = "应用错误"
 
     def __init__(
         self,
@@ -32,7 +32,7 @@ class DomainException(AppException):
 
     status_code = 400
     code = "domain_error"
-    public_message = "Invalid request"
+    public_message = "无效请求"
 
 
 class InfrastructureException(AppException):
@@ -40,4 +40,4 @@ class InfrastructureException(AppException):
 
     status_code = 500
     code = "infrastructure_error"
-    public_message = "Service temporarily unavailable"
+    public_message = "服务暂时不可用"

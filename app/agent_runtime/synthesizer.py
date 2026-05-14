@@ -14,13 +14,13 @@ class ReportSynthesizer:
         evidence_text = (
             "\n".join(f"- {item}" for item in evidence)
             if evidence
-            else "- No tool evidence was collected."
+            else "- 未采集到工具证据。"
         )
         knowledge_lines = state.knowledge_context.to_report_lines()
         knowledge_text = (
             "\n".join(knowledge_lines)
             if knowledge_lines
-            else "- No scene knowledge base is configured."
+            else "- 未配置场景知识库。"
         )
         # Confirmed Facts: only successful evidence outputs
         confirmed_items = [item for item in state.evidence if item.status == "success"]
@@ -29,46 +29,45 @@ class ReportSynthesizer:
                 f"- {item.tool_name}: {item.output}" for item in confirmed_items
             )
         else:
-            confirmed_facts = "- No facts are confirmed yet."
+            confirmed_facts = "- 尚未确认任何事实。"
         # Executed Actions: tool name + execution status
         if state.evidence:
             executed_actions = "\n".join(
                 f"- {item.tool_name}: {item.status}" for item in state.evidence
             )
         else:
-            executed_actions = "- No tools were executed."
+            executed_actions = "- 未执行任何工具。"
         tool_failures = [
             item.to_report_line() for item in state.evidence if item.status not in {"success"}
         ]
         tool_failure_text = (
             "\n".join(f"- {item}" for item in tool_failures)
             if tool_failures
-            else "- No tool failure, denial, timeout, or approval block was observed."
+            else "- 未观测到工具失败、拒绝、超时或审批拦截。"
         )
         conclusion = (
-            "The collected evidence supports the observations above, but the final root "
-            "cause still requires operator confirmation."
+            "已采集的证据支持上述观测结论，但最终根因仍需运维人员确认。"
             if evidence
-            else "No deterministic root cause is claimed because no evidence was collected."
+            else "因未采集到证据，无法给出确定性根因判断。"
         )
         return (
-            "# SmartSRE Agent Evidence Report\n\n"
-            f"## Goal\n{state.goal}\n\n"
-            "## Success Criteria\n"
-            "- Use only scene-approved tools and knowledge context.\n"
-            "- Preserve auditable evidence, tool status, and uncertainty.\n\n"
-            f"## Confirmed Facts\n{confirmed_facts}\n\n"
-            f"## Key Evidence\n{evidence_text}\n\n"
-            f"## Knowledge Context\n{knowledge_text}\n\n"
-            f"## Inference Conclusion\n{conclusion}\n\n"
-            "## Uncertainty\n"
-            "- Evidence can be incomplete, stale, or scoped to the configured scene.\n\n"
-            f"## Executed Actions\n{executed_actions}\n\n"
-            f"## Unexecuted Or Blocked Actions\n{tool_failure_text}\n\n"
-            "## Recovery And Degradation\n"
-            "- Approval-required, denied, timed-out, or failed tools are non-authoritative.\n\n"
-            "## Recommended Next Step\n"
-            "- Review cited evidence and run targeted follow-up checks for unresolved uncertainty."
+            "# SmartSRE Agent 证据报告\n\n"
+            f"## 目标\n{state.goal}\n\n"
+            "## 成功标准\n"
+            "- 仅使用场景允许的工具和知识上下文。\n"
+            "- 保留可审计的证据、工具状态和不确定性。\n\n"
+            f"## 已确认事实\n{confirmed_facts}\n\n"
+            f"## 关键证据\n{evidence_text}\n\n"
+            f"## 知识上下文\n{knowledge_text}\n\n"
+            f"## 推理结论\n{conclusion}\n\n"
+            "## 不确定性\n"
+            "- 证据可能不完整、已过期或仅限于已配置的场景范围。\n\n"
+            f"## 已执行操作\n{executed_actions}\n\n"
+            f"## 未执行或被拦截的操作\n{tool_failure_text}\n\n"
+            "## 恢复与降级\n"
+            "- 需审批、被拒绝、超时或失败的工具结果不具备权威性。\n\n"
+            "## 建议下一步\n"
+            "- 审查引用的证据，针对未解决的不确定性执行后续检查。"
         )
 
     @staticmethod
@@ -80,16 +79,16 @@ class ReportSynthesizer:
         skipped_tools: list[str],
     ) -> str:
         base_report = ReportSynthesizer.build_report(state)
-        prefix = "# SmartSRE Agent Evidence Report\n\n"
+        prefix = "# SmartSRE Agent 证据报告\n\n"
         body = base_report[len(prefix) :] if base_report.startswith(prefix) else base_report
-        executed_text = ", ".join(executed_tools) if executed_tools else "none"
-        skipped_text = ", ".join(skipped_tools) if skipped_tools else "none"
+        executed_text = ", ".join(executed_tools) if executed_tools else "无"
+        skipped_text = ", ".join(skipped_tools) if skipped_tools else "无"
         return (
             f"{prefix}"
-            "## Execution Boundaries\n"
-            f"- Maximum tool steps: {max_steps}\n"
-            f"- Executed tools: {executed_text}\n"
-            f"- Skipped tools: {skipped_text}\n\n"
+            "## 执行边界\n"
+            f"- 最大工具步骤：{max_steps}\n"
+            f"- 已执行工具：{executed_text}\n"
+            f"- 已跳过工具：{skipped_text}\n\n"
             f"{body}"
         )
 
@@ -103,16 +102,15 @@ class ReportSynthesizer:
         knowledge_text = (
             "\n".join(knowledge_lines)
             if knowledge_lines
-            else "- No scene knowledge base is configured."
+            else "- 未配置场景知识库。"
         )
         return (
-            "# SmartSRE Agent Evidence Report\n\n"
-            f"## Goal\n{goal}\n\n"
-            f"## Knowledge Context\n{knowledge_text}\n\n"
-            "## Inference Conclusion\n"
-            "No deterministic root cause is claimed because no executable tool evidence "
-            "was collected.\n\n"
-            "## Recovery And Degradation\n"
-            "- External MCP tools are unavailable or the scene has no executable tools.\n"
-            "- Configure log, metric, alert, or knowledge tools before retrying."
+            "# SmartSRE Agent 证据报告\n\n"
+            f"## 目标\n{goal}\n\n"
+            f"## 知识上下文\n{knowledge_text}\n\n"
+            "## 推理结论\n"
+            "因未采集到可执行工具的证据，无法给出确定性根因判断。\n\n"
+            "## 恢复与降级\n"
+            "- 外部 MCP 工具不可用或场景无可执行工具。\n"
+            "- 请配置日志、指标、告警或知识工具后重试。"
         )

@@ -415,7 +415,7 @@ class NativeAgentApplicationService:
             run_id,
             event_type="approval_decision",
             stage="approval",
-            message=f"Tool approval {decision}: {tool_name}",
+            message=f"工具审批 {decision}：{tool_name}",
             payload=payload,
         )
         if decision == "approved":
@@ -442,7 +442,7 @@ class NativeAgentApplicationService:
                 run_id,
                 event_type="approval_resume",
                 stage="approval",
-                message=f"Approval resume dispatch {resume_status}: {tool_name}",
+                message=f"审批恢复调度 {resume_status}：{tool_name}",
                 payload=resume_payload,
             )
             payload = resume_payload
@@ -451,7 +451,7 @@ class NativeAgentApplicationService:
                 run_id,
                 tool_name=tool_name,
                 reason="approval_rejected",
-                message="Tool approval was rejected; run requires manual handoff.",
+                message="工具审批已被拒绝；运行需要手动交接。",
             )
         return payload
 
@@ -515,7 +515,7 @@ class NativeAgentApplicationService:
             decision_payload = {
                 "tool_name": tool_name,
                 "decision": "expired",
-                "comment": "Approval request expired before an explicit decision.",
+                "comment": "审批请求在明确决策前已过期。",
                 "actor": "system",
                 "resume_status": "not_resumed",
                 "reason": _resume_status_reason("expired"),
@@ -525,14 +525,14 @@ class NativeAgentApplicationService:
                 run_id,
                 event_type="approval_decision",
                 stage="approval",
-                message=f"Tool approval expired: {tool_name}",
+                message=f"工具审批已过期：{tool_name}",
                 payload=decision_payload,
             )
             self._mark_run_handoff(
                 run_id,
                 tool_name=tool_name,
                 reason="approval_expired",
-                message="Tool approval expired before a decision; run requires manual handoff.",
+                message="工具审批在决策前已过期；运行需要手动交接。",
             )
             expired.append(
                 {
@@ -553,11 +553,11 @@ class NativeAgentApplicationService:
         message: str,
     ) -> None:
         final_report = (
-            "## Handoff Required\n\n"
-            f"- Tool: {tool_name}\n"
-            f"- Reason: {reason}\n"
-            f"- Detail: {message}\n"
-            "- No high-risk tool action was executed after the approval boundary."
+            "## 需要交接\n\n"
+            f"- 工具：{tool_name}\n"
+            f"- 原因：{reason}\n"
+            f"- 详情：{message}\n"
+            "- 审批边界后未执行任何高风险工具操作。"
         )
         self._agent_run_repository.append_event(
             run_id,
@@ -849,16 +849,16 @@ def _enqueue_approval_resume_task(
 
 def _resume_status_reason(resume_status: str) -> str:
     reasons = {
-        "queued": "Approved action was queued for checkpoint resume.",
-        "enqueue_failed": "Approval was audited, but resume queue enqueue failed.",
+        "queued": "已批准的操作已加入检查点恢复队列。",
+        "enqueue_failed": "审批已审计，但恢复队列入队失败。",
         "deferred_until_resume_worker_enabled": (
-            "Approval was audited; checkpoint resume worker is not enabled in this mode."
+            "审批已审计；当前模式未启用检查点恢复工作器。"
         ),
-        "pending_resume_enqueue": "Approval was audited before resume dispatch.",
-        "not_resumed": "Approval decision was audited without executing the action.",
-        "expired": "Approval request expired before an explicit decision.",
+        "pending_resume_enqueue": "审批在恢复调度前已审计。",
+        "not_resumed": "审批决定已审计但未执行操作。",
+        "expired": "审批请求在明确决策前已过期。",
     }
-    return reasons.get(resume_status, "Approval decision was audited.")
+    return reasons.get(resume_status, "审批决定已审计。")
 
 
 def _approval_expires_at(created_at: Any) -> str | None:

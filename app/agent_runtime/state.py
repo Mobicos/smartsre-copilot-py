@@ -21,8 +21,8 @@ class Hypothesis:
     def from_goal(cls, goal: str) -> Hypothesis:
         return cls(
             summary=(
-                f"Investigate goal '{goal}' by checking scene knowledge, "
-                "approved tools, and collected evidence before making claims."
+                f"调查目标「{goal}」，先检查场景知识、"
+                "已批准工具和已采集证据，再给出结论。"
             )
         )
 
@@ -40,11 +40,11 @@ class KnowledgeContext:
     @property
     def summary(self) -> str:
         if not self.knowledge_bases:
-            return "No scene knowledge base is configured."
+            return "未配置场景知识库。"
         names = ", ".join(str(item["name"]) for item in self.knowledge_bases)
         count = len(self.knowledge_bases)
-        noun = "knowledge base" if count == 1 else "knowledge bases"
-        return f"Loaded {count} scene {noun}: {names}"
+        noun = "个知识库" if count == 1 else "个知识库"
+        return f"已加载场景{noun} {count} 个：{names}"
 
     def has_knowledge(self) -> bool:
         return bool(self.knowledge_bases)
@@ -57,7 +57,7 @@ class KnowledgeContext:
 
     def to_report_lines(self) -> list[str]:
         return [
-            f"- {item['name']} ({item['version']}): {item.get('description') or 'No description'}"
+            f"- {item['name']} ({item['version']}): {item.get('description') or '暂无描述'}"
             for item in self.knowledge_bases
         ]
 
@@ -215,10 +215,10 @@ class EvidenceItem:
         if self.status == "success":
             return f"{self.tool_name}: {self.output}"
         if self.status == "approval_required":
-            return f"{self.tool_name}: awaiting human approval before evidence collection"
+            return f"{self.tool_name}：等待人工审批后采集证据"
         if self.status == "disabled":
-            return f"{self.tool_name}: tool is disabled by policy"
-        return f"{self.tool_name}: tool execution failed: {self.error}"
+            return f"{self.tool_name}：工具已被策略禁用"
+        return f"{self.tool_name}：工具执行失败：{self.error}"
 
 
 @dataclass

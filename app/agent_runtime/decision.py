@@ -239,7 +239,7 @@ class DeterministicDecisionProvider:
         if state.budget.exhausted:
             return AgentDecision(
                 action_type="handoff",
-                reasoning_summary="Runtime budget is exhausted, so the run should hand off.",
+                reasoning_summary="运行时预算已耗尽，应进行人工交接。",
                 evidence=_best_evidence(state.evidence),
                 recovery=RecoveryDecision(
                     required=True,
@@ -253,7 +253,7 @@ class DeterministicDecisionProvider:
         if strong_evidence is not None:
             return AgentDecision(
                 action_type="final_report",
-                reasoning_summary="Strong evidence is available and can support a final report.",
+                reasoning_summary="已有充分证据支持生成最终报告。",
                 evidence=strong_evidence,
                 confidence=max(strong_evidence.confidence, 0.8),
             )
@@ -261,8 +261,8 @@ class DeterministicDecisionProvider:
         if state.consecutive_empty_evidence >= 2:
             return AgentDecision(
                 action_type="recover",
-                reasoning_summary="Evidence remained empty after repeated attempts.",
-                evidence=EvidenceAssessment(quality="empty", summary="No usable evidence yet."),
+                reasoning_summary="多次尝试后证据仍为空。",
+                evidence=EvidenceAssessment(quality="empty", summary="尚无可用证据。"),
                 recovery=RecoveryDecision(
                     required=True,
                     reason="empty_evidence",
@@ -280,15 +280,15 @@ class DeterministicDecisionProvider:
                 action_type="call_tool",
                 selected_tool=tool_name,
                 tool_arguments={"query": state.goal.goal},
-                expected_evidence=[f"Evidence from {tool_name}"],
-                reasoning_summary=f"Call {tool_name} to gather evidence for the goal.",
+                expected_evidence=[f"来自 {tool_name} 的证据"],
+                reasoning_summary=f"调用 {tool_name} 采集与目标相关的证据。",
                 evidence=_best_evidence(state.evidence),
                 confidence=0.7,
             )
 
         return AgentDecision(
             action_type="handoff",
-            reasoning_summary="No executable tools are available for this goal.",
+            reasoning_summary="当前目标没有可用的可执行工具。",
             evidence=_best_evidence(state.evidence),
             recovery=RecoveryDecision(
                 required=True,
@@ -313,7 +313,7 @@ class QwenDecisionProvider:
         except (ValueError, ValidationError, TypeError) as exc:
             return AgentDecision(
                 action_type="recover",
-                reasoning_summary="Model output was not valid structured decision JSON.",
+                reasoning_summary="模型输出不是有效的结构化决策 JSON。",
                 evidence=EvidenceAssessment(
                     quality="error",
                     summary=f"{type(exc).__name__}: {exc}",
@@ -329,10 +329,10 @@ class QwenDecisionProvider:
         if decision.selected_tool and decision.selected_tool not in state.available_tools:
             return AgentDecision(
                 action_type="recover",
-                reasoning_summary="Model selected a tool outside the available tool set.",
+                reasoning_summary="模型选择了可用工具集之外的工具。",
                 evidence=EvidenceAssessment(
                     quality="error",
-                    summary=f"Unknown tool: {decision.selected_tool}",
+                    summary=f"未知工具：{decision.selected_tool}",
                 ),
                 recovery=RecoveryDecision(
                     required=True,
@@ -484,7 +484,7 @@ class AgentDecisionRuntime:
             observations.append(
                 AgentObservation(
                     source="tool_catalog",
-                    summary=f"{len(state.available_tools)} scene-approved tools are available.",
+                    summary=f"可用场景工具 {len(state.available_tools)} 个。",
                     confidence=1.0,
                     citations=[{"tools": state.available_tools}],
                 )
@@ -504,10 +504,10 @@ class AgentDecisionRuntime:
         if latest.selected_tool and latest.selected_tool not in state.available_tools:
             decision = AgentDecision(
                 action_type="recover",
-                reasoning_summary="Decision selected a tool outside the scene-approved tool set.",
+                reasoning_summary="决策选择了场景允许工具集之外的工具。",
                 evidence=EvidenceAssessment(
                     quality="error",
-                    summary=f"Unknown tool: {latest.selected_tool}",
+                    summary=f"未知工具：{latest.selected_tool}",
                 ),
                 recovery=RecoveryDecision(
                     required=True,
@@ -523,10 +523,10 @@ class AgentDecisionRuntime:
         if latest.action_type == "call_tool" and not latest.selected_tool:
             decision = AgentDecision(
                 action_type="recover",
-                reasoning_summary="Decision requested a tool call without selecting a tool.",
+                reasoning_summary="决策请求调用工具但未选择具体工具。",
                 evidence=EvidenceAssessment(
                     quality="error",
-                    summary="Missing selected_tool for call_tool decision.",
+                    summary="call_tool 决策缺少 selected_tool。",
                 ),
                 recovery=RecoveryDecision(
                     required=True,
@@ -566,7 +566,7 @@ class AgentDecisionRuntime:
         latest = state.decisions[-1]
         if latest.action_type != "call_tool":
             return _state_to_graph_payload(state)
-        expected = latest.expected_evidence or ["Tool evidence is pending execution."]
+        expected = latest.expected_evidence or ["工具证据等待执行。"]
         evidence = EvidenceAssessment(
             quality="weak",
             summary="; ".join(expected),
@@ -659,7 +659,7 @@ def build_initial_decision_state(
         hypothesis_queue=[
             AgentHypothesis(
                 hypothesis_id="hypothesis-1",
-                summary="Validate logs, metrics, alerts, and recent changes for the goal.",
+                summary="验证目标相关的日志、指标、告警和近期变更。",
                 priority=1,
                 confidence=0.5,
             )
@@ -687,7 +687,7 @@ class FinalReportContract(BaseModel):
 
 def _best_evidence(evidence: Sequence[EvidenceAssessment]) -> EvidenceAssessment:
     if not evidence:
-        return EvidenceAssessment(quality="empty", summary="No evidence has been collected yet.")
+        return EvidenceAssessment(quality="empty", summary="尚未采集到任何证据。")
     order = {"strong": 0, "partial": 1, "weak": 2, "conflicting": 3, "error": 4, "empty": 5}
     return sorted(evidence, key=lambda item: order[item.quality])[0]
 

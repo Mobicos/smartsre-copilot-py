@@ -70,7 +70,7 @@ def test_build_initial_state_includes_observation_and_hypothesis_queue():
     assert state.hypothesis_queue == [
         AgentHypothesis(
             hypothesis_id="hypothesis-1",
-            summary="Validate logs, metrics, alerts, and recent changes for the goal.",
+            summary="验证目标相关的日志、指标、告警和近期变更。",
             priority=1,
             confidence=0.5,
         )

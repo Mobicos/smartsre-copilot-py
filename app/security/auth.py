@@ -180,7 +180,7 @@ async def get_current_principal(
         if settings.is_production:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication is required in production",
+                detail="生产环境需要认证",
                 headers={"WWW-Authenticate": "ApiKey"},
             )
         principal = Principal(role="admin", subject="local-dev")
@@ -199,7 +199,7 @@ async def get_current_principal(
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid API key",
+        detail="无效的 API 密钥",
         headers={"WWW-Authenticate": "ApiKey"},
     )
 
@@ -218,7 +218,7 @@ def require_capability(capability: str, settings: AppSettings | None = None):
 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Missing capability: {capability}",
+            detail=f"缺少能力：{capability}",
         )
 
     return capability_dependency
