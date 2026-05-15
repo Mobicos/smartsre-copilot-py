@@ -15,7 +15,7 @@ from app.agent_runtime.decision import (
     DeterministicDecisionProvider,
     RuntimeBudget,
 )
-from app.agent_runtime.trace_collector import TraceCollector
+from app.agent_runtime.trace_collector import TraceCollector, TraceSpan
 
 TerminalAction = {"ask_approval", "final_report", "handoff"}
 
@@ -68,7 +68,7 @@ class LoopTraceCollector(Protocol):
         self,
         name: str,
         attributes: dict[str, Any] | None = None,
-    ) -> Iterator[None]:
+    ) -> Iterator[TraceSpan]:
         """Open an optional tracing span."""
 
 
@@ -119,9 +119,15 @@ class BoundedReActLoop:
                     "agent.step_index": step_index,
                     "agent.max_steps": budget.max_steps,
                 },
-            ):
+            ) as span:
                 decision = self._provider.decide(current_state)
-            step_tokens = self._token_estimator(decision)
+                span.set_attribute("agent.action_type", decision.action_type)
+                if decision.selected_tool:
+                    span.set_attribute("agent.tool_name", decision.selected_tool)
+                span.set_attribute("agent.evidence_quality", decision.evidence.quality)
+                step_tokens = self._token_estimator(decision)
+                span.set_attribute("agent.token_usage", step_tokens)
+                span.set_attribute("agent.cost_estimate", 0.0)
             token_usage += step_tokens
 
             if budget.max_tokens is not None and token_usage > budget.max_tokens:

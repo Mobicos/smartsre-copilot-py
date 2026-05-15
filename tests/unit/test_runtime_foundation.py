@@ -29,7 +29,15 @@ class _RecordingTraceCollector:
     @contextmanager
     def span(self, name: str, attributes: dict[str, Any] | None = None):
         self.spans.append((name, attributes))
-        yield
+        yield _RecordingSpan(attributes or {})
+
+
+class _RecordingSpan:
+    def __init__(self, attributes: dict[str, Any]) -> None:
+        self._attributes = attributes
+
+    def set_attribute(self, key: str, value: Any) -> None:
+        self._attributes[key] = value
 
 
 def test_bounded_react_loop_stops_at_max_steps():
@@ -58,6 +66,7 @@ def test_bounded_react_loop_records_trace_span_for_each_step():
 
     result = BoundedReActLoop(
         provider=_RepeatingProvider(),
+        token_estimator=lambda _: 17,
         trace_collector=trace_collector,
     ).run(
         state,
@@ -72,6 +81,11 @@ def test_bounded_react_loop_records_trace_span_for_each_step():
                 "agent.run_id": "run-1",
                 "agent.step_index": 0,
                 "agent.max_steps": 2,
+                "agent.action_type": "call_tool",
+                "agent.tool_name": "SearchLog",
+                "agent.evidence_quality": "empty",
+                "agent.token_usage": 17,
+                "agent.cost_estimate": 0.0,
             },
         ),
         (
@@ -80,6 +94,11 @@ def test_bounded_react_loop_records_trace_span_for_each_step():
                 "agent.run_id": "run-1",
                 "agent.step_index": 1,
                 "agent.max_steps": 2,
+                "agent.action_type": "call_tool",
+                "agent.tool_name": "SearchLog",
+                "agent.evidence_quality": "empty",
+                "agent.token_usage": 17,
+                "agent.cost_estimate": 0.0,
             },
         ),
     ]
