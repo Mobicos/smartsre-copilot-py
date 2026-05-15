@@ -96,7 +96,7 @@ editing code:
 
 ### Tests
 
-- [ ] T011 [P] Unit test: BoundedReActLoop budget enforcement in `tests/unit/test_loop.py`
+- [x] T011 [P] Unit test: BoundedReActLoop budget enforcement in `tests/unit/test_runtime_foundation.py`
   - Test step_budget prevents infinite loop
   - Test time_budget timeout
   - Test token_budget exceeded

@@ -40,6 +40,16 @@ class _RecordingSpan:
         self._attributes[key] = value
 
 
+class _FakeClock:
+    def __init__(self, *values: float) -> None:
+        self._values = list(values)
+
+    def __call__(self) -> float:
+        if not self._values:
+            raise AssertionError("Fake clock exhausted")
+        return self._values.pop(0)
+
+
 def test_bounded_react_loop_stops_at_max_steps():
     state = AgentDecisionState(
         run_id="run-1",
@@ -54,6 +64,45 @@ def test_bounded_react_loop_stops_at_max_steps():
     assert result.termination_reason == "max_steps_reached"
     assert result.step_count == 2
     assert [step.step_index for step in result.steps] == [0, 1]
+
+
+def test_bounded_react_loop_stops_when_time_budget_is_exhausted():
+    state = AgentDecisionState(
+        run_id="run-1",
+        goal=AgentGoalContract(goal="diagnose latency"),
+        available_tools=["SearchLog"],
+    )
+
+    result = BoundedReActLoop(
+        provider=_RepeatingProvider(),
+        clock=_FakeClock(0.0, 31.0),
+    ).run(
+        state,
+        LoopBudget(max_steps=3, max_time_seconds=30),
+    )
+
+    assert result.termination_reason == "max_time_seconds_reached"
+    assert result.step_count == 0
+
+
+def test_bounded_react_loop_stops_when_token_budget_is_exhausted():
+    state = AgentDecisionState(
+        run_id="run-1",
+        goal=AgentGoalContract(goal="diagnose latency"),
+        available_tools=["SearchLog"],
+    )
+
+    result = BoundedReActLoop(
+        provider=_RepeatingProvider(),
+        token_estimator=lambda _: 2,
+    ).run(
+        state,
+        LoopBudget(max_steps=3, max_time_seconds=30, max_tokens=1),
+    )
+
+    assert result.termination_reason == "max_tokens_reached"
+    assert result.step_count == 0
+    assert result.token_usage == 2
 
 
 def test_bounded_react_loop_records_trace_span_for_each_step():

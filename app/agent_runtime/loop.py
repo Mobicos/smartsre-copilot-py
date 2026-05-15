@@ -85,20 +85,22 @@ class BoundedReActLoop:
         provider: DecisionProvider | None = None,
         token_estimator: Callable[[AgentDecision], int] | None = None,
         trace_collector: LoopTraceCollector | None = None,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         self._provider = provider or DeterministicDecisionProvider()
         self._token_estimator = token_estimator or _zero_token_estimator
         self._trace_collector = trace_collector or TraceCollector()
+        self._clock = clock or monotonic
 
     def run(self, state: AgentDecisionState, budget: LoopBudget | None = None) -> LoopResult:
         budget = (budget or _budget_from_state(state)).normalize()
-        deadline = monotonic() + budget.max_time_seconds
+        deadline = self._clock() + budget.max_time_seconds
         current_state = state
         steps: list[LoopStep] = []
         token_usage = 0
 
         for step_index in range(budget.max_steps):
-            if monotonic() >= deadline:
+            if self._clock() >= deadline:
                 return LoopResult(
                     state=current_state,
                     steps=steps,
