@@ -28,6 +28,8 @@ Implemented or mostly implemented:
   tool pause semantics.
 - `RecoveryManager` is isolated in `app/agent_runtime/recovery.py` for
   cancellation, timeout, and unexpected-error failure boundaries.
+- `TraceCollector` is isolated in `app/agent_runtime/trace_collector.py` and
+  guards runtime spans without making OpenTelemetry a hard dependency.
 - Deterministic and Qwen decision providers share the current decision runtime,
   and Qwen failures emit `provider_fallback` before falling back.
 - Cross-session memory exists as text memory and is injected through
@@ -51,7 +53,7 @@ Not implemented yet:
 
 - Proactive monitor, alert deduplication, and automatic diagnosis triggers.
 - Collaborative intervention APIs and frontend controls.
-- OpenTelemetry span collector and Grafana dashboard artifacts for AgentOps.
+- Grafana dashboard artifacts for AgentOps.
 - Full pgvector-backed memory retrieval and badcase clustering / FAQ candidate
   workflow.
 

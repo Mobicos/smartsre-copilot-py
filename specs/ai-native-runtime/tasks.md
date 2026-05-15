@@ -20,17 +20,17 @@ editing code:
   badcase review / promotion APIs, run-level metrics columns, deterministic/Qwen
   provider fallback, text-based cross-session memory, extracted
   `BoundedReActLoop` skeleton, extracted `EvidenceAssessor`, extracted
-  `ApprovalGate`, extracted `RecoveryManager`, and frontend workbench coverage
-  for memory, badcase, approval, and scenario flows.
+  `ApprovalGate`, extracted `RecoveryManager`, extracted `TraceCollector`, and
+  frontend workbench coverage for memory, badcase, approval, and scenario flows.
 - Partial: runtime loop orchestration, recovery strategy selection, replay
   metrics, and memory injection exist but still need hardening. Metrics
   collection has been extracted to
   `app/agent_runtime/metrics_collector.py`; evidence classification has been
   extracted to `app/agent_runtime/evidence.py`, but conflict detection is still
   pending.
-- Not started: `TraceCollector`, proactive monitor, collaborative intervention,
-  pgvector memory embeddings, badcase clustering, FAQ candidates, and per-step
-  `agent_events` metric columns.
+- Not started: proactive monitor, collaborative intervention, pgvector memory
+  embeddings, badcase clustering, FAQ candidates, and per-step `agent_events`
+  metric columns.
 - Private planning files: `PLAN.md` and `specs/ai-native-runtime/plan.md` are
   local-only and must not be committed.
 
@@ -238,6 +238,7 @@ editing code:
 - [ ] T035 Implement TraceCollector in `app/agent_runtime/trace_collector.py`
   - Each loop step produces OpenTelemetry span
   - Attributes: step_index, tool_name, evidence_quality, token_usage, cost
+  - Status: optional span collector extracted and tool-call span wired; per-step loop spans pending
 - [ ] T036 Integrate TraceCollector into BoundedReActLoop in `app/agent_runtime/loop.py`
 - [ ] T037 [P] Update golden scenario eval tests in `tests/agent_scenarios/`
   - 6 golden scenarios all pass regression eval

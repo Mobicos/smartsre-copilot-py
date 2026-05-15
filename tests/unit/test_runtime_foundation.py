@@ -5,6 +5,7 @@ from app.agent_runtime.evidence import EvidenceAssessor
 from app.agent_runtime.loop import BoundedReActLoop, LoopBudget
 from app.agent_runtime.recovery import RecoveryManager
 from app.agent_runtime.state import EvidenceItem
+from app.agent_runtime.trace_collector import TraceCollector
 
 
 class _RepeatingProvider:
@@ -59,3 +60,12 @@ def test_recovery_manager_selects_handoff_after_repeated_empty_evidence():
     assert plan.action == "handoff"
     assert plan.reason == "insufficient_evidence"
     assert plan.handoff_required is True
+
+
+def test_trace_collector_span_is_optional_runtime_boundary():
+    collector = TraceCollector("smartsre.tests")
+
+    with collector.span("agent.test", {"agent.step_index": 1}):
+        observed = "inside-span"
+
+    assert observed == "inside-span"

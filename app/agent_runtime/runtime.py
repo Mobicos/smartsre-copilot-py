@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncGenerator
-from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from time import monotonic
 from typing import Any, cast
@@ -41,6 +40,7 @@ from app.agent_runtime.state import EvidenceItem
 from app.agent_runtime.synthesizer import ReportSynthesizer
 from app.agent_runtime.tool_catalog import ToolCatalog
 from app.agent_runtime.tool_executor import ToolExecutionResult, ToolExecutor
+from app.agent_runtime.trace_collector import TraceCollector
 from app.core.config import AppSettings
 
 
@@ -240,6 +240,7 @@ class AgentRuntime:
         self._evidence_assessor = EvidenceAssessor()
         self._knowledge_context_provider = knowledge_context_provider or KnowledgeContextProvider()
         self._decision_runtime = decision_runtime or AgentDecisionRuntime()
+        self._trace_collector = TraceCollector()
         self._step_runner = StepRunner(self)
         self._approval_boundary = ApprovalGate(
             run_store=self._run_store,
@@ -551,18 +552,27 @@ class AgentRuntime:
                             yield event
                         return
                     if assessment.quality in {"empty", "error", "conflicting"}:
-                        reason = self._evidence_assessor.handoff_reason(assessment)
+                        recovery_plan = self._failure_handler.choose_strategy(
+                            evidence_quality=assessment.quality,
+                            consecutive_failures=1,
+                            tool_available=False,
+                        )
+                        reason = recovery_plan.reason or self._evidence_assessor.handoff_reason(
+                            assessment
+                        )
                         recovery = RecoveryDecision(
                             required=True,
                             reason=reason,
                             next_action="handoff",
                         )
+                        recovery_payload = recovery.model_dump(mode="json")
+                        recovery_payload["recovery_action"] = recovery_plan.action
                         yield self._record_event(
                             run_id,
                             event_type="recovery",
                             stage="recover",
                             message=f"需要恢复：{reason}",
-                            payload=recovery.model_dump(mode="json"),
+                            payload=recovery_payload,
                         )
                         report_contract = FinalReportContract(
                             summary=("证据不足以得出安全的自主结论，因此运行交由人工处理。"),
@@ -763,7 +773,7 @@ class AgentRuntime:
 
         timeout_seconds = min(safety_config.tool_timeout_seconds, remaining_seconds)
         try:
-            with _optional_span(
+            with self._trace_collector.span(
                 "agent.tool_call",
                 {
                     "agent.tool_name": str(action.tool_name),
@@ -925,21 +935,6 @@ def _handoff_report(goal: str, report: FinalReportContract) -> str:
     if report.recommendations:
         lines.extend(["", "## 建议", *[f"- {item}" for item in report.recommendations]])
     return "\n".join(lines)
-
-
-@contextmanager
-def _optional_span(name: str, attributes: dict[str, Any]):
-    try:
-        from opentelemetry import trace
-    except Exception:
-        with nullcontext():
-            yield
-        return
-
-    with trace.get_tracer("smartsre.agent_runtime").start_as_current_span(name) as span:
-        for key, value in attributes.items():
-            span.set_attribute(key, value)
-        yield
 
 
 def _memory_excerpt(text: str, *, limit: int = 2000) -> str:
