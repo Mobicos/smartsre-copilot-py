@@ -16,6 +16,10 @@ class _ObjectStoragePort(Protocol):
 
     def local_path_for(self, key: str) -> Path: ...
 
+    def get_bytes(self, key: str) -> bytes: ...
+
+    def cleanup_local_cache(self, key: str) -> None: ...
+
 
 class IndexingResult:
     """索引结果类"""
@@ -144,7 +148,7 @@ class VectorIndexService:
             result.end_time = datetime.now()
             return result
 
-    def index_single_file(self, file_key: str):
+    def index_single_file(self, file_key: str) -> None:
         """
         索引单个文件 (使用新的 LangChain 分割器)
 
@@ -155,30 +159,29 @@ class VectorIndexService:
             ValueError: 文件不存在时抛出
             RuntimeError: 索引失败时抛出
         """
-        if self._object_storage is not None:
-            path = self._object_storage.local_path_for(file_key).resolve()
-        else:
-            path = Path(file_key).resolve()
-
-        if not path.exists() or not path.is_file():
-            raise ValueError(f"文件不存在: {file_key}")
-
-        logger.info(f"开始索引文件: {path}")
+        logger.info(f"开始索引文件: {file_key}")
 
         try:
-            # 1. 读取文件内容
-            content = path.read_text(encoding="utf-8")
-            logger.info(f"读取文件: {path}, 内容长度: {len(content)} 字符")
+            local_path = Path(file_key).resolve()
+            if self._object_storage is not None and not local_path.exists():
+                content = self._object_storage.get_bytes(file_key).decode("utf-8")
+                source = self._object_storage.local_path_for(file_key).as_posix()
+            else:
+                if not local_path.exists() or not local_path.is_file():
+                    raise ValueError(f"文件不存在: {file_key}")
+                content = local_path.read_text(encoding="utf-8")
+                source = local_path.as_posix()
 
-            # 2. 删除该文件的旧数据（如果存在）
-            normalized_path = path.as_posix()
-            self.vector_store_manager.delete_by_source(normalized_path)
+            logger.info(f"读取文件: {file_key}, 内容长度: {len(content)} 字符")
 
-            # 3. 使用新的文档分割器
-            documents = self.document_splitter_service.split_document(content, normalized_path)
+            # 1. 删除该文件的旧数据（如果存在）
+            self.vector_store_manager.delete_by_source(source)
+
+            # 2. 使用新的文档分割器
+            documents = self.document_splitter_service.split_document(content, source)
             logger.info(f"文档分割完成: {file_key} -> {len(documents)} 个分片")
 
-            # 4. 添加文档到向量存储
+            # 3. 添加文档到向量存储
             if documents:
                 self.vector_store_manager.add_documents(documents)
                 logger.info(f"文件索引完成: {file_key}, 共 {len(documents)} 个分片")
