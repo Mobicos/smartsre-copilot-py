@@ -16,6 +16,7 @@ from typing import Any, cast
 
 from loguru import logger
 
+from app.agent_runtime.approval import ApprovalGate
 from app.agent_runtime.context import KnowledgeContextProvider
 from app.agent_runtime.decision import (
     AgentDecision,
@@ -35,6 +36,7 @@ from app.agent_runtime.metrics_collector import MetricsCollector
 from app.agent_runtime.planner import AgentPlanner
 from app.agent_runtime.policy import ToolPolicyGate
 from app.agent_runtime.ports import AgentMemoryStore, AgentRunStore, SceneStore, ToolPolicyStore
+from app.agent_runtime.recovery import RecoveryManager
 from app.agent_runtime.state import EvidenceItem
 from app.agent_runtime.synthesizer import ReportSynthesizer
 from app.agent_runtime.tool_catalog import ToolCatalog
@@ -188,151 +190,6 @@ class StepRunner:
         )
 
 
-class ApprovalBoundary:
-    """Centralize approval pause semantics for the Agent runtime."""
-
-    waiting_message = "工具执行等待人工审批。"
-
-    def __init__(
-        self,
-        *,
-        run_store: AgentRunStore,
-        event_recorder: EventRecorder,
-        metrics_collector: MetricsCollector,
-    ) -> None:
-        self._run_store = run_store
-        self._event_recorder = event_recorder
-        self._metrics_collector = metrics_collector
-
-    def pause(
-        self,
-        context: RuntimeContext,
-        *,
-        tool_name: str,
-        payload: dict[str, Any],
-    ) -> list[AgentRuntimeEvent]:
-        self._run_store.update_run(
-            context.run_id,
-            status="waiting_approval",
-            final_report=self.waiting_message,
-        )
-        event = self._event_recorder.record(
-            context.run_id,
-            event_type="approval_required",
-            stage="approval",
-            message=f"工具需要审批：{tool_name}",
-            payload=payload,
-        )
-        self._metrics_collector.persist(context.run_id)
-        return [
-            event,
-            AgentRuntimeEvent(
-                type="approval_required",
-                stage="approval",
-                run_id=context.run_id,
-                status="waiting_approval",
-                message=f"工具需要审批：{tool_name}",
-            ),
-        ]
-
-
-class RuntimeFailureHandler:
-    """Translate runtime failures into persisted run state and stream events."""
-
-    def __init__(
-        self,
-        *,
-        run_store: AgentRunStore,
-        event_recorder: EventRecorder,
-        metrics_collector: MetricsCollector,
-    ) -> None:
-        self._run_store = run_store
-        self._event_recorder = event_recorder
-        self._metrics_collector = metrics_collector
-
-    def mark_cancelled(
-        self,
-        context: RuntimeContext,
-    ) -> None:
-        self._run_store.update_run(
-            context.run_id,
-            status="cancelled",
-            error_message="Agent 运行已取消",
-        )
-        self._event_recorder.record(
-            context.run_id,
-            event_type="cancelled",
-            stage="cancelled",
-            message="Agent 运行已取消",
-            payload={"runtime_safety": context.safety_config.to_dict()},
-        )
-        self._metrics_collector.persist(context.run_id)
-
-    def timeout_event(self, context: RuntimeContext, exc: TimeoutError) -> list[AgentRuntimeEvent]:
-        error_message = str(exc) or (
-            f"Agent 运行超时，已运行 {context.safety_config.run_timeout_seconds:g} 秒"
-        )
-        self._run_store.update_run(
-            context.run_id,
-            status="failed",
-            error_message=f"TimeoutError: {error_message}",
-        )
-        event = self._event_recorder.record(
-            context.run_id,
-            event_type="timeout",
-            stage="error",
-            message=f"运行超时：{error_message}",
-            payload={
-                "error_type": "TimeoutError",
-                "error_message": error_message,
-                "timeout_scope": "run",
-                "runtime_safety": context.safety_config.to_dict(),
-            },
-        )
-        self._metrics_collector.persist(context.run_id)
-        return [
-            event,
-            AgentRuntimeEvent(
-                type="timeout",
-                stage="error",
-                run_id=context.run_id,
-                status="failed",
-                message=f"TimeoutError: {error_message}",
-            ),
-        ]
-
-    def error_event(self, context: RuntimeContext, exc: Exception) -> list[AgentRuntimeEvent]:
-        error_type = type(exc).__name__
-        error_message = str(exc)
-        self._run_store.update_run(
-            context.run_id,
-            status="failed",
-            error_message=f"{error_type}: {error_message}",
-        )
-        event = self._event_recorder.record(
-            context.run_id,
-            event_type="error",
-            stage="error",
-            message=f"运行失败：{error_message}",
-            payload={
-                "error_type": error_type,
-                "error_message": error_message,
-                "runtime_safety": context.safety_config.to_dict(),
-            },
-        )
-        self._metrics_collector.persist(context.run_id)
-        return [
-            event,
-            AgentRuntimeEvent(
-                type="error",
-                stage="error",
-                run_id=context.run_id,
-                status="failed",
-                message=f"{error_type}: {error_message}",
-            ),
-        ]
-
-
 class AgentOrchestrator:
     """Coordinate a complete Agent run while AgentRuntime remains the public facade."""
 
@@ -384,12 +241,12 @@ class AgentRuntime:
         self._knowledge_context_provider = knowledge_context_provider or KnowledgeContextProvider()
         self._decision_runtime = decision_runtime or AgentDecisionRuntime()
         self._step_runner = StepRunner(self)
-        self._approval_boundary = ApprovalBoundary(
+        self._approval_boundary = ApprovalGate(
             run_store=self._run_store,
             event_recorder=self._event_recorder,
             metrics_collector=self._metrics_collector,
         )
-        self._failure_handler = RuntimeFailureHandler(
+        self._failure_handler = RecoveryManager(
             run_store=self._run_store,
             event_recorder=self._event_recorder,
             metrics_collector=self._metrics_collector,

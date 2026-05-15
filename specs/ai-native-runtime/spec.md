@@ -24,6 +24,10 @@ Implemented or mostly implemented:
   persists non-empty heuristic token / cost metrics for deterministic runs.
 - `EvidenceAssessor` is isolated in `app/agent_runtime/evidence.py` for current
   tool-result quality classification and handoff reason mapping.
+- `ApprovalGate` is isolated in `app/agent_runtime/approval.py` for high-risk
+  tool pause semantics.
+- `RecoveryManager` is isolated in `app/agent_runtime/recovery.py` for
+  cancellation, timeout, and unexpected-error failure boundaries.
 - Deterministic and Qwen decision providers share the current decision runtime,
   and Qwen failures emit `provider_fallback` before falling back.
 - Cross-session memory exists as text memory and is injected through
@@ -37,8 +41,8 @@ Partially implemented:
   still be integrated.
 - Evidence assessment has a dedicated module, but conflict detection and richer
   evidence coverage rules still need to be implemented.
-- Recovery behavior still exists in runtime helpers; there is no dedicated
-  `RecoveryManager` module yet.
+- Recovery strategy selection is still basic; richer retry / alternative /
+  downgrade decisions remain pending.
 - Replay exposes metrics, memory, approval, badcase, and recovery events, but
   per-step `agent_events` metric columns are not persisted yet.
 - Agent memory does not yet use pgvector embeddings for semantic retrieval.
