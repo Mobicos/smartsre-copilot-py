@@ -26,6 +26,8 @@ test.describe.configure({ mode: "serial" })
 test.describe("Agent runtime production paths", () => {
   const toolName = "get_current_time"
 
+  test.setTimeout(60_000)
+
   test.afterEach(async ({ request }) => {
     await request.patch(`/api/agent/tools/${toolName}/policy`, {
       data: {
@@ -67,10 +69,10 @@ test.describe("Agent runtime production paths", () => {
     expect(Number(readNested(decisionState, ["summary", "decision_count"]) ?? 0)).toBeGreaterThan(0)
 
     await page.goto(`/agent/${run.run_id}`)
-    await expect(page.getByText("Replay Snapshot")).toBeVisible()
-    await expect(page.getByText("Decision State")).toBeVisible()
-    await expect(page.getByText("Tool Trajectory")).toBeVisible()
-    await expect(page.getByText("Report", { exact: true })).toBeVisible()
+    await expect(page.getByText("回放快照")).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText("决策状态")).toBeVisible()
+    await expect(page.getByText("工具轨迹")).toBeVisible()
+    await expect(page.getByText("报告", { exact: true })).toBeVisible()
   })
 
   test("requires approval, approves the tool call, resumes, and updates replay state", async ({
@@ -90,12 +92,17 @@ test.describe("Agent runtime production paths", () => {
 
     await page.goto("/agent/approvals")
     await expect(
-      page.getByRole("main").getByRole("heading", { name: "Approvals" }),
+      page.getByRole("main").getByRole("heading", { name: "审批" }),
     ).toBeVisible()
-    await expect(page.getByText(toolName).first()).toBeVisible()
-    await page.getByRole("button", { name: "Approve" }).first().click()
-    await expect(page.getByRole("button", { name: "Resume" }).first()).toBeVisible()
-    await page.getByRole("button", { name: "Resume" }).first().click()
+    const approvalLink = page.locator(`a[href="/agent/${run.run_id}"]`)
+    await expect(approvalLink).toBeVisible({ timeout: 15_000 })
+    const approveButton = approvalLink.locator('xpath=following::button[contains(., "批准")][1]')
+    await approveButton.click()
+    const resumeButton = approvalLink.locator('xpath=following::button[contains(., "恢复")][1]')
+    await expect(resumeButton).toBeVisible({
+      timeout: 15_000,
+    })
+    await resumeButton.click()
 
     const replay = await expectEventually(async () =>
       getJson<JsonRecord>(
@@ -116,9 +123,9 @@ test.describe("Agent runtime production paths", () => {
     expect(arrayLength(readNested(decisionState, ["approval_resume"]))).toBeGreaterThan(0)
 
     await page.goto(`/agent/${run.run_id}`)
-    await expect(page.getByText("Decision State")).toBeVisible()
-    await expect(page.locator("dt").filter({ hasText: /^Approvals$/ }).first()).toBeVisible()
-    await expect(page.locator("dt").filter({ hasText: /^Resume$/ }).first()).toBeVisible()
+    await expect(page.getByText("决策状态")).toBeVisible({ timeout: 20_000 })
+    await expect(page.locator("dt").filter({ hasText: /^审批次数$/ }).first()).toBeVisible()
+    await expect(page.locator("dt").filter({ hasText: /^恢复$/ }).first()).toBeVisible()
   })
 })
 

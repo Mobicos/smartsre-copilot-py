@@ -455,7 +455,7 @@ async def test_failure_empty_tool_catalog():
 
     last = events[-1]
     assert last.type == "complete"
-    assert "External MCP tools are unavailable" in last.final_report
+    assert "外部 MCP 工具不可用" in last.final_report
 
 
 async def test_failure_governance_denied_disabled_tool():

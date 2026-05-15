@@ -40,8 +40,7 @@ class KnowledgeContext:
             return "未配置场景知识库。"
         names = ", ".join(str(item["name"]) for item in self.knowledge_bases)
         count = len(self.knowledge_bases)
-        noun = "个知识库" if count == 1 else "个知识库"
-        return f"已加载场景{noun} {count} 个：{names}"
+        return f"已加载场景知识库 {count} 个：{names}"
 
     def has_knowledge(self) -> bool:
         return bool(self.knowledge_bases)

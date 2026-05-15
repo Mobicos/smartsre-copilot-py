@@ -39,7 +39,7 @@ async def test_tool_executor_skips_disabled_tool_without_invoking_it():
     assert result.status == "disabled"
     assert result.output is None
     assert result.governance_payload()["decision"] == "denied"
-    assert result.governance_payload()["reason"] == "Tool is disabled by policy"
+    assert result.governance_payload()["reason"] == "工具已被策略禁用"
 
 
 @pytest.mark.asyncio
@@ -56,9 +56,7 @@ async def test_tool_executor_returns_approval_required_without_invoking_tool():
     assert result.status == "approval_required"
     assert result.output is None
     assert result.governance_payload()["decision"] == "approval_required"
-    assert (
-        result.governance_payload()["reason"] == "Tool requires explicit approval before execution"
-    )
+    assert result.governance_payload()["reason"] == "工具需要明确审批后才能执行"
 
 
 @pytest.mark.asyncio
@@ -89,7 +87,7 @@ async def test_tool_executor_normalizes_success_and_failure():
     assert success.governance_payload()["decision"] == "executed"
     assert failure.status == "error"
     assert "boom" in str(failure.error)
-    assert failure.governance_payload()["reason"] == "Tool execution allowed by policy but failed"
+    assert failure.governance_payload()["reason"] == "工具执行已通过策略授权但执行失败"
 
 
 @pytest.mark.asyncio
@@ -116,8 +114,8 @@ async def test_tool_executor_denies_invalid_tool_arguments_before_invocation():
 
     assert result.status == "invalid_input"
     assert result.governance_payload()["decision"] == "denied"
-    assert result.governance_payload()["reason"] == "Tool arguments failed schema validation"
-    assert result.error == "Argument query must be string"
+    assert result.governance_payload()["reason"] == "工具参数未通过 schema 校验"
+    assert result.error == "参数 query 必须为 string 类型"
 
 
 @pytest.mark.asyncio
@@ -208,10 +206,10 @@ async def test_tool_executor_rejects_invalid_output_schema_result():
     )
 
     assert result.status == "invalid_output"
-    assert result.error == "Argument summary must be string"
+    assert result.error == "参数 summary 必须为 string 类型"
     assert result.policy is not None
     assert result.policy["fallback_strategy"] == "handoff"
-    assert result.governance_payload()["reason"] == "Tool output failed schema validation"
+    assert result.governance_payload()["reason"] == "工具输出未通过 schema 校验"
 
 
 @pytest.mark.asyncio

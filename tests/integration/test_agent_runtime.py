@@ -225,8 +225,7 @@ def test_agent_runtime_core_components_shape_agent_loop():
 
     assert planner.select_tool_names({"tools": ["SearchLog"]}) == ["SearchLog"]
     assert state.hypothesis.summary == (
-        "Investigate goal 'diagnose latency' by checking scene knowledge, "
-        "approved tools, and collected evidence before making claims."
+        "调查目标「diagnose latency」，先检查场景知识、已批准工具和已采集证据，再给出结论。"
     )
     assert knowledge_context.to_event_payload() == {
         "knowledge_bases": [
@@ -237,12 +236,12 @@ def test_agent_runtime_core_components_shape_agent_loop():
                 "version": "development",
             }
         ],
-        "summary": "Loaded 1 scene knowledge base: Runbook",
+        "summary": "已加载场景知识库 1 个：Runbook",
     }
     assert action.approval_state == "required"
     assert action.policy_snapshot.risk_level == "high"
-    assert "No tool evidence was collected." in synthesizer.build_report(state)
-    assert "External MCP tools are unavailable" in synthesizer.unavailable_report(state.goal)
+    assert "未采集到工具证据" in synthesizer.build_report(state)
+    assert "外部 MCP 工具不可用" in synthesizer.unavailable_report(state.goal)
 
 
 def test_runtime_safety_config_prefers_env_then_scene_then_hardcoded(monkeypatch):
@@ -352,7 +351,7 @@ async def test_agent_runtime_accepts_injected_persistence_ports():
     assert events[-1].run_id == "run-1"
     assert run_store.events[0]["type"] == "run_started"
     assert run_store.events[-1]["type"] == "final_report"
-    assert "External MCP tools are unavailable" in str(run_store.final_report)
+    assert "外部 MCP 工具不可用" in str(run_store.final_report)
     assert run_store.metrics["runtime_version"] == "native-agent-v1"
     assert run_store.metrics["trace_id"] == "run-1"
     assert run_store.metrics["model_name"] == "deterministic-native-agent"
@@ -557,10 +556,10 @@ async def test_agent_runtime_records_tool_timeout_and_hands_off_run():
     assert events[-1].type == "handoff"
     assert run_store.status == "handoff_required"
     assert tool_result["payload"]["execution_status"] == "timeout"
-    assert tool_result["payload"]["error"] == "Tool execution timed out after 0.001 seconds"
+    assert tool_result["payload"]["error"] == "工具执行超时，已运行 0.001 秒"
     assert tool_result["payload"]["governance"] == {
         "decision": "timeout",
-        "reason": "Tool execution exceeded timeout: 0.001 seconds",
+        "reason": "工具执行超时：0.001 秒",
         "policy": {
             "tool_name": "SearchLog",
             "scope": "diagnosis",
@@ -592,7 +591,7 @@ async def test_agent_runtime_records_audit_friendly_tool_governance_payload():
         description="Search logs",
         status="approval_required",
         decision="approval_required",
-        decision_reason="Tool requires explicit approval before execution",
+        decision_reason="工具需要明确审批后才能执行",
         policy=policy,
     )
     runtime = AgentRuntime(
@@ -621,7 +620,7 @@ async def test_agent_runtime_records_audit_friendly_tool_governance_payload():
     assert tool_result["payload"]["policy"] == policy
     assert tool_result["payload"]["governance"] == {
         "decision": "approval_required",
-        "reason": "Tool requires explicit approval before execution",
+        "reason": "工具需要明确审批后才能执行",
         "policy": policy,
     }
 
@@ -693,7 +692,7 @@ async def test_agent_runtime_records_cancellation_and_reraises():
             pass
 
     assert run_store.status == "cancelled"
-    assert run_store.error_message == "Agent run cancelled"
+    assert run_store.error_message == "Agent 运行已取消"
     assert run_store.events[-1]["type"] == "cancelled"
 
 
@@ -721,7 +720,7 @@ async def test_agent_runtime_reports_unavailable_external_tools_without_fabricat
 
     assert isinstance(events[-1], AgentRuntimeEvent)
     assert events[-1].type == "complete"
-    assert "External MCP tools are unavailable" in events[-1].final_report
+    assert "外部 MCP 工具不可用" in events[-1].final_report
     assert agent_run_repository.list_events(events[-1].run_id)[0]["type"] == "run_started"
     assert events[-1].to_dict()["type"] == "complete"
 
@@ -770,7 +769,7 @@ async def test_agent_runtime_records_scene_knowledge_context_in_trajectory_and_r
                 "version": "development",
             }
         ],
-        "summary": "Loaded 1 scene knowledge base: CLB Runbook",
+        "summary": "已加载场景知识库 1 个：CLB Runbook",
     }
     assert "CLB Runbook" in events[-1].final_report
 
