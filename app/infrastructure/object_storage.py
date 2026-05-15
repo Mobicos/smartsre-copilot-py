@@ -36,6 +36,10 @@ class ObjectStoragePort(Protocol):
 
     def local_path_for(self, key: str) -> Path: ...
 
+    def get_bytes(self, key: str) -> bytes: ...
+
+    def cleanup_local_cache(self, key: str) -> None: ...
+
 
 class LocalObjectStorageAdapter:
     """Store uploaded objects on local disk."""
@@ -76,6 +80,17 @@ class LocalObjectStorageAdapter:
 
     def local_path_for(self, key: str) -> Path:
         return _safe_local_path(self._root, key)
+
+    def get_bytes(self, key: str) -> bytes:
+        path = self.local_path_for(key)
+        if not path.exists():
+            raise FileNotFoundError(f"object_not_found: {key}")
+        return path.read_bytes()
+
+    def cleanup_local_cache(self, key: str) -> None:
+        path = self.local_path_for(key)
+        if path.exists():
+            path.unlink()
 
 
 class MinioObjectStorageAdapter:
@@ -153,6 +168,21 @@ class MinioObjectStorageAdapter:
 
     def local_path_for(self, key: str) -> Path:
         return _safe_local_path(self._local_cache_root, key)
+
+    def get_bytes(self, key: str) -> bytes:
+        client = self._get_client()
+        response = client.get_object(self._bucket, key)
+        try:
+            data: bytes = response.read()
+            return data
+        finally:
+            response.close()
+            response.release_conn()
+
+    def cleanup_local_cache(self, key: str) -> None:
+        path = self.local_path_for(key)
+        if path.exists():
+            path.unlink()
 
     def _get_client(self):
         if self._client is not None:

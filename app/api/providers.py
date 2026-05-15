@@ -203,6 +203,7 @@ class AppContainer:
             repository=indexing_task_repository,
             vector_indexer_provider=lambda: self.vector_index_service,
             max_retries_provider=lambda: self._settings.indexing_task_max_retries,
+            object_storage=self.object_storage,
         )
 
     @cached_property

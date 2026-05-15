@@ -32,6 +32,12 @@ class VectorIndexerPort(Protocol):
     def index_single_file(self, file_path: str) -> None: ...
 
 
+class _ObjectStoragePort(Protocol):
+    """Object storage port for local cache cleanup."""
+
+    def cleanup_local_cache(self, key: str) -> None: ...
+
+
 class IndexingTaskService:
     """管理索引任务的提交与执行。"""
 
@@ -41,10 +47,12 @@ class IndexingTaskService:
         repository: IndexingTaskRepositoryPort,
         vector_indexer_provider: Callable[[], VectorIndexerPort],
         max_retries_provider: Callable[[], int],
+        object_storage: _ObjectStoragePort | None = None,
     ) -> None:
         self._repository = repository
         self._vector_indexer_provider = vector_indexer_provider
         self._max_retries_provider = max_retries_provider
+        self._object_storage = object_storage
 
     def submit_task(self, filename: str, file_path: str) -> str:
         """登记待执行的索引任务。"""
@@ -67,6 +75,11 @@ class IndexingTaskService:
         """执行索引任务并更新状态。"""
         try:
             self._vector_indexer_provider().index_single_file(file_path)
+            if self._object_storage is not None:
+                try:
+                    self._object_storage.cleanup_local_cache(file_path)
+                except Exception as cleanup_exc:
+                    logger.warning(f"清理本地缓存失败（不影响索引结果）: {cleanup_exc}")
             self._repository.update_task(task_id, status="completed")
             logger.info(f"索引任务执行完成: {task_id}")
             return "completed"
