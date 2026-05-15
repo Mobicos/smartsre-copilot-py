@@ -6,8 +6,8 @@ import os
 from logging.config import fileConfig
 from pathlib import Path
 
-from sqlalchemy import create_engine, pool
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, pool
 from sqlmodel import SQLModel
 
 from alembic import context

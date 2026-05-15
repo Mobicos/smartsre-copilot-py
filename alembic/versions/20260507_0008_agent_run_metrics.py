@@ -28,8 +28,7 @@ def upgrade() -> None:
     op.execute("ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS token_usage JSONB")
     op.execute("CREATE INDEX IF NOT EXISTS idx_agent_runs_trace_id ON agent_runs(trace_id)")
     op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_runs_approval_state "
-        "ON agent_runs(approval_state)"
+        "CREATE INDEX IF NOT EXISTS idx_agent_runs_approval_state ON agent_runs(approval_state)"
     )
 
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from alembic import op
 
-
 revision = "20260508_0009"
 down_revision = "20260507_0008"
 branch_labels = None
@@ -16,8 +15,7 @@ def upgrade() -> None:
     op.execute("ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS cost_estimate JSONB")
     op.execute("ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS handoff_reason TEXT")
     op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_agent_runs_handoff_reason "
-        "ON agent_runs(handoff_reason)"
+        "CREATE INDEX IF NOT EXISTS idx_agent_runs_handoff_reason ON agent_runs(handoff_reason)"
     )
 
 

@@ -132,4 +132,39 @@ class AgentFeedback(SQLModel, table=True):
     run_id: str = Field(foreign_key="agent_runs.run_id", ondelete="CASCADE")
     rating: str
     comment: str | None = None
+    correction: str | None = None
+    badcase_flag: bool = Field(default=False)
+    original_report: str | None = None
+    review_status: str = Field(default="pending")
+    review_note: str | None = None
+    reviewed_by: str | None = None
+    reviewed_at: datetime | None = Field(
+        default=None,
+        sa_column=sa.Column(sa.TIMESTAMP(timezone=True), nullable=True),
+    )
+    knowledge_status: str = Field(default="not_promoted")
+    knowledge_task_id: str | None = None
+    knowledge_filename: str | None = None
+    promoted_at: datetime | None = Field(
+        default=None,
+        sa_column=sa.Column(sa.TIMESTAMP(timezone=True), nullable=True),
+    )
     created_at: datetime = Field(sa_column=sa.Column(sa.TIMESTAMP(timezone=True), nullable=False))
+
+
+class AgentMemory(SQLModel, table=True):
+    __tablename__ = "agent_memory"
+
+    memory_id: str = Field(primary_key=True)
+    workspace_id: str = Field(foreign_key="workspaces.workspace_id", ondelete="CASCADE")
+    run_id: str | None = Field(foreign_key="agent_runs.run_id", ondelete="SET NULL")
+    conclusion_text: str
+    conclusion_type: str = Field(default="final_report")
+    confidence: float = Field(default=0.5)
+    validation_count: int = Field(default=0)
+    memory_metadata: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=sa.Column("metadata", sa.JSON, nullable=True),
+    )
+    created_at: datetime = Field(sa_column=sa.Column(sa.TIMESTAMP(timezone=True), nullable=False))
+    updated_at: datetime = Field(sa_column=sa.Column(sa.TIMESTAMP(timezone=True), nullable=False))

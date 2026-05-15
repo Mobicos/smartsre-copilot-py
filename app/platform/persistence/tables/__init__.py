@@ -3,6 +3,7 @@
 from app.platform.persistence.tables.agent import (
     AgentEvent,
     AgentFeedback,
+    AgentMemory,
     AgentRun,
     KnowledgeBase,
     Scene,
@@ -33,6 +34,7 @@ __all__ = [
     "AgentCheckpointWrite",
     "AgentEvent",
     "AgentFeedback",
+    "AgentMemory",
     "AgentRun",
     "AuditLog",
     "ChatToolEvent",
