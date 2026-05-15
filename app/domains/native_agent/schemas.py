@@ -41,3 +41,9 @@ class AgentRunCreateRequest(BaseModel):
 class AgentFeedbackCreateRequest(BaseModel):
     rating: str = Field(pattern="^(up|down|helpful|not_helpful|wrong|unsafe|incomplete)$")
     comment: str | None = None
+    correction: str | None = None
+
+
+class AgentBadcaseReviewRequest(BaseModel):
+    review_status: str = Field(pattern="^(pending|confirmed|rejected)$")
+    review_note: str | None = None

@@ -15,6 +15,7 @@ from app.platform.persistence.database import get_engine
 from app.platform.persistence.schema import (
     AgentEvent,
     AgentFeedback,
+    AgentMemory,
     AgentRun,
     KnowledgeBase,
     Scene,
@@ -685,6 +686,10 @@ class AgentFeedbackRepository:
         *,
         rating: str,
         comment: str | None = None,
+        correction: str | None = None,
+        badcase_flag: bool = False,
+        original_report: str | None = None,
+        review_status: str = "pending",
     ) -> str:
         feedback_id = str(uuid.uuid4())
         db.add(
@@ -693,6 +698,10 @@ class AgentFeedbackRepository:
                 run_id=run_id,
                 rating=rating,
                 comment=comment,
+                correction=correction,
+                badcase_flag=badcase_flag,
+                original_report=original_report,
+                review_status=review_status,
                 created_at=_utc_now(),
             )
         )
@@ -704,10 +713,21 @@ class AgentFeedbackRepository:
         *,
         rating: str,
         comment: str | None = None,
+        correction: str | None = None,
+        badcase_flag: bool = False,
+        original_report: str | None = None,
+        review_status: str = "pending",
     ) -> str:
         with Session(bind=get_engine()) as db:
             feedback_id = self.create_feedback_with_session(
-                db, run_id, rating=rating, comment=comment
+                db,
+                run_id,
+                rating=rating,
+                comment=comment,
+                correction=correction,
+                badcase_flag=badcase_flag,
+                original_report=original_report,
+                review_status=review_status,
             )
             db.commit()
         return feedback_id
@@ -724,6 +744,17 @@ class AgentFeedbackRepository:
                 "run_id": row.run_id,
                 "rating": row.rating,
                 "comment": row.comment,
+                "correction": row.correction,
+                "badcase_flag": row.badcase_flag,
+                "original_report": row.original_report,
+                "review_status": row.review_status,
+                "review_note": row.review_note,
+                "reviewed_by": row.reviewed_by,
+                "reviewed_at": row.reviewed_at,
+                "knowledge_status": row.knowledge_status,
+                "knowledge_task_id": row.knowledge_task_id,
+                "knowledge_filename": row.knowledge_filename,
+                "promoted_at": row.promoted_at,
                 "created_at": row.created_at,
             }
             for row in rows
@@ -733,6 +764,227 @@ class AgentFeedbackRepository:
         with Session(bind=get_engine()) as db:
             return self.list_feedback_with_session(db, run_id)
 
+    def list_badcases(self, *, limit: int = 50) -> list[dict[str, Any]]:
+        with Session(bind=get_engine()) as db:
+            rows = db.exec(
+                select(AgentFeedback, AgentRun)
+                .join(AgentRun, col(AgentFeedback.run_id) == col(AgentRun.run_id))
+                .where(col(AgentFeedback.badcase_flag).is_(True))
+                .order_by(col(AgentFeedback.created_at).desc())
+                .limit(limit)
+            ).all()
+        return [
+            {
+                **self._feedback_row_to_dict(feedback),
+                "run": AgentRunRepository._row_to_dict(run),
+            }
+            for feedback, run in rows
+        ]
+
+    def get_badcase(self, feedback_id: str) -> dict[str, Any] | None:
+        with Session(bind=get_engine()) as db:
+            row = db.exec(
+                select(AgentFeedback, AgentRun)
+                .join(AgentRun, col(AgentFeedback.run_id) == col(AgentRun.run_id))
+                .where(col(AgentFeedback.feedback_id) == feedback_id)
+                .where(col(AgentFeedback.badcase_flag).is_(True))
+            ).first()
+        if row is None:
+            return None
+        feedback, run = row
+        return {
+            **self._feedback_row_to_dict(feedback),
+            "run": AgentRunRepository._row_to_dict(run),
+        }
+
+    def review_badcase(
+        self,
+        feedback_id: str,
+        *,
+        review_status: str,
+        review_note: str | None,
+        reviewed_by: str | None,
+    ) -> dict[str, Any] | None:
+        reviewed_at = _utc_now()
+        with Session(bind=get_engine()) as db:
+            db.exec(
+                update(AgentFeedback)
+                .where(col(AgentFeedback.feedback_id) == feedback_id)
+                .where(col(AgentFeedback.badcase_flag).is_(True))
+                .values(
+                    review_status=review_status,
+                    review_note=review_note,
+                    reviewed_by=reviewed_by,
+                    reviewed_at=reviewed_at,
+                )
+            )
+            db.commit()
+            row = db.exec(
+                select(AgentFeedback).where(AgentFeedback.feedback_id == feedback_id)
+            ).first()
+            if row is None or not row.badcase_flag:
+                return None
+            return self._feedback_row_to_dict(row)
+
+    def mark_badcase_knowledge_promotion(
+        self,
+        feedback_id: str,
+        *,
+        knowledge_status: str,
+        knowledge_task_id: str,
+        knowledge_filename: str,
+    ) -> dict[str, Any] | None:
+        promoted_at = _utc_now()
+        with Session(bind=get_engine()) as db:
+            db.exec(
+                update(AgentFeedback)
+                .where(col(AgentFeedback.feedback_id) == feedback_id)
+                .where(col(AgentFeedback.badcase_flag).is_(True))
+                .values(
+                    knowledge_status=knowledge_status,
+                    knowledge_task_id=knowledge_task_id,
+                    knowledge_filename=knowledge_filename,
+                    promoted_at=promoted_at,
+                )
+            )
+            db.commit()
+            row = db.exec(
+                select(AgentFeedback).where(col(AgentFeedback.feedback_id) == feedback_id)
+            ).first()
+            if row is None or not row.badcase_flag:
+                return None
+            return self._feedback_row_to_dict(row)
+
+    @staticmethod
+    def _feedback_row_to_dict(row: AgentFeedback) -> dict[str, Any]:
+        return {
+            "feedback_id": row.feedback_id,
+            "run_id": row.run_id,
+            "rating": row.rating,
+            "comment": row.comment,
+            "correction": row.correction,
+            "badcase_flag": row.badcase_flag,
+            "original_report": row.original_report,
+            "review_status": row.review_status,
+            "review_note": row.review_note,
+            "reviewed_by": row.reviewed_by,
+            "reviewed_at": row.reviewed_at,
+            "knowledge_status": row.knowledge_status,
+            "knowledge_task_id": row.knowledge_task_id,
+            "knowledge_filename": row.knowledge_filename,
+            "promoted_at": row.promoted_at,
+            "created_at": row.created_at,
+        }
+
+
+class AgentMemoryRepository:
+    """Cross-session Agent memory repository."""
+
+    def create_memory_with_session(
+        self,
+        db: Session,
+        *,
+        workspace_id: str,
+        run_id: str | None,
+        conclusion_text: str,
+        conclusion_type: str = "final_report",
+        confidence: float = 0.5,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        memory_id = str(uuid.uuid4())
+        now = _utc_now()
+        db.add(
+            AgentMemory(
+                memory_id=memory_id,
+                workspace_id=workspace_id,
+                run_id=run_id,
+                conclusion_text=conclusion_text,
+                conclusion_type=conclusion_type,
+                confidence=confidence,
+                validation_count=0,
+                memory_metadata=metadata,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        return memory_id
+
+    def create_memory(
+        self,
+        *,
+        workspace_id: str,
+        run_id: str | None,
+        conclusion_text: str,
+        conclusion_type: str = "final_report",
+        confidence: float = 0.5,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        with Session(bind=get_engine()) as db:
+            memory_id = self.create_memory_with_session(
+                db,
+                workspace_id=workspace_id,
+                run_id=run_id,
+                conclusion_text=conclusion_text,
+                conclusion_type=conclusion_type,
+                confidence=confidence,
+                metadata=metadata,
+            )
+            db.commit()
+            return memory_id
+
+    def search_memory(
+        self,
+        *,
+        workspace_id: str,
+        query: str,
+        limit: int = 3,
+    ) -> list[dict[str, Any]]:
+        with Session(bind=get_engine()) as db:
+            rows = db.exec(
+                select(AgentMemory)
+                .where(col(AgentMemory.workspace_id) == workspace_id)
+                .order_by(col(AgentMemory.updated_at).desc())
+                .limit(100)
+            ).all()
+        scored = [
+            (score, self._row_to_dict(row))
+            for row in rows
+            if (score := _memory_text_score(query, row.conclusion_text)) > 0
+        ]
+        scored.sort(key=lambda item: (item[0], item[1]["confidence"]), reverse=True)
+        return [{**item, "similarity": score} for score, item in scored[:limit]]
+
+    @staticmethod
+    def _row_to_dict(row: AgentMemory) -> dict[str, Any]:
+        return {
+            "memory_id": row.memory_id,
+            "workspace_id": row.workspace_id,
+            "run_id": row.run_id,
+            "conclusion_text": row.conclusion_text,
+            "conclusion_type": row.conclusion_type,
+            "confidence": row.confidence,
+            "validation_count": row.validation_count,
+            "metadata": row.memory_metadata,
+            "created_at": row.created_at.isoformat(),
+            "updated_at": row.updated_at.isoformat(),
+        }
+
+
+def _memory_text_score(query: str, text: str) -> float:
+    query_terms = _memory_terms(query)
+    text_terms = _memory_terms(text)
+    if not query_terms or not text_terms:
+        return 0.0
+    overlap = query_terms & text_terms
+    if not overlap:
+        return 0.0
+    return round(len(overlap) / max(len(query_terms), 1), 4)
+
+
+def _memory_terms(value: str) -> set[str]:
+    normalized = "".join(char.lower() if char.isalnum() else " " for char in value)
+    return {term for term in normalized.split() if len(term) >= 2}
+
 
 workspace_repository = WorkspaceRepository()
 knowledge_base_repository = KnowledgeBaseRepository()
@@ -740,3 +992,4 @@ scene_repository = SceneRepository()
 tool_policy_repository = ToolPolicyRepository()
 agent_run_repository = AgentRunRepository()
 agent_feedback_repository = AgentFeedbackRepository()
+agent_memory_repository = AgentMemoryRepository()

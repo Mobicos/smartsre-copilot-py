@@ -102,6 +102,31 @@
         "title": "AgentApprovalDecisionRequest",
         "type": "object"
       },
+      "AgentBadcaseReviewRequest": {
+        "properties": {
+          "review_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Note"
+          },
+          "review_status": {
+            "pattern": "^(pending|confirmed|rejected)$",
+            "title": "Review Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "review_status"
+        ],
+        "title": "AgentBadcaseReviewRequest",
+        "type": "object"
+      },
       "AgentFeedbackCreateRequest": {
         "properties": {
           "comment": {
@@ -114,6 +139,17 @@
               }
             ],
             "title": "Comment"
+          },
+          "correction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correction"
           },
           "rating": {
             "pattern": "^(up|down|helpful|not_helpful|wrong|unsafe|incomplete)$",
@@ -594,6 +630,185 @@
           }
         },
         "summary": "List Agent Approvals",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/agent/badcases": {
+      "get": {
+        "operationId": "NativeAgent-list_agent_badcases-get-api_v1_agent_badcases",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Agent Badcases",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/agent/badcases/{feedback_id}/promote-knowledge": {
+      "post": {
+        "operationId": "NativeAgent-promote_agent_badcase_to_knowledge-post-api_v1_agent_badcases_feedback_id_promote_knowledge",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "feedback_id",
+            "required": true,
+            "schema": {
+              "title": "Feedback Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Promote Agent Badcase To Knowledge",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/agent/badcases/{feedback_id}/review": {
+      "post": {
+        "operationId": "NativeAgent-review_agent_badcase-post-api_v1_agent_badcases_feedback_id_review",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "feedback_id",
+            "required": true,
+            "schema": {
+              "title": "Feedback Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentBadcaseReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Review Agent Badcase",
         "tags": [
           "NativeAgent"
         ]

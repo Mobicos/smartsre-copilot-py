@@ -22,12 +22,14 @@ from app.platform.persistence.repositories.indexing import (
 )
 from app.platform.persistence.repositories.native_agent import (
     AgentFeedbackRepository,
+    AgentMemoryRepository,
     AgentRunRepository,
     KnowledgeBaseRepository,
     SceneRepository,
     ToolPolicyRepository,
     WorkspaceRepository,
     agent_feedback_repository,
+    agent_memory_repository,
     agent_run_repository,
     knowledge_base_repository,
     scene_repository,
@@ -54,10 +56,12 @@ __all__ = [
     "ToolPolicyRepository",
     "AgentRunRepository",
     "AgentFeedbackRepository",
+    "AgentMemoryRepository",
     "workspace_repository",
     "knowledge_base_repository",
     "scene_repository",
     "tool_policy_repository",
     "agent_run_repository",
     "agent_feedback_repository",
+    "agent_memory_repository",
 ]

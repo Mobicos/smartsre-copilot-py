@@ -9,18 +9,25 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from app.api.providers import get_agent_resume_service, get_native_agent_application_service
+from app.api.providers import (
+    get_agent_resume_service,
+    get_indexing_task_service,
+    get_native_agent_application_service,
+    get_object_storage,
+)
 from app.api.responses import json_response
 from app.application.agent_resume_service import AgentResumeService
 from app.application.native_agent_application_service import NativeAgentApplicationService
 from app.core.exceptions import InfrastructureException
 from app.domains.native_agent import (
+    AgentBadcaseReviewRequest,
     AgentFeedbackCreateRequest,
     AgentRunCreateRequest,
     SceneCreateRequest,
     ToolPolicyUpdateRequest,
     WorkspaceCreateRequest,
 )
+from app.infrastructure.tasks import task_dispatcher
 from app.security import Principal, require_capability, require_stream_rate_limit
 
 router = APIRouter()
@@ -431,6 +438,100 @@ async def resume_agent_approval(
     )
 
 
+@router.get("/agent/badcases")
+async def list_agent_badcases(
+    limit: int = 50,
+    _principal: Principal = Depends(require_capability("aiops:run")),
+    native_agent_service: NativeAgentApplicationService = Depends(
+        get_native_agent_application_service
+    ),
+):
+    badcases = native_agent_service.list_agent_badcases(limit=limit)
+    return json_response(
+        status_code=200,
+        content={"code": 200, "message": "success", "data": badcases},
+    )
+
+
+@router.post("/agent/badcases/{feedback_id}/review")
+async def review_agent_badcase(
+    feedback_id: str,
+    request: AgentBadcaseReviewRequest,
+    principal: Principal = Depends(require_capability("aiops:run")),
+    native_agent_service: NativeAgentApplicationService = Depends(
+        get_native_agent_application_service
+    ),
+):
+    badcase = native_agent_service.review_agent_badcase(
+        feedback_id,
+        review_status=request.review_status,
+        review_note=request.review_note,
+        reviewed_by=principal.subject,
+    )
+    if badcase is None:
+        return JSONResponse(status_code=404, content={"code": 404, "message": "not_found"})
+    return json_response(
+        status_code=200,
+        content={"code": 200, "message": "success", "data": badcase},
+    )
+
+
+@router.post("/agent/badcases/{feedback_id}/promote-knowledge")
+async def promote_agent_badcase_to_knowledge(
+    feedback_id: str,
+    _principal: Principal = Depends(require_capability("knowledge:write")),
+    native_agent_service: NativeAgentApplicationService = Depends(
+        get_native_agent_application_service
+    ),
+):
+    draft = native_agent_service.build_badcase_knowledge_document(feedback_id)
+    if draft is None:
+        return JSONResponse(status_code=404, content={"code": 404, "message": "not_found"})
+    if draft.get("status") != "ready":
+        return JSONResponse(
+            status_code=409,
+            content={
+                "code": 409,
+                "message": "review_required",
+                "data": draft.get("badcase"),
+            },
+        )
+
+    filename = str(draft["filename"])
+    content = str(draft["content"]).encode("utf-8")
+    stored_object = get_object_storage().put_bytes(filename, content)
+    task_id = get_indexing_task_service().submit_task(filename, filename)
+    await task_dispatcher.enqueue_indexing_task(  # type: ignore[attr-defined]
+        task_id,
+        filename,
+    )
+    badcase = native_agent_service.mark_badcase_knowledge_promotion(
+        feedback_id,
+        knowledge_status="queued",
+        knowledge_task_id=task_id,
+        knowledge_filename=filename,
+    )
+    return json_response(
+        status_code=202,
+        content={
+            "code": 202,
+            "message": "accepted",
+            "data": {
+                "badcase": badcase,
+                "filename": filename,
+                "file_path": str(stored_object.local_path),
+                "object_uri": stored_object.uri,
+                "storage_backend": stored_object.backend,
+                "size": stored_object.size,
+                "indexing": {
+                    "taskId": task_id,
+                    "status": "queued",
+                },
+            },
+        },
+    )
+
+
 @router.post("/agent/runs/{run_id}/feedback")
 async def create_agent_feedback(
     run_id: str,
@@ -444,6 +545,7 @@ async def create_agent_feedback(
         run_id,
         rating=request.rating,
         comment=request.comment,
+        correction=request.correction,
     )
     if feedback is None:
         return JSONResponse(status_code=404, content={"code": 404, "message": "not_found"})

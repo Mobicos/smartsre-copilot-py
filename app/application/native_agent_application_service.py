@@ -11,6 +11,7 @@ from app.core.config import AppSettings
 from app.infrastructure import redis_manager
 from app.platform.persistence.repositories.native_agent import (
     AgentFeedbackRepository,
+    AgentMemoryRepository,
     AgentRunRepository,
     SceneRepository,
     ToolPolicyRepository,
@@ -33,6 +34,7 @@ class NativeAgentApplicationService:
         tool_policy_repository: ToolPolicyRepository,
         agent_run_repository: AgentRunRepository,
         agent_feedback_repository: AgentFeedbackRepository,
+        agent_memory_repository: AgentMemoryRepository,
     ) -> None:
         self._agent_runtime = agent_runtime
         self._tool_catalog = tool_catalog
@@ -41,6 +43,7 @@ class NativeAgentApplicationService:
         self._tool_policy_repository = tool_policy_repository
         self._agent_run_repository = agent_run_repository
         self._agent_feedback_repository = agent_feedback_repository
+        self._agent_memory_repository = agent_memory_repository
 
     def create_workspace(self, *, name: str, description: str | None) -> dict[str, Any] | None:
         with UnitOfWork() as uow:
@@ -225,6 +228,59 @@ class NativeAgentApplicationService:
             self._enrich_run_with_metrics(run)
             for run in self._agent_run_repository.list_runs(limit=limit)
         ]
+
+    def list_agent_badcases(self, *, limit: int = 50) -> list[dict[str, Any]]:
+        return self._agent_feedback_repository.list_badcases(limit=limit)
+
+    def get_agent_badcase(self, feedback_id: str) -> dict[str, Any] | None:
+        return self._agent_feedback_repository.get_badcase(feedback_id)
+
+    def review_agent_badcase(
+        self,
+        feedback_id: str,
+        *,
+        review_status: str,
+        review_note: str | None,
+        reviewed_by: str | None,
+    ) -> dict[str, Any] | None:
+        return self._agent_feedback_repository.review_badcase(
+            feedback_id,
+            review_status=review_status,
+            review_note=review_note,
+            reviewed_by=reviewed_by,
+        )
+
+    def build_badcase_knowledge_document(self, feedback_id: str) -> dict[str, Any] | None:
+        badcase = self.get_agent_badcase(feedback_id)
+        if badcase is None:
+            return None
+        if badcase.get("review_status") != "confirmed":
+            return {
+                "status": "review_required",
+                "badcase": badcase,
+            }
+        filename = f"badcase-{feedback_id[:8]}.md"
+        return {
+            "status": "ready",
+            "filename": filename,
+            "content": _badcase_knowledge_markdown(badcase),
+            "badcase": badcase,
+        }
+
+    def mark_badcase_knowledge_promotion(
+        self,
+        feedback_id: str,
+        *,
+        knowledge_status: str,
+        knowledge_task_id: str,
+        knowledge_filename: str,
+    ) -> dict[str, Any] | None:
+        return self._agent_feedback_repository.mark_badcase_knowledge_promotion(
+            feedback_id,
+            knowledge_status=knowledge_status,
+            knowledge_task_id=knowledge_task_id,
+            knowledge_filename=knowledge_filename,
+        )
 
     def list_agent_run_events(self, run_id: str) -> list[dict[str, Any]] | None:
         if self._agent_run_repository.get_run(run_id) is None:
@@ -474,15 +530,43 @@ class NativeAgentApplicationService:
         *,
         rating: str,
         comment: str | None,
-    ) -> dict[str, str] | None:
-        if self._agent_run_repository.get_run(run_id) is None:
+        correction: str | None = None,
+    ) -> dict[str, Any] | None:
+        run = self._agent_run_repository.get_run(run_id)
+        if run is None:
             return None
+        badcase_flag = _is_badcase_feedback(rating=rating, correction=correction)
         feedback_id = self._agent_feedback_repository.create_feedback(
             run_id,
             rating=rating,
             comment=comment,
+            correction=correction,
+            badcase_flag=badcase_flag,
+            original_report=run.get("final_report"),
         )
-        return {"feedback_id": feedback_id}
+        normalized_correction = correction.strip() if correction else ""
+        if normalized_correction:
+            self._agent_memory_repository.create_memory(
+                workspace_id=str(run["workspace_id"]),
+                run_id=run_id,
+                conclusion_text=normalized_correction,
+                conclusion_type="correction",
+                confidence=0.7,
+                metadata={
+                    "source": "feedback",
+                    "feedback_id": feedback_id,
+                    "rating": rating,
+                },
+            )
+        return {
+            "feedback_id": feedback_id,
+            "run_id": run_id,
+            "rating": rating,
+            "comment": comment,
+            "correction": correction,
+            "badcase_flag": badcase_flag,
+            "review_status": "pending",
+        }
 
     def _enrich_run_with_metrics(self, run: dict[str, Any]) -> dict[str, Any]:
         events = self._agent_run_repository.list_events(str(run["run_id"]))
@@ -888,6 +972,46 @@ def _ensure_aware_utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
+def _is_badcase_feedback(*, rating: str, correction: str | None) -> bool:
+    negative_ratings = {"down", "not_helpful", "wrong", "unsafe", "incomplete"}
+    return rating in negative_ratings or bool(correction and correction.strip())
+
+
+def _badcase_knowledge_markdown(badcase: dict[str, Any]) -> str:
+    run_payload = badcase.get("run")
+    run = run_payload if isinstance(run_payload, dict) else {}
+    goal = str(run.get("goal") or badcase.get("run_id") or "Unknown Agent run")
+    lines = [
+        f"# SmartSRE Badcase Knowledge: {goal}",
+        "",
+        "## Metadata",
+        "",
+        f"- feedback_id: {badcase.get('feedback_id')}",
+        f"- run_id: {badcase.get('run_id')}",
+        f"- rating: {badcase.get('rating')}",
+        f"- review_status: {badcase.get('review_status')}",
+        "",
+        "## Corrected Conclusion",
+        "",
+        str(badcase.get("correction") or "No correction provided."),
+    ]
+    if badcase.get("comment"):
+        lines.extend(["", "## Operator Feedback", "", str(badcase["comment"])])
+    if badcase.get("original_report"):
+        lines.extend(["", "## Original Report", "", str(badcase["original_report"])])
+    lines.extend(
+        [
+            "",
+            "## Usage Guidance",
+            "",
+            "- Prefer the corrected conclusion when a future incident has matching symptoms.",
+            "- Treat this entry as reviewed operational knowledge, not as proof without fresh evidence.",
+            "- Cite tool outputs and current observations before recommending actions.",
+        ]
+    )
+    return "\n".join(lines).strip() + "\n"
+
+
 def _derive_run_metrics(run: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
     run_started = next((event for event in events if event.get("type") == "run_started"), None)
     run_started_payload = run_started.get("payload") if run_started else {}
@@ -925,9 +1049,12 @@ def _derive_run_metrics(run: dict[str, Any], events: list[dict[str, Any]]) -> di
     decision_count = len(decision_events)
     approval_count = len(_events_by_type(events, "approval_decision"))
     resume_count = len(_events_by_type(events, "approval_resume"))
-    cost_estimate_usd = _estimate_run_cost(
-        tool_call_count=tool_call_count, retrieval_count=retrieval_count
-    )
+    persisted_cost_estimate = run.get("cost_estimate")
+    cost_estimate_usd = _cost_estimate_usd(persisted_cost_estimate)
+    if cost_estimate_usd is None:
+        cost_estimate_usd = _estimate_run_cost(
+            tool_call_count=tool_call_count, retrieval_count=retrieval_count
+        )
 
     persisted_step_count = _persisted_int(run.get("step_count"))
     persisted_tool_call_count = _persisted_int(run.get("tool_call_count"))
@@ -960,9 +1087,11 @@ def _derive_run_metrics(run: dict[str, Any], events: list[dict[str, Any]]) -> di
         "recovery_count": recovery_count,
         "handoff_count": handoff_count,
         "token_usage": run.get("token_usage"),
-        "cost_estimate": cost_estimate_usd,
+        "cost_estimate": persisted_cost_estimate
+        if persisted_cost_estimate is not None
+        else cost_estimate_usd,
         "cost_estimate_usd": cost_estimate_usd,
-        "cost_estimate_source": "heuristic",
+        "cost_estimate_source": _cost_estimate_source(persisted_cost_estimate),
         "runtime_safety": run_started_payload.get("runtime_safety"),
         "event_counts": _count_event_types(events),
     }
@@ -991,6 +1120,30 @@ def _persisted_int(value: Any) -> int | None:
         return None
     try:
         return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _cost_estimate_usd(value: Any) -> float | None:
+    if isinstance(value, dict):
+        for key in ("total_cost", "cost_estimate_usd", "total"):
+            parsed = _persisted_float(value.get(key))
+            if parsed is not None:
+                return parsed
+    return _persisted_float(value)
+
+
+def _cost_estimate_source(value: Any) -> str:
+    if isinstance(value, dict) and value.get("source"):
+        return str(value["source"])
+    return "heuristic"
+
+
+def _persisted_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
     except (TypeError, ValueError):
         return None
 

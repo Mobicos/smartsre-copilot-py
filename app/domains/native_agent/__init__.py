@@ -9,6 +9,7 @@ from app.domains.native_agent.entities import (
     Workspace,
 )
 from app.domains.native_agent.schemas import (
+    AgentBadcaseReviewRequest,
     AgentFeedbackCreateRequest,
     AgentRunCreateRequest,
     SceneCreateRequest,
@@ -18,6 +19,7 @@ from app.domains.native_agent.schemas import (
 
 __all__ = [
     "AgentEvent",
+    "AgentBadcaseReviewRequest",
     "AgentFeedbackCreateRequest",
     "AgentRun",
     "AgentRunCreateRequest",

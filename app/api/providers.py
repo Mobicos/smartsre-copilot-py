@@ -20,6 +20,7 @@ from app.infrastructure.knowledge import (
 )
 from app.platform.persistence import (
     agent_feedback_repository,
+    agent_memory_repository,
     agent_run_repository,
     aiops_run_repository,
     chat_tool_event_repository,
@@ -62,11 +63,13 @@ class RuntimeContainer:
         scene_store: Any = scene_repository,
         run_store: Any = agent_run_repository,
         policy_store: Any = tool_policy_repository,
+        memory_store: Any = agent_memory_repository,
     ) -> None:
         self._settings = settings
         self.scene_store = scene_store
         self.run_store = run_store
         self.policy_store = policy_store
+        self.memory_store = memory_store
 
     @cached_property
     def tool_catalog(self) -> ToolCatalog:
@@ -106,7 +109,11 @@ class RuntimeContainer:
         else:
             provider = DeterministicDecisionProvider()
 
-        return AgentDecisionRuntime(provider=provider, checkpoint_saver=checkpoint_saver)
+        return AgentDecisionRuntime(
+            provider=provider,
+            fallback_provider=DeterministicDecisionProvider() if provider_name == "qwen" else None,
+            checkpoint_saver=checkpoint_saver,
+        )
 
     @cached_property
     def agent_runtime(self) -> AgentRuntime:
@@ -119,6 +126,7 @@ class RuntimeContainer:
             scene_store=self.scene_store,
             run_store=self.run_store,
             policy_store=self.policy_store,
+            memory_store=self.memory_store,
             decision_runtime=self.decision_runtime,
         )
 
@@ -264,6 +272,7 @@ class AppContainer:
             tool_policy_repository=tool_policy_repository,
             agent_run_repository=agent_run_repository,
             agent_feedback_repository=agent_feedback_repository,
+            agent_memory_repository=agent_memory_repository,
         )
 
     def has(self, dependency_name: str) -> bool:

@@ -15,6 +15,7 @@ from app.platform.persistence.repositories.conversation import (
 from app.platform.persistence.repositories.indexing import indexing_task_repository  # noqa: E402
 from app.platform.persistence.repositories.native_agent import (
     agent_feedback_repository,
+    agent_memory_repository,
     agent_run_repository,
     knowledge_base_repository,
     scene_repository,
@@ -24,6 +25,7 @@ from app.platform.persistence.repositories.native_agent import (
 
 __all__ = [
     "agent_feedback_repository",
+    "agent_memory_repository",
     "agent_run_repository",
     "aiops_run_repository",
     "audit_log_repository",
