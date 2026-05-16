@@ -33,6 +33,7 @@ from app.agent_runtime.events import AgentRuntimeEvent
 from app.agent_runtime.evidence import EvidenceAssessor
 from app.agent_runtime.executor import AgentToolExecutor
 from app.agent_runtime.guardrails import sanitize_goal
+from app.agent_runtime.loop import LoopStep
 from app.agent_runtime.metrics_collector import MetricsCollector
 from app.agent_runtime.planner import AgentPlanner
 from app.agent_runtime.policy import ToolPolicyGate
@@ -161,6 +162,21 @@ class EventRecorder:
             stage=stage,
             run_id=run_id,
             message=message,
+            payload=payload,
+        )
+
+    def record_loop_step(self, run_id: str, step: LoopStep) -> AgentRuntimeEvent:
+        """Persist one loop decision step with event-level AgentOps metrics."""
+
+        payload = {
+            **step.metrics,
+            "decision": step.decision.to_event_payload(),
+        }
+        return self.record(
+            run_id,
+            event_type="decision",
+            stage="decision",
+            message=step.decision.reasoning_summary,
             payload=payload,
         )
 
