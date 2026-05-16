@@ -13,6 +13,7 @@ _EXPORTS = {
     "AgentGoalContract": "app.agent_runtime.decision",
     "AgentHypothesis": "app.agent_runtime.decision",
     "AgentObservation": "app.agent_runtime.decision",
+    "DecisionProviderFactory": "app.agent_runtime.decision",
     "DeterministicDecisionProvider": "app.agent_runtime.decision",
     "EvidenceAssessment": "app.agent_runtime.decision",
     "FinalReportContract": "app.agent_runtime.decision",

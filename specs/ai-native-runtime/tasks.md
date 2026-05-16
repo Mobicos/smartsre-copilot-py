@@ -129,7 +129,7 @@ editing code:
   - Implement DecisionProvider protocol
   - Call LLM, return real TokenUsage
   - Record reasoning_summary
-- [ ] T017 Implement ProviderFactory in `app/agent_runtime/decision.py`
+- [x] T017 Implement ProviderFactory in `app/agent_runtime/decision.py`
   - Create provider based on agent_decision_provider config
   - Support runtime switching (no restart needed)
 - [ ] T018 Implement Provider Fallback in `app/agent_runtime/loop.py`

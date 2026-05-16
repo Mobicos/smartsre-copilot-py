@@ -86,32 +86,23 @@ class RuntimeContainer:
     @cached_property
     def decision_runtime(self) -> Any:
         from app.agent_runtime import (
-            AgentDecisionRuntime,
-            DeterministicDecisionProvider,
-            LangChainQwenDecisionInvoker,
-            QwenDecisionProvider,
+            DecisionProviderFactory,
         )
 
-        provider_name = self._settings.agent_decision_provider.strip().lower()
-        provider: Any
-        if provider_name == "qwen":
+        def chat_model_factory(model_name: str) -> Any:
             from app.core.llm_factory import llm_factory
 
-            provider = QwenDecisionProvider(
-                LangChainQwenDecisionInvoker(
-                    llm_factory.create_chat_model(
-                        model=self._settings.dashscope_model,
-                        temperature=0,
-                        streaming=False,
-                    )
-                )
+            return llm_factory.create_chat_model(
+                model=model_name,
+                temperature=0,
+                streaming=False,
             )
-        else:
-            provider = DeterministicDecisionProvider()
 
-        return AgentDecisionRuntime(
-            provider=provider,
-            fallback_provider=DeterministicDecisionProvider() if provider_name == "qwen" else None,
+        factory = DecisionProviderFactory(
+            self._settings,
+            chat_model_factory=chat_model_factory,
+        )
+        return factory.create_runtime(
             checkpoint_saver=checkpoint_saver,
         )
 

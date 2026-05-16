@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from app.agent_runtime.decision import (
+    DecisionProviderFactory,
     DeterministicDecisionProvider,
     LangChainQwenDecisionInvoker,
     QwenDecisionProvider,
     build_initial_decision_state,
 )
 from app.agent_runtime.ports import DecisionProvider
+from app.core.config import AppSettings
 
 
 def test_deterministic_provider_implements_decision_provider_port():
@@ -104,3 +106,33 @@ def test_langchain_qwen_invoker_exposes_provider_token_usage():
     }
     assert provider.get_cost_estimate()["total_cost"] > 0
     assert provider.get_cost_estimate()["source"] == "heuristic_from_provider_tokens"
+
+
+def test_provider_factory_creates_deterministic_provider_from_settings():
+    factory = DecisionProviderFactory(AppSettings(agent_decision_provider="deterministic"))
+
+    provider = factory.create_provider()
+    runtime = factory.create_runtime()
+
+    assert isinstance(provider, DeterministicDecisionProvider)
+    assert runtime.consume_provider_fallback_events() == []
+
+
+def test_provider_factory_creates_qwen_provider_with_fallback():
+    created_models: list[str] = []
+
+    def chat_model_factory(model_name: str):
+        created_models.append(model_name)
+        return _FakeQwenChatModel()
+
+    factory = DecisionProviderFactory(
+        AppSettings(agent_decision_provider="qwen", dashscope_model="qwen-max"),
+        chat_model_factory=chat_model_factory,
+    )
+
+    provider = factory.create_provider()
+    runtime = factory.create_runtime()
+
+    assert isinstance(provider, QwenDecisionProvider)
+    assert created_models == ["qwen-max", "qwen-max"]
+    assert isinstance(runtime._fallback_provider, DeterministicDecisionProvider)

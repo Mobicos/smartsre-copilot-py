@@ -448,6 +448,41 @@ class LangChainQwenDecisionInvoker:
         }
 
 
+class DecisionProviderFactory:
+    """Create decision providers from runtime settings."""
+
+    def __init__(
+        self,
+        settings: Any,
+        *,
+        chat_model_factory: Callable[[str], Any] | None = None,
+    ) -> None:
+        self._settings = settings
+        self._chat_model_factory = chat_model_factory
+
+    def create_provider(self, provider_name: str | None = None) -> DecisionProvider:
+        selected = (provider_name or self._settings.agent_decision_provider).strip().lower()
+        if selected == "qwen":
+            if self._chat_model_factory is None:
+                raise ValueError("qwen decision provider requires chat_model_factory")
+            return QwenDecisionProvider(
+                LangChainQwenDecisionInvoker(
+                    self._chat_model_factory(self._settings.dashscope_model),
+                )
+            )
+        return DeterministicDecisionProvider()
+
+    def create_runtime(self, *, checkpoint_saver: Any | None = None) -> AgentDecisionRuntime:
+        selected = self._settings.agent_decision_provider.strip().lower()
+        provider = self.create_provider(selected)
+        fallback_provider = DeterministicDecisionProvider() if selected == "qwen" else None
+        return AgentDecisionRuntime(
+            provider=provider,
+            fallback_provider=fallback_provider,
+            checkpoint_saver=checkpoint_saver,
+        )
+
+
 class AgentDecisionRuntime:
     """Small graph-compatible runtime skeleton for V2 decisions."""
 
