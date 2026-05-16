@@ -10,11 +10,9 @@ from app.agent_runtime.proactive import (
     DegradedMetricProvider,
     InMemoryAlertStore,
     MetricAnomaly,
-    ProbeResult,
-    ProactiveAlert,
     ProactiveMonitor,
+    ProbeResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,9 +36,7 @@ class _FakeMetricProvider:
         self._mem_msg = mem_alert_msg
         self.calls: list[str] = []
 
-    def get_cpu_metrics(
-        self, service_name: str, *, scenario: str = "critical"
-    ) -> dict[str, Any]:
+    def get_cpu_metrics(self, service_name: str, *, scenario: str = "critical") -> dict[str, Any]:
         self.calls.append(f"cpu:{service_name}")
         spike = self._cpu_max > 80.0
         return {
@@ -84,9 +80,7 @@ class _FakeMetricProvider:
 class _FailingMetricProvider:
     """Provider that raises on every call — tests degraded fallback path."""
 
-    def get_cpu_metrics(
-        self, service_name: str, *, scenario: str = "critical"
-    ) -> dict[str, Any]:
+    def get_cpu_metrics(self, service_name: str, *, scenario: str = "critical") -> dict[str, Any]:
         raise ConnectionError("external monitoring unavailable")
 
     def get_memory_metrics(
@@ -105,9 +99,7 @@ def _make_monitor(
 ) -> tuple[ProactiveMonitor, _FakeMetricProvider, AlertDeduplicator]:
     provider = _FakeMetricProvider(cpu_max=cpu_max, memory_max=memory_max)
     store = InMemoryAlertStore()
-    dedup = AlertDeduplicator(
-        store=store, suppress_interval_seconds=suppress_interval
-    )
+    dedup = AlertDeduplicator(store=store, suppress_interval_seconds=suppress_interval)
     monitor = ProactiveMonitor(
         metric_provider=provider,
         deduplicator=dedup,
@@ -199,9 +191,7 @@ class TestProactiveMonitorProbe:
         assert len(result.alerts_emitted) == 2
 
     def test_alert_suppressed_on_second_probe(self):
-        monitor, provider, _ = _make_monitor(
-            cpu_max=90.0, memory_max=40.0, suppress_interval=60
-        )
+        monitor, provider, _ = _make_monitor(cpu_max=90.0, memory_max=40.0, suppress_interval=60)
         r1 = monitor.probe()
         assert len(r1.alerts_emitted) == 1
         # Second probe immediately — same alert should be suppressed
@@ -210,9 +200,7 @@ class TestProactiveMonitorProbe:
         assert len(r2.alerts_emitted) == 0
 
     def test_probe_multiple_services(self):
-        monitor, provider, _ = _make_monitor(
-            cpu_max=90.0, services=["svc-a", "svc-b"]
-        )
+        monitor, provider, _ = _make_monitor(cpu_max=90.0, services=["svc-a", "svc-b"])
         result = monitor.probe()
         assert result.services_polled == 2
         assert len(result.anomalies) == 2  # one CPU anomaly per service
@@ -296,8 +284,11 @@ class TestAutoDiagnosisTrigger:
 
         trigger = AutoDiagnosisTrigger(run_creator=_fail, scene_id="scene-1")
         anomaly = MetricAnomaly(
-            service_name="svc", metric_type="cpu",
-            max_value=90.0, threshold=80.0, message="spike",
+            service_name="svc",
+            metric_type="cpu",
+            max_value=90.0,
+            threshold=80.0,
+            message="spike",
         )
         assert trigger.trigger(service_name="svc", anomalies=[anomaly]) is None
 
@@ -310,8 +301,11 @@ class TestAutoDiagnosisTrigger:
 
         trigger = AutoDiagnosisTrigger(run_creator=_create, scene_id="s1")
         a = MetricAnomaly(
-            service_name="svc", metric_type="cpu",
-            max_value=90.0, threshold=80.0, message="spike",
+            service_name="svc",
+            metric_type="cpu",
+            max_value=90.0,
+            threshold=80.0,
+            message="spike",
         )
         trigger.trigger(service_name="svc", anomalies=[a])
         trigger.trigger(service_name="svc", anomalies=[a])
@@ -380,15 +374,21 @@ class TestDegradedMetricProvider:
 class TestMetricAnomaly:
     def test_alert_key_auto_generated(self):
         a = MetricAnomaly(
-            service_name="svc", metric_type="cpu",
-            max_value=90.0, threshold=80.0, message="spike",
+            service_name="svc",
+            metric_type="cpu",
+            max_value=90.0,
+            threshold=80.0,
+            message="spike",
         )
         assert a.alert_key == "svc:cpu"
 
     def test_alert_key_custom(self):
         a = MetricAnomaly(
-            service_name="svc", metric_type="cpu",
-            max_value=90.0, threshold=80.0, message="spike",
+            service_name="svc",
+            metric_type="cpu",
+            max_value=90.0,
+            threshold=80.0,
+            message="spike",
             alert_key="custom:key",
         )
         assert a.alert_key == "custom:key"

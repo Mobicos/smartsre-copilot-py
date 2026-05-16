@@ -351,7 +351,10 @@ class _ConsecutiveEmptyToolExecutor:
         tool = decision.selected_tool or "unknown"
         self.calls.append(tool)
         return ToolExecutionResult(
-            tool_name=tool, status="success", arguments={}, output=None,
+            tool_name=tool,
+            status="success",
+            arguments={},
+            output=None,
         )
 
 
@@ -368,10 +371,12 @@ class _RetryThenDowngradeManager:
         consecutive_failures: int = 0,
         tool_available: bool = True,
     ) -> RecoveryPlan:
-        self.calls.append({
-            "evidence_quality": evidence_quality,
-            "consecutive_failures": consecutive_failures,
-        })
+        self.calls.append(
+            {
+                "evidence_quality": evidence_quality,
+                "consecutive_failures": consecutive_failures,
+            }
+        )
         if consecutive_failures >= 2:
             return RecoveryPlan(action="downgrade_report", reason="too many failures")
         return RecoveryPlan(action="retry", reason="empty evidence")
@@ -407,7 +412,7 @@ def test_recovery_intercepts_before_provider_call():
     recovery = _LoopRecoveryManager()
     state = _make_state()
 
-    result = BoundedReActLoop(
+    BoundedReActLoop(
         provider=_ToolCallProvider(),
         tool_executor=tool_executor,
         recovery_manager=recovery,

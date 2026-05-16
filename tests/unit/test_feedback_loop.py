@@ -10,8 +10,6 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
-import pytest
-
 from app.application.badcase_service import (
     BadcaseClusterer,
     FAQCandidate,
@@ -20,7 +18,6 @@ from app.application.badcase_service import (
 from app.application.native_agent_application_service import (
     NativeAgentApplicationService,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -58,11 +55,7 @@ class _StubFeedbackRepository:
         return feedback_id
 
     def list_badcases(self, *, limit: int = 50) -> list[dict[str, Any]]:
-        return [
-            fb
-            for fb in self._feedbacks.values()
-            if fb.get("badcase_flag")
-        ][:limit]
+        return [fb for fb in self._feedbacks.values() if fb.get("badcase_flag")][:limit]
 
     def get_badcase(self, feedback_id: str) -> dict[str, Any] | None:
         fb = self._feedbacks.get(feedback_id)
@@ -84,7 +77,9 @@ class _StubFeedbackRepository:
         fb["review_status"] = review_status
         fb["review_note"] = review_note
         fb["reviewed_by"] = reviewed_by
-        self._call_log.append({"action": "review", "feedback_id": feedback_id, "status": review_status})
+        self._call_log.append(
+            {"action": "review", "feedback_id": feedback_id, "status": review_status}
+        )
         return dict(fb)
 
     def mark_badcase_knowledge_promotion(
@@ -130,15 +125,17 @@ class _StubMemoryRepository:
         metadata: dict[str, Any] | None = None,
     ) -> str:
         memory_id = f"mem-{len(self.memories) + 1:03d}"
-        self.memories.append({
-            "memory_id": memory_id,
-            "workspace_id": workspace_id,
-            "run_id": run_id,
-            "conclusion_text": conclusion_text,
-            "conclusion_type": conclusion_type,
-            "confidence": confidence,
-            "metadata": metadata or {},
-        })
+        self.memories.append(
+            {
+                "memory_id": memory_id,
+                "workspace_id": workspace_id,
+                "run_id": run_id,
+                "conclusion_text": conclusion_text,
+                "conclusion_type": conclusion_type,
+                "confidence": confidence,
+                "metadata": metadata or {},
+            }
+        )
         return memory_id
 
 
@@ -314,7 +311,7 @@ class TestNativeAgentFAQWorkflow:
     def test_list_faq_candidates_groups_similar_corrections(self):
         service, fb_repo, _ = _make_service()
         # Create 6 confirmed badcases with similar corrections
-        for i in range(1, 7):
+        for _ in range(1, 7):
             fb_repo.create_feedback(
                 "run-001",
                 rating="down",
@@ -331,7 +328,7 @@ class TestNativeAgentFAQWorkflow:
     def test_confirm_faq_candidate_sets_review_status(self):
         service, fb_repo, _ = _make_service()
         feedback_ids = []
-        for i in range(1, 6):
+        for _ in range(1, 6):
             fid = fb_repo.create_feedback(
                 "run-001",
                 rating="down",
