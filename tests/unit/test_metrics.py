@@ -191,9 +191,7 @@ def test_no_duplicates_for_different_arguments():
 
 
 def test_step_latencies_computed_from_step_index():
-    from datetime import timezone
-
-    base = datetime(2026, 5, 17, 10, 0, 0, tzinfo=timezone.utc)
+    base = datetime(2026, 5, 17, 10, 0, 0, tzinfo=datetime.UTC)
     run_store = _RunStore()
     run_store.events = [
         {"type": "decision", "step_index": 0, "created_at": base},
