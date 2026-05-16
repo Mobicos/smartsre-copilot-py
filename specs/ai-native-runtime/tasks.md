@@ -136,6 +136,7 @@ editing code:
   - Qwen call fails -> auto-degrade to Deterministic
   - Record provider_fallback event
   - Notify frontend (SSE event)
+  - Status: loop-level fallback and consumable fallback event cache implemented; runtime/SSE emission remains pending
 
 **Checkpoint**: Both providers switchable at runtime, fallback reliable
 
@@ -144,6 +145,7 @@ editing code:
 - [ ] T019 [P] Unit test: ProviderFactory creation and switching in `tests/unit/test_decision.py`
 - [ ] T020 [P] Unit test: QwenDecisionProvider fallback in `tests/unit/test_decision.py`
   - Mock LLM failure -> verify degrade to deterministic
+  - Status: loop fallback is covered in `tests/unit/test_runtime_foundation.py`; provider-specific runtime wiring test remains pending
 
 ---
 

@@ -22,6 +22,13 @@ class _RepeatingProvider:
         )
 
 
+class _FailingProvider:
+    provider_name = "qwen"
+
+    def decide(self, state: AgentDecisionState) -> AgentDecision:
+        raise RuntimeError("qwen unavailable")
+
+
 class _RecordingTraceCollector:
     def __init__(self) -> None:
         self.spans: list[tuple[str, dict[str, Any] | None]] = []
@@ -151,6 +158,35 @@ def test_bounded_react_loop_records_trace_span_for_each_step():
             },
         ),
     ]
+
+
+def test_bounded_react_loop_falls_back_when_primary_provider_fails():
+    state = AgentDecisionState(
+        run_id="run-1",
+        goal=AgentGoalContract(goal="diagnose latency"),
+        available_tools=["SearchLog"],
+    )
+    loop = BoundedReActLoop(
+        provider=_FailingProvider(),
+        fallback_provider=_RepeatingProvider(),
+    )
+
+    result = loop.run(
+        state,
+        LoopBudget(max_steps=1, max_time_seconds=30),
+    )
+
+    assert result.step_count == 1
+    assert result.steps[0].decision.selected_tool == "SearchLog"
+    assert loop.consume_provider_fallback_events() == [
+        {
+            "from_provider": "qwen",
+            "to_provider": "test",
+            "reason": "RuntimeError",
+            "error_message": "qwen unavailable",
+        }
+    ]
+    assert loop.consume_provider_fallback_events() == []
 
 
 def test_evidence_assessor_accepts_mapping_outputs_as_strong_evidence():

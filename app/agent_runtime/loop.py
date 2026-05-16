@@ -83,14 +83,24 @@ class BoundedReActLoop:
     def __init__(
         self,
         provider: DecisionProvider | None = None,
+        fallback_provider: DecisionProvider | None = None,
         token_estimator: Callable[[AgentDecision], int] | None = None,
         trace_collector: LoopTraceCollector | None = None,
         clock: Callable[[], float] | None = None,
     ) -> None:
         self._provider = provider or DeterministicDecisionProvider()
+        self._fallback_provider = fallback_provider
         self._token_estimator = token_estimator or _zero_token_estimator
         self._trace_collector = trace_collector or TraceCollector()
         self._clock = clock or monotonic
+        self._provider_fallback_events: list[dict[str, str]] = []
+
+    def consume_provider_fallback_events(self) -> list[dict[str, str]]:
+        """Return and clear provider fallback events for replay/SSE adapters."""
+
+        events = list(self._provider_fallback_events)
+        self._provider_fallback_events.clear()
+        return events
 
     def run(self, state: AgentDecisionState, budget: LoopBudget | None = None) -> LoopResult:
         budget = (budget or _budget_from_state(state)).normalize()
@@ -122,7 +132,7 @@ class BoundedReActLoop:
                     "agent.max_steps": budget.max_steps,
                 },
             ) as span:
-                decision = self._provider.decide(current_state)
+                decision = self._decide_with_fallback(current_state, span)
                 span.set_attribute("agent.action_type", decision.action_type)
                 if decision.selected_tool:
                     span.set_attribute("agent.tool_name", decision.selected_tool)
@@ -167,6 +177,30 @@ class BoundedReActLoop:
             token_usage=token_usage,
         )
 
+    def _decide_with_fallback(
+        self,
+        state: AgentDecisionState,
+        span: TraceSpan,
+    ) -> AgentDecision:
+        try:
+            return self._provider.decide(state)
+        except Exception as exc:
+            if self._fallback_provider is None:
+                raise
+
+            event = {
+                "from_provider": _provider_name(self._provider),
+                "to_provider": _provider_name(self._fallback_provider),
+                "reason": exc.__class__.__name__,
+                "error_message": str(exc),
+            }
+            self._provider_fallback_events.append(event)
+            span.set_attribute("agent.provider_fallback", True)
+            span.set_attribute("agent.provider_fallback.from", event["from_provider"])
+            span.set_attribute("agent.provider_fallback.to", event["to_provider"])
+            span.set_attribute("agent.provider_fallback.reason", event["reason"])
+            return self._fallback_provider.decide(state)
+
 
 def _budget_from_state(state: AgentDecisionState) -> LoopBudget:
     return LoopBudget(
@@ -194,3 +228,7 @@ def _state_with_remaining_budget(
 
 def _zero_token_estimator(_: AgentDecision) -> int:
     return 0
+
+
+def _provider_name(provider: DecisionProvider) -> str:
+    return str(getattr(provider, "provider_name", provider.__class__.__name__))
