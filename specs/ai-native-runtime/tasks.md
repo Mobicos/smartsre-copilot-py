@@ -98,9 +98,10 @@ editing code:
 - [x] T012 [P] Unit test: EvidenceAssessment in `tests/unit/test_evidence.py`
   - Test strong/moderate/weak/insufficient/conflict/error assessment
   - Test evidence conflict detection
-- [ ] T013 Integration test: Full loop execution in `tests/integration/test_react_loop.py`
+- [x] T013 Integration test: Full loop execution in `tests/unit/test_react_loop_integration.py`
   - Mock tool outputs, verify loop produces final_report
   - Mock tool timeout, verify recovery path
+  - Status: 7 tests covering tool execution, evidence collection, approval_required pause, failing tools, recovery retries, mixed results, and handoff termination
 
 ---
 
