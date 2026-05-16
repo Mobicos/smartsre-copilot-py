@@ -984,6 +984,47 @@ class AgentMemoryRepository:
             db.commit()
             return memory_id
 
+    def create_memory_with_embedding(
+        self,
+        *,
+        workspace_id: str,
+        run_id: str | None,
+        conclusion_text: str,
+        embedding: list[float],
+        conclusion_type: str = "final_report",
+        confidence: float = 0.5,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        """Insert a memory row and store its vector embedding via raw SQL."""
+        memory_id = str(uuid.uuid4())
+        now = _utc_now()
+        embedding_literal = "[" + ",".join(f"{v:.6f}" for v in embedding) + "]"
+        with Session(bind=get_engine()) as db:
+            db.exec(
+                text(
+                    "INSERT INTO agent_memory "
+                    "(memory_id, workspace_id, run_id, conclusion_text, conclusion_type, "
+                    " confidence, validation_count, metadata, embedding, created_at, updated_at) "
+                    "VALUES "
+                    "(:mid, :wid, :rid, :ct, :ctype, :conf, 0, :meta, "
+                    " CAST(:emb AS vector), :cat, :uat)"
+                ),
+                {
+                    "mid": memory_id,
+                    "wid": workspace_id,
+                    "rid": run_id,
+                    "ct": conclusion_text,
+                    "ctype": conclusion_type,
+                    "conf": confidence,
+                    "meta": json.dumps(metadata, ensure_ascii=False) if metadata else None,
+                    "emb": embedding_literal,
+                    "cat": now,
+                    "uat": now,
+                },
+            )
+            db.commit()
+        return memory_id
+
     def search_memory(
         self,
         *,
@@ -1005,6 +1046,80 @@ class AgentMemoryRepository:
         ]
         scored.sort(key=lambda item: (item[0], item[1]["confidence"]), reverse=True)
         return [{**item, "similarity": score} for score, item in scored[:limit]]
+
+    def search_memory_vector(
+        self,
+        *,
+        workspace_id: str,
+        query_embedding: list[float],
+        top_k: int = 5,
+        similarity_threshold: float = 0.7,
+    ) -> list[dict[str, Any]]:
+        """Cosine similarity search over agent_memory embeddings via pgvector."""
+        embedding_literal = "[" + ",".join(f"{v:.6f}" for v in query_embedding) + "]"
+        with Session(bind=get_engine()) as db:
+            rows = db.exec(
+                text(
+                    "SELECT memory_id, workspace_id, run_id, conclusion_text, "
+                    "       conclusion_type, confidence, validation_count, metadata, "
+                    "       created_at, updated_at, "
+                    "       1 - (embedding <=> CAST(:emb AS vector)) AS similarity "
+                    "FROM agent_memory "
+                    "WHERE workspace_id = :wid "
+                    "  AND embedding IS NOT NULL "
+                    "  AND 1 - (embedding <=> CAST(:emb AS vector)) >= :threshold "
+                    "ORDER BY embedding <=> CAST(:emb AS vector) "
+                    "LIMIT :top_k"
+                ),
+                {
+                    "emb": embedding_literal,
+                    "wid": workspace_id,
+                    "threshold": similarity_threshold,
+                    "top_k": top_k,
+                },
+            ).all()
+        return [
+            {
+                "memory_id": row.memory_id,
+                "workspace_id": row.workspace_id,
+                "run_id": row.run_id,
+                "conclusion_text": row.conclusion_text,
+                "conclusion_type": row.conclusion_type,
+                "confidence": float(row.confidence),
+                "validation_count": row.validation_count,
+                "metadata": row.metadata if isinstance(row.metadata, dict) else {},
+                "similarity": round(float(row.similarity), 4),
+                "created_at": row.created_at.isoformat() if row.created_at else "",
+                "updated_at": row.updated_at.isoformat() if row.updated_at else "",
+            }
+            for row in rows
+        ]
+
+    def increment_validation_count(
+        self,
+        *,
+        memory_id: str,
+        confidence_boost: float = 0.1,
+    ) -> dict[str, Any] | None:
+        """Increment validation_count and boost confidence for a memory entry."""
+        with Session(bind=get_engine()) as db:
+            db.exec(
+                text(
+                    "UPDATE agent_memory "
+                    "SET validation_count = validation_count + 1, "
+                    "    confidence = LEAST(confidence + :boost, 1.0), "
+                    "    updated_at = :now "
+                    "WHERE memory_id = :mid"
+                ),
+                {"boost": confidence_boost, "now": _utc_now(), "mid": memory_id},
+            )
+            db.commit()
+            row = db.exec(
+                select(AgentMemory).where(AgentMemory.memory_id == memory_id)
+            ).first()
+        if row is None:
+            return None
+        return self._row_to_dict(row)
 
     @staticmethod
     def _row_to_dict(row: AgentMemory) -> dict[str, Any]:

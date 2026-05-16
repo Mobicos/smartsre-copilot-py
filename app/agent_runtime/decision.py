@@ -210,6 +210,7 @@ class AgentDecisionState(BaseModel):
     evidence: list[EvidenceAssessment] = Field(default_factory=list)
     consecutive_empty_evidence: int = 0
     decisions: list[AgentDecision] = Field(default_factory=list)
+    memory_context: str = ""
 
     def with_decision(self, decision: AgentDecision) -> AgentDecisionState:
         status: DecisionRunStatus = self.status

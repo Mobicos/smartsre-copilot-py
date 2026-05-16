@@ -125,6 +125,7 @@ class BoundedReActLoop:
         recovery_manager: LoopRecoveryManager | None = None,
         tool_executor: ToolExecutorCallback | None = None,
         evidence_assessor: EvidenceAssessor | None = None,
+        memory_retriever: Any | None = None,
         clock: Callable[[], float] | None = None,
     ) -> None:
         self._provider = provider or DeterministicDecisionProvider()
@@ -134,6 +135,7 @@ class BoundedReActLoop:
         self._recovery_manager = recovery_manager
         self._tool_executor = tool_executor
         self._evidence_assessor = evidence_assessor
+        self._memory_retriever = memory_retriever
         self._clock = clock or monotonic
         self._provider_fallback_events: list[dict[str, str]] = []
         self._last_decision_provider: DecisionProvider = self._provider
@@ -148,7 +150,7 @@ class BoundedReActLoop:
     def run(self, state: AgentDecisionState, budget: LoopBudget | None = None) -> LoopResult:
         budget = (budget or _budget_from_state(state)).normalize()
         deadline = self._clock() + budget.max_time_seconds
-        current_state = state
+        current_state = self._inject_memory_context(state)
         steps: list[LoopStep] = []
         evidence_items: list[EvidenceItem] = []
         token_usage = 0
@@ -280,6 +282,25 @@ class BoundedReActLoop:
         if self._evidence_assessor is not None:
             return self._evidence_assessor.assess(evidence_item)
         return decision.evidence
+
+    def _inject_memory_context(self, state: AgentDecisionState) -> AgentDecisionState:
+        """Retrieve similar memories and inject them into the decision state."""
+        if self._memory_retriever is None:
+            return state
+        workspace_id = state.goal.workspace_id
+        if not workspace_id:
+            return state
+        try:
+            memories = self._memory_retriever.retrieve(
+                workspace_id=workspace_id,
+                query=state.goal.goal,
+            )
+            context = self._memory_retriever.format_for_context(memories)
+            if context:
+                return state.model_copy(update={"memory_context": context})
+        except Exception:
+            pass
+        return state
 
     @staticmethod
     def _make_step(

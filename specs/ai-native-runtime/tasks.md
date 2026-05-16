@@ -306,34 +306,34 @@ editing code:
 
 ### Implementation
 
-- [ ] T046 [P] Implement MemoryStore in `app/infrastructure/memory_store.py`
+- [x] T046 [P] Implement MemoryStore in `app/infrastructure/memory_store.py`
   - 接口：`store(run_id, conclusion, embedding, metadata)`
   - 接口：`retrieve(query_embedding, top_k) -> list[MemoryItem]`
   - 存储：复用 pgvector（`knowledge_chunks` 表扩展或新建 `agent_memory` 表）
   - Alembic migration: 新建 `agent_memory` 表（run_id, conclusion_text, embedding vector(1024), confidence, validation_count, created_at）
-- [ ] T047 [P] Implement MemoryExtractor in `app/agent_runtime/memory_extractor.py`
+- [x] T047 [P] Implement MemoryExtractor in `app/agent_runtime/memory_extractor.py`
   - run 结束时从 final_report 提取关键结论（根因、证据、解决方案）
   - 调用 text-embedding-v4 生成向量
   - 写入 MemoryStore
-- [ ] T048 Implement MemoryRetriever in `app/agent_runtime/memory_retriever.py`
+- [x] T048 Implement MemoryRetriever in `app/agent_runtime/memory_retriever.py`
   - 新 run 启动时，将 goal 向量化，检索 top-k=5 相关历史结论
   - 相似度阈值：cosine > 0.7 才注入 context
   - 返回 `list[MemoryItem]`（含 run_id, conclusion, similarity, confidence）
-- [ ] T049 Integrate memory into BoundedReActLoop in `app/agent_runtime/loop.py`
+- [x] T049 Integrate memory into BoundedReActLoop in `app/agent_runtime/loop.py`
   - observe 阶段调用 MemoryRetriever，历史结论注入 DecisionContext
   - 历史结论附带 `confidence_boost`：被后续 run 验证过的结论权重提升
   - MemoryRetriever 失败时降级（不阻塞主流程）
-- [ ] T050 Implement MemoryValidator in `app/agent_runtime/memory_store.py`
+- [x] T050 Implement MemoryValidator in `app/agent_runtime/memory_store.py`
   - 当前 run 的结论验证了某历史结论时，`validation_count += 1`
   - confidence = base_confidence * (1 + 0.1 * validation_count)
 
 ### Tests
 
-- [ ] T051 [P] Unit test: MemoryStore retrieve with similarity threshold in `tests/unit/test_memory.py`
+- [x] T051 [P] Unit test: MemoryStore retrieve with similarity threshold in `tests/unit/test_memory.py`
   - Test: high similarity -> returned
   - Test: below threshold -> not returned
   - Test: empty store -> empty list
-- [ ] T052 [P] Unit test: MemoryExtractor from final_report in `tests/unit/test_memory.py`
+- [x] T052 [P] Unit test: MemoryExtractor from final_report in `tests/unit/test_memory.py`
   - Test: extract root cause, evidence, solution from structured report
 - [ ] T053 Integration test: full memory cycle in `tests/integration/test_memory.py`
   - Store conclusion from run #1 -> retrieve in run #2 -> verify context injection
