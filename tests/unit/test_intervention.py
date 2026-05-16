@@ -147,7 +147,11 @@ class TestApplyInjectedEvidence:
         from app.agent_runtime.decision import AgentObservation
 
         state = state.model_copy(
-            update={"observations": [AgentObservation(source="tool", summary="existing", confidence=0.8)]}
+            update={
+                "observations": [
+                    AgentObservation(source="tool", summary="existing", confidence=0.8)
+                ]
+            }
         )
         iv = _make_intervention()
         new_state = InterventionBridge.apply_injected_evidence(iv, state)
@@ -226,9 +230,11 @@ class TestApplyModifyGoal:
 class TestLoopInjectEvidence:
     def test_injected_evidence_appears_in_provider_state(self):
         bridge = InterventionBridge()
-        bridge.add(_make_intervention(
-            payload={"content": "数据库连接池耗尽", "source": "human"},
-        ))
+        bridge.add(
+            _make_intervention(
+                payload={"content": "数据库连接池耗尽", "source": "human"},
+            )
+        )
         provider = _DeterministicProvider()
         loop = BoundedReActLoop(
             provider=provider,
@@ -262,17 +268,21 @@ class TestLoopInjectEvidence:
 class TestLoopReplaceToolCall:
     def test_replace_tool_call_overrides_decision(self):
         bridge = InterventionBridge()
-        bridge.add(_make_intervention(
-            intervention_type=InterventionType.REPLACE_TOOL_CALL,
-            payload={"selected_tool": "query_database", "reasoning_summary": "human override"},
-        ))
+        bridge.add(
+            _make_intervention(
+                intervention_type=InterventionType.REPLACE_TOOL_CALL,
+                payload={"selected_tool": "query_database", "reasoning_summary": "human override"},
+            )
+        )
 
         class _ToolCaptor:
             """Provider whose decision gets replaced, then immediately terminal."""
 
             provider_name = "test"
+
             def __init__(self):
                 self.decisions: list[AgentDecision] = []
+
             def decide(self, state: AgentDecisionState) -> AgentDecision:
                 d = AgentDecision(
                     action_type="call_tool",
@@ -324,8 +334,10 @@ class TestLowConfidenceHandoff:
     def test_confidence_reset_on_high_confidence_step(self):
         class _MixedProvider:
             provider_name = "test"
+
             def __init__(self):
                 self._call_count = 0
+
             def decide(self, state: AgentDecisionState) -> AgentDecision:
                 self._call_count += 1
                 # Steps 1-2: low confidence, step 3: high confidence, step 4-6: low again
@@ -378,10 +390,12 @@ class TestLowConfidenceHandoff:
 class TestLoopModifyGoal:
     def test_modify_goal_appears_in_provider_state(self):
         bridge = InterventionBridge()
-        bridge.add(_make_intervention(
-            intervention_type=InterventionType.MODIFY_GOAL,
-            payload={"goal": "investigate memory leak"},
-        ))
+        bridge.add(
+            _make_intervention(
+                intervention_type=InterventionType.MODIFY_GOAL,
+                payload={"goal": "investigate memory leak"},
+            )
+        )
         provider = _DeterministicProvider()
         loop = BoundedReActLoop(
             provider=provider,

@@ -336,7 +336,8 @@ class BoundedReActLoop:
         return state
 
     def _apply_pending_interventions(
-        self, state: AgentDecisionState,
+        self,
+        state: AgentDecisionState,
     ) -> AgentDecisionState:
         """Apply inject_evidence and modify_goal interventions before the decide step."""
         if self._intervention_bridge is None or not state.run_id:
