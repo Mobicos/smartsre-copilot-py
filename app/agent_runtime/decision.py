@@ -10,9 +10,11 @@ import json
 import uuid
 from collections.abc import Callable, Sequence
 from contextlib import contextmanager, nullcontext
-from typing import Any, Literal, Protocol, TypedDict, cast
+from typing import Any, Literal, TypedDict, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+
+from app.agent_runtime.ports import DecisionProvider
 
 ActionType = Literal[
     "observe",
@@ -225,17 +227,25 @@ class AgentDecisionState(BaseModel):
         )
 
 
-class DecisionProvider(Protocol):
-    """Provider interface for deterministic or model-backed decisions."""
-
-    def decide(self, state: AgentDecisionState) -> AgentDecision:
-        """Return the next structured decision."""
-
-
 class DeterministicDecisionProvider:
     """Rule-based provider used before model-backed decisioning is enabled."""
 
     provider_name = "deterministic"
+
+    def get_token_usage(self) -> dict[str, Any]:
+        return {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total": 0,
+            "source": "deterministic_zero",
+        }
+
+    def get_cost_estimate(self) -> dict[str, Any]:
+        return {
+            "currency": "USD",
+            "total_cost": 0.0,
+            "source": "deterministic_zero",
+        }
 
     def decide(self, state: AgentDecisionState) -> AgentDecision:
         if state.budget.exhausted:

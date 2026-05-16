@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from app.agent_runtime.decision import AgentDecision, AgentDecisionState
 
 
 @runtime_checkable
@@ -90,3 +93,17 @@ class AgentMemoryStore(Protocol):
         metadata: dict[str, Any] | None = None,
     ) -> str:
         """Persist one memory item and return its id."""
+
+
+@runtime_checkable
+class DecisionProvider(Protocol):
+    """Provider interface for deterministic or model-backed decisions."""
+
+    def decide(self, state: AgentDecisionState) -> AgentDecision:
+        """Return the next structured decision."""
+
+    def get_token_usage(self) -> dict[str, Any]:
+        """Return provider token usage for the latest or deterministic decision."""
+
+    def get_cost_estimate(self) -> dict[str, Any]:
+        """Return provider cost estimate for the latest or deterministic decision."""
