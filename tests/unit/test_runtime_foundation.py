@@ -3,10 +3,15 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Any
 
-from app.agent_runtime.decision import AgentDecision, AgentDecisionState, AgentGoalContract
+from app.agent_runtime.decision import (
+    AgentDecision,
+    AgentDecisionState,
+    AgentGoalContract,
+    EvidenceAssessment,
+)
 from app.agent_runtime.evidence import EvidenceAssessor
 from app.agent_runtime.loop import BoundedReActLoop, LoopBudget
-from app.agent_runtime.recovery import RecoveryManager
+from app.agent_runtime.recovery import RecoveryManager, RecoveryPlan
 from app.agent_runtime.state import EvidenceItem
 from app.agent_runtime.trace_collector import TraceCollector
 
@@ -46,6 +51,35 @@ class _FailingProvider:
 
     def decide(self, state: AgentDecisionState) -> AgentDecision:
         raise RuntimeError("qwen unavailable")
+
+
+class _ExplodingProvider:
+    provider_name = "should-not-run"
+
+    def decide(self, state: AgentDecisionState) -> AgentDecision:
+        raise AssertionError("provider should not run when recovery is required")
+
+
+class _StaticRecoveryManager:
+    def __init__(self, plan: RecoveryPlan) -> None:
+        self.plan = plan
+        self.calls: list[dict[str, Any]] = []
+
+    def choose_strategy(
+        self,
+        *,
+        evidence_quality: str,
+        consecutive_failures: int = 0,
+        tool_available: bool = True,
+    ) -> RecoveryPlan:
+        self.calls.append(
+            {
+                "evidence_quality": evidence_quality,
+                "consecutive_failures": consecutive_failures,
+                "tool_available": tool_available,
+            }
+        )
+        return self.plan
 
 
 class _RecordingTraceCollector:
@@ -241,6 +275,102 @@ def test_bounded_react_loop_falls_back_when_primary_provider_fails():
         }
     ]
     assert loop.consume_provider_fallback_events() == []
+
+
+def test_bounded_react_loop_routes_empty_evidence_to_recovery_before_provider():
+    recovery_manager = _StaticRecoveryManager(
+        RecoveryPlan(action="retry_same_tool", reason="insufficient_evidence")
+    )
+    state = AgentDecisionState(
+        run_id="run-1",
+        goal=AgentGoalContract(goal="diagnose latency"),
+        available_tools=["SearchLog"],
+        evidence=[EvidenceAssessment(quality="empty", summary="no matching logs")],
+        consecutive_empty_evidence=1,
+    )
+
+    result = BoundedReActLoop(
+        provider=_ExplodingProvider(),
+        recovery_manager=recovery_manager,
+    ).run(
+        state,
+        LoopBudget(max_steps=1, max_time_seconds=30),
+    )
+
+    assert result.step_count == 1
+    assert result.steps[0].decision.action_type == "recover"
+    assert result.steps[0].decision.recovery.reason == "insufficient_evidence"
+    assert result.steps[0].decision.recovery.next_action == "retry"
+    assert recovery_manager.calls == [
+        {
+            "evidence_quality": "empty",
+            "consecutive_failures": 1,
+            "tool_available": True,
+        }
+    ]
+
+
+def test_bounded_react_loop_handoffs_after_repeated_empty_evidence():
+    recovery_manager = _StaticRecoveryManager(
+        RecoveryPlan(
+            action="handoff",
+            reason="insufficient_evidence",
+            handoff_required=True,
+        )
+    )
+    state = AgentDecisionState(
+        run_id="run-1",
+        goal=AgentGoalContract(goal="diagnose latency"),
+        available_tools=["SearchLog"],
+        evidence=[EvidenceAssessment(quality="empty", summary="still no signal")],
+        consecutive_empty_evidence=3,
+    )
+
+    result = BoundedReActLoop(
+        provider=_ExplodingProvider(),
+        recovery_manager=recovery_manager,
+    ).run(
+        state,
+        LoopBudget(max_steps=2, max_time_seconds=30),
+    )
+
+    assert result.termination_reason == "handoff"
+    assert result.status == "handoff_required"
+    assert result.step_count == 1
+    assert result.steps[0].decision.action_type == "handoff"
+    assert result.steps[0].decision.handoff_reason == "insufficient_evidence"
+
+
+def test_bounded_react_loop_downgrades_weak_evidence_to_bounded_report():
+    recovery_manager = _StaticRecoveryManager(
+        RecoveryPlan(action="downgrade_report", reason="weak_evidence")
+    )
+    state = AgentDecisionState(
+        run_id="run-1",
+        goal=AgentGoalContract(goal="diagnose latency"),
+        evidence=[
+            EvidenceAssessment(
+                quality="weak",
+                summary="single low-confidence symptom",
+                confidence=0.35,
+            )
+        ],
+    )
+
+    result = BoundedReActLoop(
+        provider=_ExplodingProvider(),
+        recovery_manager=recovery_manager,
+    ).run(
+        state,
+        LoopBudget(max_steps=2, max_time_seconds=30),
+    )
+
+    assert result.termination_reason == "final_report"
+    assert result.status == "completed"
+    assert result.step_count == 1
+    assert result.steps[0].decision.action_type == "final_report"
+    assert result.steps[0].decision.recovery.reason == "weak_evidence"
+    assert result.steps[0].decision.recovery.next_action == "final_report"
 
 
 def test_evidence_assessor_accepts_mapping_outputs_as_strong_evidence():

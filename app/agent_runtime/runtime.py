@@ -433,6 +433,7 @@ class AgentRuntime:
                     loop = BoundedReActLoop(
                         provider=DecisionRuntimeProviderAdapter(self._decision_runtime),
                         trace_collector=self._trace_collector,
+                        recovery_manager=self._failure_handler,
                     )
                     loop_result = loop.run(
                         decision_state,

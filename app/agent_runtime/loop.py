@@ -13,8 +13,11 @@ from app.agent_runtime.decision import (
     AgentDecisionState,
     DecisionProvider,
     DeterministicDecisionProvider,
+    EvidenceAssessment,
+    RecoveryDecision,
     RuntimeBudget,
 )
+from app.agent_runtime.recovery import RecoveryPlan
 from app.agent_runtime.trace_collector import TraceCollector, TraceSpan
 
 TerminalAction = {"ask_approval", "final_report", "handoff"}
@@ -86,6 +89,19 @@ class LoopTraceCollector(Protocol):
         """Open an optional tracing span."""
 
 
+class LoopRecoveryManager(Protocol):
+    """Recovery strategy boundary used by the bounded loop."""
+
+    def choose_strategy(
+        self,
+        *,
+        evidence_quality: str,
+        consecutive_failures: int = 0,
+        tool_available: bool = True,
+    ) -> RecoveryPlan:
+        """Choose the next bounded recovery action."""
+
+
 class BoundedReActLoop:
     """Run structured observe/decide steps under strict budget boundaries.
 
@@ -100,12 +116,14 @@ class BoundedReActLoop:
         fallback_provider: DecisionProvider | None = None,
         token_estimator: Callable[[AgentDecision], int] | None = None,
         trace_collector: LoopTraceCollector | None = None,
+        recovery_manager: LoopRecoveryManager | None = None,
         clock: Callable[[], float] | None = None,
     ) -> None:
         self._provider = provider or DeterministicDecisionProvider()
         self._fallback_provider = fallback_provider
         self._token_estimator = token_estimator
         self._trace_collector = trace_collector or TraceCollector()
+        self._recovery_manager = recovery_manager
         self._clock = clock or monotonic
         self._provider_fallback_events: list[dict[str, str]] = []
         self._last_decision_provider: DecisionProvider = self._provider
@@ -147,7 +165,7 @@ class BoundedReActLoop:
                     "agent.max_steps": budget.max_steps,
                 },
             ) as span:
-                decision = self._decide_with_fallback(current_state, span)
+                decision = self._decide(current_state, span)
                 span.set_attribute("agent.action_type", decision.action_type)
                 if decision.selected_tool:
                     span.set_attribute("agent.tool_name", decision.selected_tool)
@@ -226,6 +244,31 @@ class BoundedReActLoop:
             self._last_decision_provider = self._fallback_provider
             return self._fallback_provider.decide(state)
 
+    def _decide(self, state: AgentDecisionState, span: TraceSpan) -> AgentDecision:
+        recovery_decision = self._recover_if_required(state)
+        if recovery_decision is not None:
+            self._last_decision_provider = self._provider
+            span.set_attribute(
+                "agent.recovery_action", recovery_decision.recovery.next_action or ""
+            )
+            span.set_attribute("agent.recovery_reason", recovery_decision.recovery.reason or "")
+            return recovery_decision
+        return self._decide_with_fallback(state, span)
+
+    def _recover_if_required(self, state: AgentDecisionState) -> AgentDecision | None:
+        if self._recovery_manager is None or not _requires_recovery(state):
+            return None
+
+        evidence = _latest_evidence(state)
+        plan = self._recovery_manager.choose_strategy(
+            evidence_quality=evidence.quality,
+            consecutive_failures=state.consecutive_empty_evidence,
+            tool_available=_has_remaining_tool(state),
+        )
+        if plan.action == "continue":
+            return None
+        return _decision_from_recovery_plan(plan, evidence)
+
 
 def _budget_from_state(state: AgentDecisionState) -> LoopBudget:
     return LoopBudget(
@@ -249,6 +292,66 @@ def _state_with_remaining_budget(
         remaining_seconds=budget.max_time_seconds,
     )
     return state.model_copy(update={"budget": runtime_budget})
+
+
+def _requires_recovery(state: AgentDecisionState) -> bool:
+    if state.consecutive_empty_evidence > 0:
+        return True
+    if not state.evidence:
+        return False
+    return _latest_evidence(state).quality != "strong"
+
+
+def _latest_evidence(state: AgentDecisionState) -> EvidenceAssessment:
+    if not state.evidence:
+        return EvidenceAssessment(quality="empty", summary="尚未采集到任何证据。")
+    return state.evidence[-1]
+
+
+def _has_remaining_tool(state: AgentDecisionState) -> bool:
+    executed = set(state.executed_tools)
+    return any(tool not in executed for tool in state.available_tools)
+
+
+def _decision_from_recovery_plan(
+    plan: RecoveryPlan,
+    evidence: EvidenceAssessment,
+) -> AgentDecision:
+    if plan.handoff_required or plan.action == "handoff":
+        return AgentDecision(
+            action_type="handoff",
+            reasoning_summary="证据不足或存在冲突，当前运行需要人工接手。",
+            evidence=evidence,
+            recovery=RecoveryDecision(
+                required=True,
+                reason=plan.reason,
+                next_action="handoff",
+            ),
+            confidence=0.3,
+        )
+    if plan.action == "downgrade_report":
+        return AgentDecision(
+            action_type="final_report",
+            reasoning_summary="证据不足以确认根因，只能生成降级诊断报告。",
+            evidence=evidence,
+            recovery=RecoveryDecision(
+                required=True,
+                reason=plan.reason,
+                next_action="final_report",
+            ),
+            confidence=max(min(evidence.confidence, 0.5), 0.2),
+        )
+    return AgentDecision(
+        action_type="recover",
+        reasoning_summary="当前证据不足，需要先执行受控恢复策略。",
+        evidence=evidence,
+        recovery=RecoveryDecision(
+            required=True,
+            reason=plan.reason,
+            next_action="retry",
+        ),
+        confidence=max(min(evidence.confidence, 0.4), 0.2),
+    )
 
 
 def _provider_name(provider: DecisionProvider) -> str:

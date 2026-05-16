@@ -198,9 +198,10 @@ editing code:
   - Wait for human approve/reject (with timeout)
   - Timeout -> auto-reject + handoff
   - Status: approval pause gate extracted; resume / expiry remains in application services
-- [ ] T027 Integrate RecoveryManager into BoundedReActLoop in `app/agent_runtime/loop.py`
+- [x] T027 Integrate RecoveryManager into BoundedReActLoop in `app/agent_runtime/loop.py`
   - assess phase finds insufficient -> recovery
   - recovery attempt still insufficient -> bounded_report or handoff
+  - Status: `BoundedReActLoop` now accepts `RecoveryManager`, routes empty/weak evidence before provider calls, and maps retry / downgrade_report / handoff decisions with unit coverage
 - [ ] T028 Implement HandoffSummary generation in `app/agent_runtime/synthesizer.py`
   - Collected evidence + failed tools + suggested next steps
   - Send via SSE to frontend
