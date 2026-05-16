@@ -365,7 +365,7 @@ editing code:
   - 发出 `EVENT_HUMAN_HANDOFF` SSE 事件，携带已收集证据 + 失败原因
   - 等待人工通过 InterventionAPI 注入指导或替换工具
   - 超时（default=120s）未收到干预 -> 产出 bounded_report
-- [ ] T058 [P] Add frontend intervention controls in `frontend/components/agent/`
+- [x] T058 [P] Add frontend intervention controls in `frontend/components/agent/`
 
 ### Tests
 

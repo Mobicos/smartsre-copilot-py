@@ -208,6 +208,16 @@ export interface NativeAgentApproval {
   resumed_at?: string | null
 }
 
+export interface NativeAgentInterventionRequest {
+  intervention_type: "inject_evidence" | "replace_tool_call" | "modify_goal"
+  payload: Record<string, unknown>
+}
+
+export interface NativeAgentInterventionResponse {
+  intervention_id: string
+  intervention_type: string
+}
+
 export interface NativeAgentDecisionState {
   run_id: string
   goal?: {

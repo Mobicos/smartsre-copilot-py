@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Markdown } from "@/components/markdown"
 import { AgentEventTimeline } from "./agent-event-timeline"
+import { AgentInterventionPanel } from "./agent-intervention-panel"
 import { cn } from "@/lib/utils"
 import type {
   NativeAgentDecisionState,
@@ -193,6 +194,13 @@ export function AgentRunDetail({ runId }: AgentRunDetailProps) {
             </div>
           )}
         </div>
+
+        {/* Intervention controls — visible only while the run is active */}
+        {(run.status === "running" || run.status === "waiting_approval" || run.status === "handoff_required") && (
+          <div className="mb-4">
+            <AgentInterventionPanel runId={runId} />
+          </div>
+        )}
 
         {/* Events */}
         {events.length > 0 && (
