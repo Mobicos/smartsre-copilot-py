@@ -33,7 +33,7 @@ from app.agent_runtime.events import AgentRuntimeEvent
 from app.agent_runtime.evidence import EvidenceAssessor
 from app.agent_runtime.executor import AgentToolExecutor
 from app.agent_runtime.guardrails import sanitize_goal
-from app.agent_runtime.loop import LoopStep
+from app.agent_runtime.loop import BoundedReActLoop, LoopBudget, LoopStep
 from app.agent_runtime.metrics_collector import MetricsCollector
 from app.agent_runtime.planner import AgentPlanner
 from app.agent_runtime.policy import ToolPolicyGate
@@ -179,6 +179,29 @@ class EventRecorder:
             message=step.decision.reasoning_summary,
             payload=payload,
         )
+
+
+class DecisionRuntimeProviderAdapter:
+    """Expose AgentDecisionRuntime's provider as the bounded-loop provider seam."""
+
+    provider_name = "decision_runtime"
+
+    def __init__(self, decision_runtime: AgentDecisionRuntime) -> None:
+        self._decision_runtime = decision_runtime
+
+    def decide(self, state: Any) -> AgentDecision:
+        provider = self._decision_runtime.provider
+        return provider.decide(state)
+
+    def get_token_usage(self) -> dict[str, Any]:
+        provider = self._decision_runtime.provider
+        get_token_usage = getattr(provider, "get_token_usage", None)
+        return cast(dict[str, Any], get_token_usage()) if callable(get_token_usage) else {}
+
+    def get_cost_estimate(self) -> dict[str, Any]:
+        provider = self._decision_runtime.provider
+        get_cost_estimate = getattr(provider, "get_cost_estimate", None)
+        return cast(dict[str, Any], get_cost_estimate()) if callable(get_cost_estimate) else {}
 
 
 class StepRunner:
@@ -406,14 +429,41 @@ class AgentRuntime:
                         remaining_seconds=max(deadline.remaining_seconds(), 0),
                     ),
                 )
-                try:
-                    decision_state = self._decision_runtime.run_graph_once(decision_state)
-                except Exception as exc:
-                    logger.warning(
-                        "Decision graph execution failed; falling back to direct provider: {exc}",
-                        exc=exc,
+                if _bounded_react_loop_enabled(scene):
+                    loop = BoundedReActLoop(
+                        provider=DecisionRuntimeProviderAdapter(self._decision_runtime),
+                        trace_collector=self._trace_collector,
                     )
-                    decision_state = self._decision_runtime.decide_once(decision_state)
+                    loop_result = loop.run(
+                        decision_state,
+                        LoopBudget(
+                            max_steps=1,
+                            max_time_seconds=max(deadline.remaining_seconds(), 0.001),
+                        ),
+                    )
+                    decision_state = loop_result.state
+                    for fallback_payload in loop.consume_provider_fallback_events():
+                        yield self._record_event(
+                            run_id,
+                            event_type="provider_fallback",
+                            stage="decision",
+                            message=(
+                                "决策 Provider 不可用，"
+                                f"已降级到 {fallback_payload.get('to_provider')}"
+                            ),
+                            payload=fallback_payload,
+                        )
+                    for step in loop_result.steps:
+                        yield self._event_recorder.record_loop_step(run_id, step)
+                else:
+                    try:
+                        decision_state = self._decision_runtime.run_graph_once(decision_state)
+                    except Exception as exc:
+                        logger.warning(
+                            "Decision graph execution failed; falling back to direct provider: {exc}",
+                            exc=exc,
+                        )
+                        decision_state = self._decision_runtime.decide_once(decision_state)
                 for fallback_payload in self._decision_runtime.consume_provider_fallback_events():
                     yield self._record_event(
                         run_id,
@@ -432,21 +482,22 @@ class AgentRuntime:
                         message=observation.summary,
                         payload=observation.model_dump(mode="json"),
                     )
-                latest_decision = decision_state.decisions[-1]
-                yield self._record_event(
-                    run_id,
-                    event_type="decision",
-                    stage="decision",
-                    message=latest_decision.reasoning_summary,
-                    payload={
-                        "checkpoint_ns": self._decision_runtime.checkpoint_ns,
-                        "step_index": len(decision_state.decisions) - 1,
-                        "decision": latest_decision.to_event_payload(),
-                        "token_usage": self._decision_runtime.get_token_usage(),
-                        "cost_estimate": self._decision_runtime.get_cost_estimate(),
-                        "state_status": decision_state.status,
-                    },
-                )
+                if not _bounded_react_loop_enabled(scene):
+                    latest_decision = decision_state.decisions[-1]
+                    yield self._record_event(
+                        run_id,
+                        event_type="decision",
+                        stage="decision",
+                        message=latest_decision.reasoning_summary,
+                        payload={
+                            "checkpoint_ns": self._decision_runtime.checkpoint_ns,
+                            "step_index": len(decision_state.decisions) - 1,
+                            "decision": latest_decision.to_event_payload(),
+                            "token_usage": self._decision_runtime.get_token_usage(),
+                            "cost_estimate": self._decision_runtime.get_cost_estimate(),
+                            "state_status": decision_state.status,
+                        },
+                    )
 
             selected_tool_names, skipped_tool_names = _limit_tool_steps(
                 selected_tool_names,
@@ -1026,6 +1077,13 @@ def _decision_runtime_enabled(scene: dict[str, Any]) -> bool:
         return True
     value = agent_config.get("decision_runtime_enabled")
     return value if value is not None else True
+
+
+def _bounded_react_loop_enabled(scene: dict[str, Any]) -> bool:
+    agent_config = scene.get("agent_config")
+    if not isinstance(agent_config, dict):
+        return False
+    return bool(agent_config.get("bounded_react_loop_enabled"))
 
 
 def _handoff_report(goal: str, report: FinalReportContract) -> str:

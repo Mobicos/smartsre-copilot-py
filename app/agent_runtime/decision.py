@@ -503,6 +503,12 @@ class AgentDecisionRuntime:
         self._last_token_usage: dict[str, Any] = _unavailable_token_usage()
         self._last_cost_estimate: dict[str, Any] = _unavailable_cost_estimate()
 
+    @property
+    def provider(self) -> DecisionProvider:
+        """Return the active decision provider for runtime adapters."""
+
+        return self._provider
+
     def decide_once(self, state: AgentDecisionState) -> AgentDecisionState:
         try:
             decision = self._provider.decide(state)

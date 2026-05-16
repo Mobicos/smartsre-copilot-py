@@ -162,10 +162,10 @@ editing code:
   - Collect tool_call latency from ToolExecutor
   - Calculate cost_estimate = prompt_cost + completion_cost + tool_output_cost
   - Status: collector now exposes `collect_run_metrics()`, prefers provider token/cost events, aggregates tool execution latency, and falls back to heuristic estimates
-- [ ] T022 Integrate MetricsCollector into BoundedReActLoop in `app/agent_runtime/loop.py`
+- [x] T022 Integrate MetricsCollector into BoundedReActLoop in `app/agent_runtime/loop.py`
   - Record step_metrics at each step
   - Persist to database at run completion
-  - Status: `BoundedReActLoop` now records per-step token/cost metrics in `LoopStep`; `EventRecorder.record_loop_step()` can persist them as `decision` events; full runtime cutover remains pending
+  - Status: `BoundedReActLoop` now records per-step token/cost metrics in `LoopStep`; runtime can opt into bounded-loop execution via `agent_config.bounded_react_loop_enabled` and persist step metrics as `decision` events
 - [x] T023 Add cost_per_step to agent_events table
   - Each step's token/cost independently trackable
   - Status: `agent_events` now has `step_index`, `token_usage`, `cost_estimate`, `evidence_quality`, and `recovery_action` columns with migration `20260516_0014`
