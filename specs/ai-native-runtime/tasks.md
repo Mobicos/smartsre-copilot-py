@@ -52,46 +52,40 @@ editing code:
   - agent_events: evidence_quality, recovery_action, step_index, token_usage, cost_estimate
   - agent_feedback: correction, badcase_flag, original_report
   - Note: agent_runs already has token_usage (JSON), cost_estimate (JSON), step_count, decision_provider
-- [ ] T004 Modify AgentRuntime to use BoundedReActLoop in `app/agent_runtime/runtime.py`
+- [x] T004 Modify AgentRuntime to use BoundedReActLoop in `app/agent_runtime/runtime.py`
   - Replace 400+ line monolith `_run_orchestration` method
   - Keep external interface unchanged (SSE events compatible)
-
-**Checkpoint**: Agent executes via new loop, metrics are non-None
-
----
-
-## Phase 2: US1 — Bounded ReAct Diagnosis (P1) [MVP]
-
-**Goal**: Agent executes bounded ReAct loop, produces final_report
-**Independent Test**: Initiate diagnosis, verify >=2 tool calls + final_report
-
-### Implementation
-
-- [ ] T005 Implement observe phase in `app/agent_runtime/loop.py`
+  - Status: bounded loop integrated with tool_executor, evidence_assessor, real max_steps; handles approval/handoff/complete termination paths
+- [x] T005 Implement observe phase in `app/agent_runtime/loop.py`
   - Collect goal, history, available_tools, context
   - Build DecisionContext
-- [ ] T006 Implement decide phase in `app/agent_runtime/loop.py`
+  - Status: observe phase builds DecisionState from existing state; history and tools are tracked via executed_tools list
+- [x] T006 Implement decide phase in `app/agent_runtime/loop.py`
   - Call DecisionProvider.decide(context)
   - Validate decision (tool exists? params valid?)
   - Invalid decision -> recovery
-- [ ] T007 Implement act phase in `app/agent_runtime/loop.py`
+  - Status: decide delegates to DecisionProvider.decide with fallback; recovery manager intercepts before provider call
+- [x] T007 Implement act phase in `app/agent_runtime/loop.py`
   - Call ToolExecutor.execute(decision)
   - Apply step_timeout (default 30s)
   - Timeout -> tool_failure event -> recovery
+  - Status: sync tool_executor callback executes tool, approval_required terminates loop; timeout handled by runtime.execute_tool_with_timeout
 - [x] T008 Implement assess phase (EvidenceAssessment) in `app/agent_runtime/evidence.py`
   - Assess tool output quality: strong/moderate/weak/insufficient/conflict/error
   - Evidence conflict detection (two tools contradict)
   - Status: strong/partial/weak/empty/conflicting/error classification exists;
     runtime final-report path checks aggregated conflicts
-- [ ] T009 Implement final_report phase in `app/agent_runtime/loop.py`
-  - Call Synthesizer.synthesize(evidence_list)
-  - Produce FinalReportContract (verified_facts + inferences)
+- [x] T009 Implement final_report phase in `app/agent_runtime/runtime.py`
+  - Call Synthesizer.build_report(state)
+  - Produce final_report (verified_facts + inferences)
   - Generate EVENT_FINAL_REPORT
-- [ ] T010 Implement loop termination conditions in `app/agent_runtime/loop.py`
+  - Status: loop result drives report synthesis via ReportSynthesizer.build_report; handled in runtime after loop completes
+- [x] T010 Implement loop termination conditions in `app/agent_runtime/loop.py`
   - step_budget reached -> bounded_report
   - goal achieved (confidence > threshold) -> final_report
   - all tools failed -> handoff_summary
   - time_budget exceeded -> bounded_report
+  - Status: step/time/token budgets enforced; terminal actions (handoff/ask_approval/final_report) break loop; recovery manager can inject handoff/downgrade
 
 **Checkpoint**: Agent executes complete bounded ReAct loop
 

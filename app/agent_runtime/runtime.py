@@ -33,13 +33,13 @@ from app.agent_runtime.events import AgentRuntimeEvent
 from app.agent_runtime.evidence import EvidenceAssessor
 from app.agent_runtime.executor import AgentToolExecutor
 from app.agent_runtime.guardrails import sanitize_goal
-from app.agent_runtime.loop import BoundedReActLoop, LoopBudget, LoopStep
+from app.agent_runtime.loop import BoundedReActLoop, LoopBudget, LoopResult, LoopStep
 from app.agent_runtime.metrics_collector import MetricsCollector
 from app.agent_runtime.planner import AgentPlanner
 from app.agent_runtime.policy import ToolPolicyGate
 from app.agent_runtime.ports import AgentMemoryStore, AgentRunStore, SceneStore, ToolPolicyStore
 from app.agent_runtime.recovery import RecoveryManager
-from app.agent_runtime.state import EvidenceItem
+from app.agent_runtime.state import AgentRunState, EvidenceItem
 from app.agent_runtime.synthesizer import ReportSynthesizer
 from app.agent_runtime.tool_catalog import ToolCatalog
 from app.agent_runtime.tool_executor import ToolExecutionResult, ToolExecutor
@@ -434,11 +434,17 @@ class AgentRuntime:
                         provider=DecisionRuntimeProviderAdapter(self._decision_runtime),
                         trace_collector=self._trace_collector,
                         recovery_manager=self._failure_handler,
+                        tool_executor=self._make_loop_tool_executor(
+                            principal=principal,
+                            safety_config=safety_config,
+                            deadline=deadline,
+                        ),
+                        evidence_assessor=self._evidence_assessor,
                     )
                     loop_result = loop.run(
                         decision_state,
                         LoopBudget(
-                            max_steps=1,
+                            max_steps=safety_config.max_steps,
                             max_time_seconds=max(deadline.remaining_seconds(), 0.001),
                         ),
                     )
@@ -456,6 +462,90 @@ class AgentRuntime:
                         )
                     for step in loop_result.steps:
                         yield self._event_recorder.record_loop_step(run_id, step)
+
+                    # --- approval_required: pause and wait ---
+                    if loop_result.termination_reason == "approval_required":
+                        last_step = loop_result.steps[-1] if loop_result.steps else None
+                        tool_name = (
+                            last_step.decision.selected_tool if last_step and last_step.decision.selected_tool else "unknown"
+                        )
+                        tool_result = last_step.tool_result if last_step else None
+                        for event in self._approval_boundary.pause(
+                            runtime_context,
+                            tool_name=tool_name,
+                            payload=(
+                                tool_result.governance_payload()
+                                if tool_result and hasattr(tool_result, "governance_payload")
+                                else {}
+                            ),
+                        ):
+                            yield event
+                        return
+
+                    # --- handoff: persist and return ---
+                    if loop_result.termination_reason == "handoff":
+                        last_decision = decision_state.decisions[-1] if decision_state.decisions else None
+                        reason = (
+                            (last_decision.handoff_reason or last_decision.recovery.reason or "证据不足")
+                            if last_decision
+                            else "证据不足"
+                        )
+                        report_contract = FinalReportContract(
+                            summary="证据不足以得出安全的自主结论，因此运行交由人工处理。",
+                            verified_facts=[],
+                            inferences=["当前工具结果未提供足够的经验证证据来确认根因。"],
+                            recommendations=[
+                                "请运维人员检查引用的工具输出，收集额外证据，并在理解边界条件后恢复运行。"
+                            ],
+                            citations=[],
+                            confidence=0.3,
+                            handoff_required=True,
+                            handoff_reason=reason,
+                        )
+                        final_report = _handoff_report(goal, report_contract)
+                        self._run_store.update_run(
+                            run_id, status="handoff_required",
+                            final_report=final_report, error_message=reason,
+                        )
+                        self._persist_run_memory(
+                            runtime_context, final_report,
+                            conclusion_type="handoff", confidence=0.3,
+                            metadata={"handoff_reason": reason},
+                        )
+                        yield self._record_event(
+                            run_id, event_type="handoff", stage="handoff",
+                            message="Agent 运行需要人工交接",
+                            payload=report_contract.to_event_payload(),
+                        )
+                        self._persist_run_metrics(run_id)
+                        yield AgentRuntimeEvent(
+                            type="handoff", stage="handoff", run_id=run_id,
+                            status="handoff_required", final_report=final_report,
+                        )
+                        return
+
+                    # --- normal / final_report / max_steps: generate report ---
+                    evidence_items = list(loop_result.evidence_items)
+                    state_for_report = AgentRunState.from_goal(goal)
+                    for item in evidence_items:
+                        state_for_report.add_evidence(item)
+                    state_for_report.set_knowledge_context(
+                        self._knowledge_context_provider.build_context(scene)
+                    )
+                    final_report = ReportSynthesizer.build_report(state_for_report)
+                    self._run_store.update_run(run_id, status="completed", final_report=final_report)
+                    self._persist_run_memory(runtime_context, final_report)
+                    yield self._record_event(
+                        run_id, event_type="final_report", stage="complete",
+                        message="最终报告已生成",
+                        payload={"report": final_report},
+                    )
+                    self._persist_run_metrics(run_id)
+                    yield AgentRuntimeEvent(
+                        type="complete", stage="complete", run_id=run_id,
+                        status="completed", final_report=final_report,
+                    )
+                    return
                 else:
                     try:
                         decision_state = self._decision_runtime.run_graph_once(decision_state)
@@ -938,6 +1028,62 @@ class AgentRuntime:
                 decision_reason=f"工具执行超时：{timeout_seconds:g} 秒",
                 latency_ms=latency_ms,
             )
+
+    def _make_loop_tool_executor(
+        self,
+        *,
+        principal: Any,
+        safety_config: RuntimeSafetyConfig,
+        deadline: RuntimeDeadline,
+    ) -> Any:
+        """Return a sync callback that executes a tool from the bounded loop.
+
+        The callback bridges the sync loop.run() to the async tool execution
+        path via ``asyncio.get_event_loop().run_until_complete()``.
+        """
+        runtime = self
+        loop = asyncio.get_event_loop()
+
+        def _exec(decision: Any) -> Any:
+            tool_name = getattr(decision, "selected_tool", None)
+            if not tool_name:
+                return ToolExecutionResult(
+                    tool_name="unknown", status="error",
+                    arguments={}, error="决策未选择工具",
+                    policy={}, decision="error", decision_reason="未选择工具",
+                )
+            tools = loop.run_until_complete(
+                runtime._tool_catalog.get_tools("diagnosis"),
+            )
+            tool_by_name = {
+                str(getattr(t, "name", "")): t for t in tools
+            }
+            tool = tool_by_name.get(tool_name)
+            if tool is None:
+                return ToolExecutionResult(
+                    tool_name=tool_name, status="error",
+                    arguments=getattr(decision, "tool_arguments", {}),
+                    error=f"工具 {tool_name} 不在可用列表中",
+                    policy={}, decision="denied",
+                    decision_reason=f"工具 {tool_name} 不可用",
+                )
+            action = runtime._policy_gate.create_action(
+                tool_name, goal=getattr(decision, "reasoning_summary", ""),
+            )
+            if getattr(decision, "tool_arguments", None):
+                from dataclasses import replace as _dc_replace
+                action = _dc_replace(action, arguments=decision.tool_arguments)
+            result = loop.run_until_complete(
+                runtime.execute_tool_with_timeout(
+                    tool, action,
+                    principal=principal,
+                    safety_config=safety_config,
+                    deadline=deadline,
+                ),
+            )
+            return result
+
+        return _exec
 
     def _record_event(
         self,

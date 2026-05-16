@@ -17,8 +17,12 @@ from app.agent_runtime.decision import (
     RecoveryDecision,
     RuntimeBudget,
 )
+from app.agent_runtime.evidence import EvidenceAssessor
 from app.agent_runtime.recovery import RecoveryPlan
+from app.agent_runtime.state import EvidenceItem
 from app.agent_runtime.trace_collector import TraceCollector, TraceSpan
+
+ToolExecutorCallback = Callable[[AgentDecision], Any]
 
 TerminalAction = {"ask_approval", "final_report", "handoff"}
 
@@ -48,6 +52,7 @@ class LoopStep:
     token_usage: int = 0
     token_usage_detail: dict[str, Any] = field(default_factory=dict)
     cost_estimate: dict[str, Any] = field(default_factory=dict)
+    tool_result: Any = field(default=None, repr=False)
 
     @property
     def metrics(self) -> dict[str, Any]:
@@ -64,6 +69,7 @@ class LoopResult:
 
     state: AgentDecisionState
     steps: list[LoopStep] = field(default_factory=list)
+    evidence_items: list[EvidenceItem] = field(default_factory=list)
     status: str = "running"
     termination_reason: str = "not_terminated"
     token_usage: int = 0
@@ -103,11 +109,11 @@ class LoopRecoveryManager(Protocol):
 
 
 class BoundedReActLoop:
-    """Run structured observe/decide steps under strict budget boundaries.
+    """Run structured observe/decide/act steps under strict budget boundaries.
 
-    This first extraction intentionally keeps tool execution outside the loop.
-    It gives the runtime a stable seam for the next phases while preserving the
-    existing public AgentRuntime API.
+    The loop calls the decision provider, executes tools via the optional
+    ``tool_executor`` callback, assesses evidence, and repeats until a
+    terminal action or budget exhaustion.
     """
 
     def __init__(
@@ -117,6 +123,8 @@ class BoundedReActLoop:
         token_estimator: Callable[[AgentDecision], int] | None = None,
         trace_collector: LoopTraceCollector | None = None,
         recovery_manager: LoopRecoveryManager | None = None,
+        tool_executor: ToolExecutorCallback | None = None,
+        evidence_assessor: EvidenceAssessor | None = None,
         clock: Callable[[], float] | None = None,
     ) -> None:
         self._provider = provider or DeterministicDecisionProvider()
@@ -124,6 +132,8 @@ class BoundedReActLoop:
         self._token_estimator = token_estimator
         self._trace_collector = trace_collector or TraceCollector()
         self._recovery_manager = recovery_manager
+        self._tool_executor = tool_executor
+        self._evidence_assessor = evidence_assessor
         self._clock = clock or monotonic
         self._provider_fallback_events: list[dict[str, str]] = []
         self._last_decision_provider: DecisionProvider = self._provider
@@ -140,16 +150,14 @@ class BoundedReActLoop:
         deadline = self._clock() + budget.max_time_seconds
         current_state = state
         steps: list[LoopStep] = []
+        evidence_items: list[EvidenceItem] = []
         token_usage = 0
 
         for step_index in range(budget.max_steps):
             if self._clock() >= deadline:
-                return LoopResult(
-                    state=current_state,
-                    steps=steps,
-                    status=current_state.status,
-                    termination_reason="max_time_seconds_reached",
-                    token_usage=token_usage,
+                return self._result(
+                    current_state, steps, evidence_items, token_usage,
+                    "max_time_seconds_reached",
                 )
 
             current_state = _state_with_remaining_budget(
@@ -157,6 +165,7 @@ class BoundedReActLoop:
                 budget=budget,
                 remaining_steps=budget.max_steps - step_index,
             )
+            tool_result: Any = None
             with self._trace_collector.span(
                 "agent.loop_step",
                 {
@@ -170,6 +179,34 @@ class BoundedReActLoop:
                 if decision.selected_tool:
                     span.set_attribute("agent.tool_name", decision.selected_tool)
                 span.set_attribute("agent.evidence_quality", decision.evidence.quality)
+
+                # --- act phase: execute tool if requested ---
+                if (
+                    decision.action_type == "action"
+                    and decision.selected_tool
+                    and self._tool_executor is not None
+                ):
+                    tool_result = self._tool_executor(decision)
+                    evidence_item = EvidenceItem.from_tool_result(tool_result)
+                    evidence_items.append(evidence_item)
+                    assessment = self._assess(decision, evidence_item)
+                    current_state = _add_tool_evidence(
+                        current_state, decision, assessment, evidence_item,
+                    )
+                    span.set_attribute("agent.evidence_quality", assessment.quality)
+                    if assessment.confidence > 0:
+                        span.set_attribute("agent.evidence_confidence", assessment.confidence)
+
+                    # approval_required → pause loop, let runtime handle
+                    if getattr(tool_result, "status", "") == "approval_required":
+                        steps.append(self._make_step(
+                            step_index, decision, tool_result=tool_result,
+                        ))
+                        return self._result(
+                            current_state, steps, evidence_items, token_usage,
+                            "approval_required",
+                        )
+
                 token_usage_detail = _step_token_usage(
                     provider=self._last_decision_provider,
                     decision=decision,
@@ -182,39 +219,73 @@ class BoundedReActLoop:
             token_usage += step_tokens
 
             if budget.max_tokens is not None and token_usage > budget.max_tokens:
-                return LoopResult(
-                    state=current_state,
-                    steps=steps,
-                    status=current_state.status,
-                    termination_reason="max_tokens_reached",
-                    token_usage=token_usage,
+                return self._result(
+                    current_state, steps, evidence_items, token_usage,
+                    "max_tokens_reached",
                 )
 
             current_state = current_state.with_decision(decision)
-            steps.append(
-                LoopStep(
-                    step_index=step_index,
-                    decision=decision,
-                    token_usage=step_tokens,
-                    token_usage_detail=token_usage_detail,
-                    cost_estimate=cost_estimate,
-                )
-            )
+            steps.append(self._make_step(
+                step_index, decision, tool_result=tool_result,
+                token_usage=step_tokens,
+                token_usage_detail=token_usage_detail,
+                cost_estimate=cost_estimate,
+            ))
 
             if decision.action_type in TerminalAction:
-                return LoopResult(
-                    state=current_state,
-                    steps=steps,
-                    status=current_state.status,
-                    termination_reason=decision.action_type,
-                    token_usage=token_usage,
+                return self._result(
+                    current_state, steps, evidence_items, token_usage,
+                    decision.action_type,
                 )
 
+        return self._result(
+            current_state, steps, evidence_items, token_usage,
+            "max_steps_reached",
+        )
+
+    # -- helpers ---------------------------------------------------------------
+
+    def _assess(
+        self, decision: AgentDecision, evidence_item: EvidenceItem,
+    ) -> EvidenceAssessment:
+        """Assess tool evidence, preferring the injected assessor."""
+        if self._evidence_assessor is not None:
+            return self._evidence_assessor.assess(evidence_item)
+        return decision.evidence
+
+    @staticmethod
+    def _make_step(
+        step_index: int,
+        decision: AgentDecision,
+        *,
+        tool_result: Any = None,
+        token_usage: int = 0,
+        token_usage_detail: dict[str, Any] | None = None,
+        cost_estimate: dict[str, Any] | None = None,
+    ) -> LoopStep:
+        return LoopStep(
+            step_index=step_index,
+            decision=decision,
+            token_usage=token_usage,
+            token_usage_detail=token_usage_detail or {},
+            cost_estimate=cost_estimate or {},
+            tool_result=tool_result,
+        )
+
+    @staticmethod
+    def _result(
+        state: AgentDecisionState,
+        steps: list[LoopStep],
+        evidence_items: list[EvidenceItem],
+        token_usage: int,
+        termination_reason: str,
+    ) -> LoopResult:
         return LoopResult(
-            state=current_state,
+            state=state,
             steps=steps,
-            status=current_state.status,
-            termination_reason="max_steps_reached",
+            evidence_items=evidence_items,
+            status=state.status,
+            termination_reason=termination_reason,
             token_usage=token_usage,
         )
 
@@ -433,3 +504,30 @@ def _float_value(value: Any) -> float:
         return max(float(value or 0.0), 0.0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _add_tool_evidence(
+    state: AgentDecisionState,
+    decision: AgentDecision,
+    assessment: EvidenceAssessment,
+    evidence_item: EvidenceItem,
+) -> AgentDecisionState:
+    """Return a new state with tool evidence and assessment appended."""
+    executed = list(state.executed_tools)
+    if decision.selected_tool and decision.selected_tool not in executed:
+        executed.append(decision.selected_tool)
+
+    evidence = list(state.evidence)
+    evidence.append(assessment)
+
+    consecutive_empty = state.consecutive_empty_evidence
+    if assessment.quality == "empty":
+        consecutive_empty += 1
+    else:
+        consecutive_empty = 0
+
+    return state.model_copy(update={
+        "executed_tools": executed,
+        "evidence": evidence,
+        "consecutive_empty_evidence": consecutive_empty,
+    })
