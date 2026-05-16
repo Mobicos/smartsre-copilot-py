@@ -43,6 +43,47 @@ def _json_loads(value: str | None) -> dict[str, Any]:
     return loaded if isinstance(loaded, dict) else {}
 
 
+def _event_metadata_columns(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        payload = {}
+    decision = payload.get("decision")
+    decision_payload = decision if isinstance(decision, dict) else {}
+    evidence = decision_payload.get("evidence")
+    evidence_payload = evidence if isinstance(evidence, dict) else {}
+
+    return {
+        "step_index": _optional_int(payload.get("step_index")),
+        "evidence_quality": _optional_str(
+            payload.get("evidence_quality")
+            or payload.get("quality")
+            or evidence_payload.get("quality")
+        ),
+        "recovery_action": _optional_str(payload.get("recovery_action")),
+        "token_usage": payload.get("token_usage")
+        if isinstance(payload.get("token_usage"), dict)
+        else None,
+        "cost_estimate": (
+            payload.get("cost_estimate") if isinstance(payload.get("cost_estimate"), dict) else None
+        ),
+    }
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    return text if text else None
+
+
 def _model_to_dict(obj: Any) -> dict[str, Any]:
     return {k: v for k, v in obj.__dict__.items() if k != "_sa_instance_state"}
 
@@ -593,6 +634,7 @@ class AgentRunRepository(AgentRunStore):
         message: str,
         payload: dict[str, Any] | None = None,
     ) -> None:
+        metadata = _event_metadata_columns(payload)
         db.add(
             AgentEvent(
                 run_id=run_id,
@@ -600,6 +642,11 @@ class AgentRunRepository(AgentRunStore):
                 stage=stage,
                 message=message,
                 payload=_json_dumps(payload),
+                step_index=metadata["step_index"],
+                evidence_quality=metadata["evidence_quality"],
+                recovery_action=metadata["recovery_action"],
+                token_usage=metadata["token_usage"],
+                cost_estimate=metadata["cost_estimate"],
                 created_at=_utc_now(),
             )
         )
@@ -638,6 +685,11 @@ class AgentRunRepository(AgentRunStore):
                 "stage": row.stage,
                 "message": row.message,
                 "payload": json.loads(row.payload) if row.payload else None,
+                "step_index": row.step_index,
+                "evidence_quality": row.evidence_quality,
+                "recovery_action": row.recovery_action,
+                "token_usage": row.token_usage,
+                "cost_estimate": row.cost_estimate,
                 "created_at": row.created_at,
             }
             for row in rows

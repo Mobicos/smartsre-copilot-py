@@ -424,6 +424,7 @@ class AgentRuntime:
                     message=latest_decision.reasoning_summary,
                     payload={
                         "checkpoint_ns": self._decision_runtime.checkpoint_ns,
+                        "step_index": len(decision_state.decisions) - 1,
                         "decision": latest_decision.to_event_payload(),
                         "token_usage": self._decision_runtime.get_token_usage(),
                         "cost_estimate": self._decision_runtime.get_cost_estimate(),

@@ -122,6 +122,17 @@ class AgentEvent(SQLModel, table=True):
     stage: str
     message: str
     payload: str | None = None
+    step_index: int | None = None
+    evidence_quality: str | None = None
+    recovery_action: str | None = None
+    token_usage: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=sa.Column(sa.JSON, nullable=True),
+    )
+    cost_estimate: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=sa.Column(sa.JSON, nullable=True),
+    )
     created_at: datetime = Field(sa_column=sa.Column(sa.TIMESTAMP(timezone=True), nullable=False))
 
 

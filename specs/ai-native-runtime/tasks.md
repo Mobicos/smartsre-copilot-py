@@ -166,8 +166,9 @@ editing code:
   - Record step_metrics at each step
   - Persist to database at run completion
   - Status: `BoundedReActLoop` now records per-step token/cost metrics in `LoopStep`; runtime/run-store persistence remains pending
-- [ ] T023 Add cost_per_step to agent_events table
+- [x] T023 Add cost_per_step to agent_events table
   - Each step's token/cost independently trackable
+  - Status: `agent_events` now has `step_index`, `token_usage`, `cost_estimate`, `evidence_quality`, and `recovery_action` columns with migration `20260516_0014`
 
 **Checkpoint**: AgentOps metrics fully trackable
 
