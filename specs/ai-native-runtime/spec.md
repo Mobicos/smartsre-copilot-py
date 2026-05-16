@@ -23,7 +23,8 @@ Implemented or mostly implemented:
 - `MetricsCollector` is isolated in `app/agent_runtime/metrics_collector.py` and
   persists non-empty heuristic token / cost metrics for deterministic runs.
 - `EvidenceAssessor` is isolated in `app/agent_runtime/evidence.py` for current
-  tool-result quality classification and handoff reason mapping.
+  tool-result quality classification, root-cause conflict detection, and handoff
+  reason mapping.
 - `ApprovalGate` is isolated in `app/agent_runtime/approval.py` for high-risk
   tool pause semantics.
 - `RecoveryManager` is isolated in `app/agent_runtime/recovery.py` for
@@ -44,8 +45,9 @@ Partially implemented:
 - The production runtime loop is still orchestrated inside
   `app/agent_runtime/runtime.py`; the extracted `BoundedReActLoop` skeleton must
   still be integrated.
-- Evidence assessment has a dedicated module, but conflict detection and richer
-  evidence coverage rules still need to be implemented.
+- Evidence assessment has a dedicated module, but the main runtime loop still
+  needs to aggregate multiple evidence items through conflict detection before
+  final reporting.
 - Recovery strategy selection is still basic; richer retry / alternative /
   downgrade decisions remain pending.
 - Replay exposes metrics, memory, approval, badcase, and recovery events, but

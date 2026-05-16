@@ -81,7 +81,8 @@ editing code:
 - [ ] T008 Implement assess phase (EvidenceAssessment) in `app/agent_runtime/evidence.py`
   - Assess tool output quality: strong/moderate/weak/insufficient/conflict/error
   - Evidence conflict detection (two tools contradict)
-  - Status: basic tool-result classification extracted; conflict detection is pending
+  - Status: strong/partial/weak/empty/conflicting/error classification exists;
+    runtime loop aggregation is pending
 - [ ] T009 Implement final_report phase in `app/agent_runtime/loop.py`
   - Call Synthesizer.synthesize(evidence_list)
   - Produce FinalReportContract (verified_facts + inferences)
@@ -100,7 +101,7 @@ editing code:
   - Test step_budget prevents infinite loop
   - Test time_budget timeout
   - Test token_budget exceeded
-- [ ] T012 [P] Unit test: EvidenceAssessment in `tests/unit/test_evidence.py`
+- [x] T012 [P] Unit test: EvidenceAssessment in `tests/unit/test_evidence.py`
   - Test strong/moderate/weak/insufficient/conflict/error assessment
   - Test evidence conflict detection
 - [ ] T013 Integration test: Full loop execution in `tests/integration/test_react_loop.py`
