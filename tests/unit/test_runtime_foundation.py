@@ -22,6 +22,25 @@ class _RepeatingProvider:
         )
 
 
+class _MetricsProvider(_RepeatingProvider):
+    provider_name = "qwen"
+
+    def get_token_usage(self) -> dict[str, Any]:
+        return {
+            "prompt_tokens": 12,
+            "completion_tokens": 8,
+            "total": 20,
+            "source": "provider_usage",
+        }
+
+    def get_cost_estimate(self) -> dict[str, Any]:
+        return {
+            "currency": "USD",
+            "total_cost": 0.0012,
+            "source": "provider_usage",
+        }
+
+
 class _FailingProvider:
     provider_name = "qwen"
 
@@ -157,6 +176,41 @@ def test_bounded_react_loop_records_trace_span_for_each_step():
                 "agent.cost_estimate": 0.0,
             },
         ),
+    ]
+
+
+def test_bounded_react_loop_records_step_metrics_from_provider():
+    state = AgentDecisionState(
+        run_id="run-1",
+        goal=AgentGoalContract(goal="diagnose latency"),
+        available_tools=["SearchLog"],
+    )
+
+    result = BoundedReActLoop(provider=_MetricsProvider()).run(
+        state,
+        LoopBudget(max_steps=1, max_time_seconds=30),
+    )
+
+    assert result.step_count == 1
+    assert result.token_usage == 20
+    assert result.steps[0].token_usage == 20
+    assert result.steps[0].token_usage_detail == {
+        "prompt_tokens": 12,
+        "completion_tokens": 8,
+        "total": 20,
+        "source": "provider_usage",
+    }
+    assert result.steps[0].cost_estimate == {
+        "currency": "USD",
+        "total_cost": 0.0012,
+        "source": "provider_usage",
+    }
+    assert result.step_metrics == [
+        {
+            "step_index": 0,
+            "token_usage": result.steps[0].token_usage_detail,
+            "cost_estimate": result.steps[0].cost_estimate,
+        }
     ]
 
 

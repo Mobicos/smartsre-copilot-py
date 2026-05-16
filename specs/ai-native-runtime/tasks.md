@@ -165,6 +165,7 @@ editing code:
 - [ ] T022 Integrate MetricsCollector into BoundedReActLoop in `app/agent_runtime/loop.py`
   - Record step_metrics at each step
   - Persist to database at run completion
+  - Status: `BoundedReActLoop` now records per-step token/cost metrics in `LoopStep`; runtime/run-store persistence remains pending
 - [ ] T023 Add cost_per_step to agent_events table
   - Each step's token/cost independently trackable
 
