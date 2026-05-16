@@ -379,6 +379,85 @@ editing code:
 
 ---
 
+## Phase 11: AgentOps Metrics & Release Gate
+
+**Goal**: 补齐 Release Gate 缺失的 4 个指标，建立聚合指标 API、Prometheus 直方图和前端仪表盘
+**Independent Test**: mock 运行数据，验证聚合指标计算正确，gate_pass 逻辑正确
+
+### Core Metrics
+
+- [x] T061 [P] Add 4 new metric computation functions to `app/agent_runtime/metrics_collector.py`
+  - `_metric_recovery_count(events)` — count recovery events
+  - `_metric_empty_result_count(events)` — count tool_result where status != "success" or output empty
+  - `_metric_duplicate_tool_call_count(events)` — detect same (tool_name, args) signatures >1x
+  - `_metric_step_latencies(events)` — group by step_index, compute wall-clock deltas
+  - Add all 4 + `regression_score=None` to `collect_run_metrics()` return dict
+- [x] T062 [P] Add per-step timing computation to MetricsCollector
+  - Return `{count, avg_ms, max_ms, p95_ms, steps[]}` from `_metric_step_latencies()`
+
+### Persistence
+
+- [x] T063 [P] Alembic migration for new agent_runs columns
+  - `recovery_count` (INTEGER, default 0)
+  - `empty_result_count` (INTEGER, default 0)
+  - `duplicate_tool_call_count` (INTEGER, default 0)
+  - `step_latencies` (JSONB, nullable)
+  - `regression_score` (DOUBLE PRECISION, nullable)
+  - Index: `idx_agent_runs_latency_ms ON agent_runs(latency_ms)`
+- [x] T064 [P] Update AgentRun table model in `app/platform/persistence/tables/agent.py`
+  - Add 5 new fields with appropriate types and defaults
+- [x] T065 Update AgentRunRepository to persist new fields
+  - Update `update_run_metrics_with_session()` to accept and write new fields
+  - Update `_row_to_dict()` to include new fields
+
+### Aggregate Metrics Service
+
+- [x] T066 [P] Implement `app/application/agent_metrics_service.py`
+  - `AgentMetricsService` with `compute_release_gate(limit=100)` and `compute_summary(limit=50)`
+  - `_compute_goal_completion_rate()` — evaluate runs against scenarios, average scores
+  - `_compute_unnecessary_tool_call_ratio()` — (duplicate + empty) / total tool_calls
+  - `_compute_approval_override_rate()` — approval_state=="required" without approval_decision event
+  - `_compute_p95_latency()` — 95th percentile of latency_ms values
+
+### API Layer
+
+- [x] T067 Add `/agent/metrics/release-gate` endpoint in `app/api/routes/agent_metrics.py`
+  - GET with `limit` query param, returns all 4 gate metrics + thresholds + gate_pass
+- [x] T068 Register new router and DI provider
+  - Add `agent_metrics_service` to `AppContainer` in `app/api/providers.py`
+  - Register router in `app/api/main.py`
+
+### Observability
+
+- [x] T069 [P] Add Prometheus histograms in `app/observability/metrics.py`
+  - `smartsre_agent_run_latency_seconds` — Histogram
+  - `smartsre_agent_token_usage_total` — Histogram
+  - `smartsre_agent_cost_estimate_usd` — Histogram
+  - `smartsre_agent_step_count` — Histogram
+  - `smartsre_agent_release_gate` — Gauge(metric_name)
+  - Add `observe_agent_run()` function
+- [x] T070 Wire Prometheus observation into `MetricsCollector.persist()`
+
+### Tests
+
+- [x] T071 [P] Unit tests for new MetricsCollector functions in `tests/unit/test_metrics.py`
+  - recovery_count, empty_result_count, duplicate detection, step_latencies, regression_score default, persistence
+- [x] T072 [P] Unit tests for AgentMetricsService in `tests/unit/test_agent_metrics_service.py`
+  - goal_completion_rate, unnecessary ratio, P95 latency, approval override, gate pass/fail
+
+### Frontend
+
+- [x] T073 [P] Frontend BFF route at `frontend/app/api/agent/metrics/route.ts`
+- [x] T074 [P] Frontend `AgentMetricsPanel` component
+  - 4 gate metric cards with pass/fail indicators, auto-refresh, Chinese labels
+
+### Release
+
+- [x] T075 OpenAPI contract regeneration (`scripts/export_openapi.py --write`)
+- [x] T076 CI gate verification (ruff + pytest + export_openapi + frontend lint/typecheck)
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

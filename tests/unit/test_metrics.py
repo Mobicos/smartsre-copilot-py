@@ -118,3 +118,138 @@ def test_metrics_collector_aggregates_tool_result_latency():
         "avg": 21,
         "max": 30,
     }
+
+
+# ---------------------------------------------------------------------------
+# Tests for new Phase 11 metric functions
+# ---------------------------------------------------------------------------
+
+
+def test_recovery_count_from_recovery_events():
+    run_store = _RunStore()
+    run_store.events = [
+        {"type": "recovery", "payload": {"reason": "timeout", "recovery_action": "retry"}},
+        {"type": "tool_call", "payload": {"tool": "SearchLog"}},
+        {"type": "recovery", "payload": {"reason": "empty_evidence"}},
+        {
+            "type": "tool_result",
+            "payload": {"tool_name": "SearchLog", "recovery_action": "try_alternative"},
+        },
+    ]
+    collector = MetricsCollector(run_store, AppSettings(agent_decision_provider="deterministic"))  # type: ignore[arg-type]
+    metrics = collector.collect_run_metrics("run-1")
+    assert metrics is not None
+    assert metrics["recovery_count"] == 3
+
+
+def test_empty_result_count_from_failed_tool_results():
+    run_store = _RunStore()
+    run_store.events = [
+        {"type": "tool_call", "payload": {"tool": "SearchLog"}},
+        {
+            "type": "tool_result",
+            "payload": {"tool_name": "SearchLog", "status": "error", "output": None},
+        },
+        {
+            "type": "tool_result",
+            "payload": {"tool_name": "GetMetrics", "status": "success", "output": "data"},
+        },
+        {
+            "type": "tool_result",
+            "payload": {"tool_name": "Timeout", "status": "timeout"},
+        },
+    ]
+    collector = MetricsCollector(run_store, AppSettings(agent_decision_provider="deterministic"))  # type: ignore[arg-type]
+    metrics = collector.collect_run_metrics("run-1")
+    assert metrics is not None
+    assert metrics["empty_result_count"] == 2
+
+
+def test_duplicate_tool_call_detection():
+    run_store = _RunStore()
+    run_store.events = [
+        {"type": "tool_call", "payload": {"tool_name": "SearchLog", "arguments": {"query": "cpu"}}},
+        {"type": "tool_call", "payload": {"tool_name": "SearchLog", "arguments": {"query": "cpu"}}},
+        {"type": "tool_call", "payload": {"tool_name": "SearchLog", "arguments": {"query": "mem"}}},
+    ]
+    collector = MetricsCollector(run_store, AppSettings(agent_decision_provider="deterministic"))  # type: ignore[arg-type]
+    metrics = collector.collect_run_metrics("run-1")
+    assert metrics is not None
+    assert metrics["duplicate_tool_call_count"] == 1
+
+
+def test_no_duplicates_for_different_arguments():
+    run_store = _RunStore()
+    run_store.events = [
+        {"type": "tool_call", "payload": {"tool_name": "SearchLog", "arguments": {"query": "cpu"}}},
+        {"type": "tool_call", "payload": {"tool_name": "SearchLog", "arguments": {"query": "mem"}}},
+    ]
+    collector = MetricsCollector(run_store, AppSettings(agent_decision_provider="deterministic"))  # type: ignore[arg-type]
+    metrics = collector.collect_run_metrics("run-1")
+    assert metrics is not None
+    assert metrics["duplicate_tool_call_count"] == 0
+
+
+def test_step_latencies_computed_from_step_index():
+    from datetime import timezone
+
+    base = datetime(2026, 5, 17, 10, 0, 0, tzinfo=timezone.utc)
+    run_store = _RunStore()
+    run_store.events = [
+        {"type": "decision", "step_index": 0, "created_at": base},
+        {"type": "tool_call", "step_index": 0, "created_at": base + timedelta(seconds=2)},
+        {"type": "tool_result", "step_index": 0, "created_at": base + timedelta(seconds=5)},
+        {"type": "decision", "step_index": 1, "created_at": base + timedelta(seconds=8)},
+        {"type": "tool_call", "step_index": 1, "created_at": base + timedelta(seconds=10)},
+        {"type": "tool_result", "step_index": 1, "created_at": base + timedelta(seconds=20)},
+    ]
+    collector = MetricsCollector(run_store, AppSettings(agent_decision_provider="deterministic"))  # type: ignore[arg-type]
+    metrics = collector.collect_run_metrics("run-1")
+    assert metrics is not None
+    sl = metrics["step_latencies"]
+    assert sl["count"] == 2
+    assert sl["steps"][0]["step_index"] == 0
+    assert sl["steps"][0]["duration_ms"] == 8000
+    assert sl["steps"][1]["step_index"] == 1
+    assert sl["steps"][1]["duration_ms"] == 12000
+    assert sl["avg_ms"] == 10000
+    assert sl["max_ms"] == 12000
+
+
+def test_step_latencies_empty_when_no_step_index():
+    run_store = _RunStore()
+    run_store.events = [
+        {"type": "decision", "payload": {"action": "tool_call"}},
+        {"type": "tool_call", "payload": {"tool": "SearchLog"}},
+    ]
+    collector = MetricsCollector(run_store, AppSettings(agent_decision_provider="deterministic"))  # type: ignore[arg-type]
+    metrics = collector.collect_run_metrics("run-1")
+    assert metrics is not None
+    assert metrics["step_latencies"]["count"] == 0
+
+
+def test_regression_score_default_none():
+    run_store = _RunStore()
+    collector = MetricsCollector(run_store, AppSettings(agent_decision_provider="deterministic"))  # type: ignore[arg-type]
+    metrics = collector.collect_run_metrics("run-1")
+    assert metrics is not None
+    assert metrics["regression_score"] is None
+
+
+def test_new_metrics_persisted_to_store():
+    run_store = _RunStore()
+    run_store.events = [
+        {"type": "recovery", "payload": {"reason": "timeout", "recovery_action": "retry"}},
+        {"type": "tool_call", "payload": {"tool_name": "SearchLog", "arguments": {"q": "cpu"}}},
+        {"type": "tool_call", "payload": {"tool_name": "SearchLog", "arguments": {"q": "cpu"}}},
+        {"type": "tool_result", "payload": {"tool_name": "SearchLog", "status": "error"}},
+    ]
+    collector = MetricsCollector(run_store, AppSettings(agent_decision_provider="deterministic"))  # type: ignore[arg-type]
+    collector.persist("run-1")
+
+    assert run_store.persisted is not None
+    assert run_store.persisted["recovery_count"] == 1
+    assert run_store.persisted["empty_result_count"] == 1
+    assert run_store.persisted["duplicate_tool_call_count"] == 1
+    assert run_store.persisted["step_latencies"]["count"] == 0
+    assert run_store.persisted["regression_score"] is None

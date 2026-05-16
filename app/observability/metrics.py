@@ -84,6 +84,37 @@ _AGENT_HANDOFFS_LEGACY = Gauge(
     "Legacy alias for smartsre_agent_handoffs.",
     registry=_REGISTRY,
 )
+_AGENT_RUN_LATENCY = Histogram(
+    "smartsre_agent_run_latency_seconds",
+    "Agent run wall-clock latency in seconds.",
+    buckets=(1, 5, 10, 15, 30, 45, 60, 90, 120, 300),
+    registry=_REGISTRY,
+)
+_AGENT_TOKEN_USAGE = Histogram(
+    "smartsre_agent_token_usage_total",
+    "Agent run total token consumption.",
+    ("source",),
+    buckets=(10, 50, 100, 250, 500, 1000, 2500, 5000, 10000),
+    registry=_REGISTRY,
+)
+_AGENT_COST_ESTIMATE = Histogram(
+    "smartsre_agent_cost_estimate_usd",
+    "Agent run estimated cost in USD.",
+    buckets=(0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 1.0),
+    registry=_REGISTRY,
+)
+_AGENT_STEP_COUNT = Histogram(
+    "smartsre_agent_step_count",
+    "Agent run step count distribution.",
+    buckets=(1, 2, 3, 4, 5, 6, 7, 8, 10),
+    registry=_REGISTRY,
+)
+_AGENT_RELEASE_GATE = Gauge(
+    "smartsre_agent_release_gate",
+    "Release gate metric values (0=fail, 1=pass).",
+    ("metric_name",),
+    registry=_REGISTRY,
+)
 _INDEXING_TASKS = Gauge(
     "smartsre_indexing_tasks",
     "Current indexing tasks grouped by status.",
@@ -119,6 +150,24 @@ def observe_http_request(
     _HTTP_REQUEST_DURATION.labels(*labels).observe(max(duration_seconds, 0.0))
 
 
+def observe_agent_run(
+    *,
+    latency_ms: int | None,
+    token_total: int,
+    cost_total: float,
+    step_count: int,
+) -> None:
+    """Record one agent run's metrics for Prometheus histograms."""
+    if latency_ms is not None:
+        _AGENT_RUN_LATENCY.observe(max(latency_ms / 1000.0, 0.0))
+    if token_total > 0:
+        _AGENT_TOKEN_USAGE.labels(source="run").observe(token_total)
+    if cost_total > 0:
+        _AGENT_COST_ESTIMATE.observe(cost_total)
+    if step_count > 0:
+        _AGENT_STEP_COUNT.observe(step_count)
+
+
 def render_prometheus_metrics() -> bytes:
     """Return Prometheus text exposition bytes."""
     try:
@@ -140,12 +189,20 @@ def reset_metrics_for_testing() -> None:
         _AGENT_APPROVALS_LEGACY,
         _INDEXING_TASKS,
         _INDEXING_TASKS_LEGACY,
+        _AGENT_RUN_LATENCY,
+        _AGENT_TOKEN_USAGE,
+        _AGENT_COST_ESTIMATE,
+        _AGENT_STEP_COUNT,
     ):
         metric.clear()
     _AGENT_TOOL_CALLS.set(0)
     _AGENT_TOOL_CALLS_LEGACY.set(0)
     _AGENT_HANDOFFS.set(0)
     _AGENT_HANDOFFS_LEGACY.set(0)
+    _AGENT_RELEASE_GATE.labels(metric_name="goal_completion_rate").set(0)
+    _AGENT_RELEASE_GATE.labels(metric_name="unnecessary_tool_call_ratio").set(0)
+    _AGENT_RELEASE_GATE.labels(metric_name="approval_override_rate").set(0)
+    _AGENT_RELEASE_GATE.labels(metric_name="p95_latency_ms").set(0)
 
 
 def _refresh_database_metrics() -> None:

@@ -33,6 +33,7 @@ from app.platform.persistence import (
 
 if TYPE_CHECKING:
     from app.agent_runtime import AgentRuntime, ToolCatalog, ToolExecutor
+    from app.application.agent_metrics_service import AgentMetricsService
     from app.application.agent_resume_service import AgentResumeService
     from app.application.aiops_application_service import AIOpsApplicationService
     from app.application.api_contract_service import ApiContractService
@@ -257,6 +258,15 @@ class AppContainer:
         return ScenarioRegressionService(agent_run_repository=agent_run_repository)
 
     @cached_property
+    def agent_metrics_service(self) -> AgentMetricsService:
+        from app.application.agent_metrics_service import AgentMetricsService
+
+        return AgentMetricsService(
+            agent_run_repository=agent_run_repository,
+            scenario_regression_service=self.scenario_regression_service,
+        )
+
+    @cached_property
     def native_agent_application_service(self) -> NativeAgentApplicationService:
         from app.application.native_agent_application_service import (
             NativeAgentApplicationService,
@@ -306,6 +316,7 @@ class AppContainer:
             "aiops_application_service",
             "agent_resume_service",
             "scenario_regression_service",
+            "agent_metrics_service",
             "native_agent_application_service",
         ):
             self.__dict__.pop(name, None)
@@ -393,6 +404,10 @@ def get_agent_resume_service() -> AgentResumeService:
 
 def get_scenario_regression_service() -> ScenarioRegressionService:
     return get_app_container().scenario_regression_service
+
+
+def get_agent_metrics_service() -> AgentMetricsService:
+    return get_app_container().agent_metrics_service
 
 
 def get_native_agent_application_service() -> NativeAgentApplicationService:

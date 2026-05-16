@@ -582,6 +582,11 @@ class AgentRunRepository(AgentRunStore):
         token_usage: dict[str, Any] | None = None,
         cost_estimate: dict[str, Any] | None = None,
         handoff_reason: str | None = None,
+        recovery_count: int | None = None,
+        empty_result_count: int | None = None,
+        duplicate_tool_call_count: int | None = None,
+        step_latencies: dict[str, Any] | None = None,
+        regression_score: float | None = None,
     ) -> None:
         run = db.get(AgentRun, run_id)
         if run is None:
@@ -599,6 +604,11 @@ class AgentRunRepository(AgentRunStore):
         run.token_usage = token_usage
         run.cost_estimate = cost_estimate
         run.handoff_reason = handoff_reason
+        run.recovery_count = recovery_count
+        run.empty_result_count = empty_result_count
+        run.duplicate_tool_call_count = duplicate_tool_call_count
+        run.step_latencies = step_latencies
+        run.regression_score = regression_score
         db.add(run)
 
     def update_run_metrics(self, run_id: str, **metrics: Any) -> None:
@@ -723,6 +733,11 @@ class AgentRunRepository(AgentRunStore):
             "cost_estimate": row.cost_estimate,
             "handoff_reason": row.handoff_reason,
             "token_usage": row.token_usage,
+            "recovery_count": row.recovery_count,
+            "empty_result_count": row.empty_result_count,
+            "duplicate_tool_call_count": row.duplicate_tool_call_count,
+            "step_latencies": row.step_latencies,
+            "regression_score": row.regression_score,
             "created_at": row.created_at,
             "updated_at": row.updated_at,
         }

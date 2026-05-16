@@ -106,6 +106,26 @@ class AgentRun(SQLModel, table=True):
         default=None,
         sa_column=sa.Column(sa.JSON, nullable=True),
     )
+    recovery_count: int | None = Field(
+        default=0,
+        sa_column=sa.Column(sa.Integer, nullable=True),
+    )
+    empty_result_count: int | None = Field(
+        default=0,
+        sa_column=sa.Column(sa.Integer, nullable=True),
+    )
+    duplicate_tool_call_count: int | None = Field(
+        default=0,
+        sa_column=sa.Column(sa.Integer, nullable=True),
+    )
+    step_latencies: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=sa.Column(sa.JSON, nullable=True),
+    )
+    regression_score: float | None = Field(
+        default=None,
+        sa_column=sa.Column(sa.Float, nullable=True),
+    )
     created_at: datetime = Field(sa_column=sa.Column(sa.TIMESTAMP(timezone=True), nullable=False))
     updated_at: datetime = Field(sa_column=sa.Column(sa.TIMESTAMP(timezone=True), nullable=False))
 
