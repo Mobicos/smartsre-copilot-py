@@ -297,6 +297,23 @@
         "title": "ClearRequest",
         "type": "object"
       },
+      "FaqCandidateConfirmRequest": {
+        "properties": {
+          "feedback_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Feedback Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "feedback_ids"
+        ],
+        "title": "FaqCandidateConfirmRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -329,6 +346,19 @@
           "intervention_type"
         ],
         "title": "InterventionRequest",
+        "type": "object"
+      },
+      "ProbeRequest": {
+        "properties": {
+          "services": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Services",
+            "type": "array"
+          }
+        },
+        "title": "ProbeRequest",
         "type": "object"
       },
       "ScenarioEvaluationRequest": {
@@ -830,6 +860,187 @@
           }
         },
         "summary": "Review Agent Badcase",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/agent/faq-candidates": {
+      "get": {
+        "operationId": "NativeAgent-list_faq_candidates-get-api_v1_agent_faq_candidates",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "min_cluster_size",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "title": "Min Cluster Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "similarity_threshold",
+            "required": false,
+            "schema": {
+              "default": 0.5,
+              "title": "Similarity Threshold",
+              "type": "number"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Faq Candidates",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/agent/faq-candidates/confirm": {
+      "post": {
+        "operationId": "NativeAgent-confirm_faq_candidate-post-api_v1_agent_faq_candidates_confirm",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FaqCandidateConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Faq Candidate",
+        "tags": [
+          "NativeAgent"
+        ]
+      }
+    },
+    "/api/v1/agent/monitor/probe": {
+      "post": {
+        "operationId": "NativeAgent-probe_monitor-post-api_v1_agent_monitor_probe",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProbeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Probe Monitor",
         "tags": [
           "NativeAgent"
         ]
