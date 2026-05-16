@@ -182,7 +182,7 @@ class BoundedReActLoop:
 
                 # --- act phase: execute tool if requested ---
                 if (
-                    decision.action_type == "action"
+                    decision.action_type == "call_tool"
                     and decision.selected_tool
                     and self._tool_executor is not None
                 ):

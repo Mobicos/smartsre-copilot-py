@@ -1039,10 +1039,12 @@ class AgentRuntime:
         """Return a sync callback that executes a tool from the bounded loop.
 
         The callback bridges the sync loop.run() to the async tool execution
-        path via ``asyncio.get_event_loop().run_until_complete()``.
+        path via a background thread with its own event loop.
         """
+        import concurrent.futures
+
         runtime = self
-        loop = asyncio.get_event_loop()
+        _pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         def _exec(decision: Any) -> Any:
             tool_name = getattr(decision, "selected_tool", None)
@@ -1052,9 +1054,10 @@ class AgentRuntime:
                     arguments={}, error="决策未选择工具",
                     policy={}, decision="error", decision_reason="未选择工具",
                 )
-            tools = loop.run_until_complete(
+            tools = _pool.submit(
+                asyncio.run,
                 runtime._tool_catalog.get_tools("diagnosis"),
-            )
+            ).result()
             tool_by_name = {
                 str(getattr(t, "name", "")): t for t in tools
             }
@@ -1073,14 +1076,15 @@ class AgentRuntime:
             if getattr(decision, "tool_arguments", None):
                 from dataclasses import replace as _dc_replace
                 action = _dc_replace(action, arguments=decision.tool_arguments)
-            result = loop.run_until_complete(
+            result = _pool.submit(
+                asyncio.run,
                 runtime.execute_tool_with_timeout(
                     tool, action,
                     principal=principal,
                     safety_config=safety_config,
                     deadline=deadline,
                 ),
-            )
+            ).result()
             return result
 
         return _exec
