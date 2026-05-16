@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from time import monotonic
+from types import SimpleNamespace
 from typing import Any, cast
 
 from loguru import logger
@@ -836,6 +837,7 @@ class AgentRuntime:
             raise TimeoutError(f"Agent run timed out after {deadline.timeout_seconds:g} seconds")
 
         timeout_seconds = min(safety_config.tool_timeout_seconds, remaining_seconds)
+        started_at = monotonic()
         try:
             with self._trace_collector.span(
                 "agent.tool_call",
@@ -845,7 +847,7 @@ class AgentRuntime:
                     "agent.tool_timeout_seconds": timeout_seconds,
                 },
             ):
-                return await asyncio.wait_for(
+                result = await asyncio.wait_for(
                     self._action_executor.execute(
                         tool,
                         action,
@@ -853,7 +855,10 @@ class AgentRuntime:
                     ),
                     timeout=timeout_seconds,
                 )
+                latency_ms = _elapsed_ms(started_at)
+                return _result_with_latency(result, latency_ms)
         except TimeoutError:
+            latency_ms = _elapsed_ms(started_at)
             return ToolExecutionResult(
                 tool_name=action.tool_name,
                 status="timeout",
@@ -862,6 +867,7 @@ class AgentRuntime:
                 policy=action.policy_snapshot.to_dict(),
                 decision="timeout",
                 decision_reason=f"工具执行超时：{timeout_seconds:g} 秒",
+                latency_ms=latency_ms,
             )
 
     def _record_event(
@@ -952,6 +958,26 @@ def _positive_float(value: Any, *, default: float) -> float:
     except (TypeError, ValueError):
         return default
     return parsed if parsed > 0 else default
+
+
+def _elapsed_ms(started_at: float) -> int:
+    return max(int((monotonic() - started_at) * 1000), 0)
+
+
+def _result_with_latency(result: Any, latency_ms: int) -> Any:
+    if isinstance(result, ToolExecutionResult):
+        return result if result.latency_ms is not None else replace(result, latency_ms=latency_ms)
+    if hasattr(result, "__dict__"):
+        result.latency_ms = latency_ms
+        return result
+    return SimpleNamespace(
+        tool_name=str(getattr(result, "tool_name", "")),
+        status=str(getattr(result, "status", "unknown")),
+        arguments=getattr(result, "arguments", {}),
+        output=getattr(result, "output", result),
+        error=getattr(result, "error", None),
+        latency_ms=latency_ms,
+    )
 
 
 def _stop_condition_from_payload(payload: dict[str, Any] | None) -> StopCondition | None:

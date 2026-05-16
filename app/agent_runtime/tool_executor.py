@@ -24,6 +24,7 @@ class ToolExecutionResult:
     policy: dict[str, Any] | None = None
     decision: str = "executed"
     decision_reason: str | None = None
+    latency_ms: int | None = None
 
     def governance_payload(self) -> dict[str, Any]:
         """Return an audit-friendly policy decision payload."""

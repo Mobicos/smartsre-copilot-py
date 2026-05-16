@@ -173,6 +173,7 @@ def _metric_cost_estimate(
             "tokens": token_usage["total"],
             "tool_calls": tool_call_count,
             "retrievals": retrieval_count,
+            "tool_latency_ms": _metric_tool_latency_ms(events),
         },
     }
 
@@ -233,9 +234,32 @@ def _provider_cost_estimate(
                 "tokens": _int_value(token_usage.get("total")),
                 "tool_calls": tool_call_count,
                 "retrievals": retrieval_count,
+                "tool_latency_ms": _metric_tool_latency_ms(events),
             },
         }
     return None
+
+
+def _metric_tool_latency_ms(events: list[dict[str, Any]]) -> dict[str, int]:
+    values: list[int] = []
+    for event in events:
+        if event.get("type") != "tool_result":
+            continue
+        payload = event.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        latency_ms = _int_value(payload.get("latency_ms"))
+        if latency_ms > 0:
+            values.append(latency_ms)
+    if not values:
+        return {"count": 0, "total": 0, "avg": 0, "max": 0}
+    total = sum(values)
+    return {
+        "count": len(values),
+        "total": total,
+        "avg": total // len(values),
+        "max": max(values),
+    }
 
 
 def _estimate_tokens(value: Any) -> int:

@@ -174,7 +174,7 @@ class ToolAction:
         executed = self.mark_executed(str(getattr(result, "status", "unknown")))
         policy = getattr(result, "policy", None) or executed.policy_snapshot.to_dict()
         governance = _result_governance_payload(result, policy=policy)
-        return {
+        payload = {
             "tool_name": str(getattr(result, "tool_name", self.tool_name)),
             "status": executed.execution_status,
             "arguments": getattr(result, "arguments", self.arguments),
@@ -185,6 +185,10 @@ class ToolAction:
             "execution_status": executed.execution_status,
             "governance": governance,
         }
+        latency_ms = getattr(result, "latency_ms", None)
+        if latency_ms is not None:
+            payload["latency_ms"] = latency_ms
+        return payload
 
 
 @dataclass(frozen=True)

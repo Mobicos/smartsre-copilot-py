@@ -86,6 +86,35 @@ def test_metrics_collector_prefers_provider_token_and_cost_events():
             "tokens": 20,
             "tool_calls": 1,
             "retrievals": 1,
+            "tool_latency_ms": {"count": 0, "total": 0, "avg": 0, "max": 0},
         },
     }
     assert run_store.persisted == metrics
+
+
+def test_metrics_collector_aggregates_tool_result_latency():
+    run_store = _RunStore()
+    run_store.events = [
+        {"type": "tool_call", "payload": {"tool_name": "SearchLog"}},
+        {
+            "type": "tool_result",
+            "payload": {"tool_name": "SearchLog", "status": "success", "latency_ms": 12},
+        },
+        {"type": "tool_call", "payload": {"tool_name": "GetMetrics"}},
+        {
+            "type": "tool_result",
+            "payload": {"tool_name": "GetMetrics", "status": "success", "latency_ms": 30},
+        },
+    ]
+    collector = MetricsCollector(run_store, AppSettings(agent_decision_provider="deterministic"))  # type: ignore[arg-type]
+
+    metrics = collector.collect_run_metrics("run-1")
+
+    assert metrics is not None
+    assert metrics["tool_call_count"] == 2
+    assert metrics["cost_estimate"]["components"]["tool_latency_ms"] == {
+        "count": 2,
+        "total": 42,
+        "avg": 21,
+        "max": 30,
+    }
