@@ -859,7 +859,7 @@ class AgentFeedbackRepository:
     ) -> dict[str, Any] | None:
         reviewed_at = _utc_now()
         with Session(bind=get_engine()) as db:
-            db.exec(
+            db.execute(
                 update(AgentFeedback)
                 .where(col(AgentFeedback.feedback_id) == feedback_id)
                 .where(col(AgentFeedback.badcase_flag).is_(True))
@@ -888,7 +888,7 @@ class AgentFeedbackRepository:
     ) -> dict[str, Any] | None:
         promoted_at = _utc_now()
         with Session(bind=get_engine()) as db:
-            db.exec(
+            db.execute(
                 update(AgentFeedback)
                 .where(col(AgentFeedback.feedback_id) == feedback_id)
                 .where(col(AgentFeedback.badcase_flag).is_(True))
@@ -1000,7 +1000,7 @@ class AgentMemoryRepository:
         now = _utc_now()
         embedding_literal = "[" + ",".join(f"{v:.6f}" for v in embedding) + "]"
         with Session(bind=get_engine()) as db:
-            db.exec(
+            db.execute(
                 text(
                     "INSERT INTO agent_memory "
                     "(memory_id, workspace_id, run_id, conclusion_text, conclusion_type, "
@@ -1058,7 +1058,7 @@ class AgentMemoryRepository:
         """Cosine similarity search over agent_memory embeddings via pgvector."""
         embedding_literal = "[" + ",".join(f"{v:.6f}" for v in query_embedding) + "]"
         with Session(bind=get_engine()) as db:
-            rows = db.exec(
+            rows = db.execute(
                 text(
                     "SELECT memory_id, workspace_id, run_id, conclusion_text, "
                     "       conclusion_type, confidence, validation_count, metadata, "
@@ -1103,7 +1103,7 @@ class AgentMemoryRepository:
     ) -> dict[str, Any] | None:
         """Increment validation_count and boost confidence for a memory entry."""
         with Session(bind=get_engine()) as db:
-            db.exec(
+            db.execute(
                 text(
                     "UPDATE agent_memory "
                     "SET validation_count = validation_count + 1, "
