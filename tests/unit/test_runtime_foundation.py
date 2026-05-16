@@ -263,7 +263,7 @@ def test_recovery_manager_selects_handoff_after_repeated_empty_evidence():
         metrics_collector=object(),  # type: ignore[arg-type]
     )
 
-    plan = manager.choose_strategy(evidence_quality="empty", consecutive_failures=1)
+    plan = manager.choose_strategy(evidence_quality="empty", consecutive_failures=2)
 
     assert plan.action == "handoff"
     assert plan.reason == "insufficient_evidence"

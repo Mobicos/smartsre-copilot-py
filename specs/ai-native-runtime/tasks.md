@@ -189,10 +189,10 @@ editing code:
 
 ### Implementation
 
-- [ ] T025 Implement RecoveryManager in `app/agent_runtime/recovery.py`
+- [x] T025 Implement RecoveryManager in `app/agent_runtime/recovery.py`
   - Recovery strategies: retry_same_tool, try_alternative, downgrade_report, handoff
   - Select strategy based on evidence_quality
-  - Status: basic strategy selection and failure boundary extracted; loop integration pending
+  - Status: retry / alternative / downgrade / handoff strategies are implemented and covered; loop integration remains T027
 - [ ] T026 Implement ApprovalGate in `app/agent_runtime/approval.py`
   - change/destructive tools -> pending_approval
   - Wait for human approve/reject (with timeout)
@@ -209,7 +209,7 @@ editing code:
 
 ### Tests
 
-- [ ] T029 [P] Unit test: RecoveryManager strategy selection in `tests/unit/test_recovery.py`
+- [x] T029 [P] Unit test: RecoveryManager strategy selection in `tests/unit/test_recovery.py`
 - [ ] T030 Integration test: Full recovery path in `tests/integration/test_recovery.py`
   - Mock empty result -> verify retry -> verify downgrade_report
   - Mock consecutive failures -> verify handoff

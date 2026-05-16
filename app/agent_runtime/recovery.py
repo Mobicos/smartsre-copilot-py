@@ -76,9 +76,13 @@ class RecoveryManager:
             return RecoveryPlan(action="continue", reason="strong_evidence")
         if evidence_quality in {"partial", "weak"} and tool_available:
             return RecoveryPlan(action="try_alternative", reason=f"{evidence_quality}_evidence")
+        if evidence_quality in {"partial", "weak"}:
+            return RecoveryPlan(action="downgrade_report", reason=f"{evidence_quality}_evidence")
         if evidence_quality in {"empty", "insufficient"}:
-            if consecutive_failures <= 0 and tool_available:
-                return RecoveryPlan(action="try_alternative", reason="insufficient_evidence")
+            if tool_available and consecutive_failures <= 0:
+                return RecoveryPlan(action="retry_same_tool", reason="insufficient_evidence")
+            if tool_available and consecutive_failures == 1:
+                return RecoveryPlan(action="downgrade_report", reason="insufficient_evidence")
             return RecoveryPlan(
                 action="handoff",
                 reason="insufficient_evidence",
