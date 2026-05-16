@@ -254,7 +254,7 @@ editing code:
 - [x] T036 Integrate TraceCollector into BoundedReActLoop in `app/agent_runtime/loop.py`
 - [ ] T037 [P] Update golden scenario eval tests in `tests/agent_scenarios/`
   - 6 golden scenarios all pass regression eval
-- [ ] T038 Update CLAUDE.md and `docs/` architecture documentation
+- [x] T038 Update CLAUDE.md and `docs/` architecture documentation
 
 ---
 
